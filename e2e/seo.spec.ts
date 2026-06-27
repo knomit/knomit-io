@@ -20,6 +20,16 @@ test.describe('meta descriptions', () => {
 });
 
 test.describe('structured data', () => {
+  test('docs page emits BreadcrumbList and Organization', async ({ page }) => {
+    await page.goto('/docs/quick-start');
+    const blocks = await jsonLdBlocks(page);
+    const types = blocks.map((b) => b['@type']);
+    expect(types).toContain('Organization');
+    expect(types).toContain('BreadcrumbList');
+    const crumbs = blocks.find((b) => b['@type'] === 'BreadcrumbList');
+    expect(crumbs.itemListElement.length).toBeGreaterThanOrEqual(2);
+  });
+
   test('homepage emits Organization and WebSite', async ({ page }) => {
     await page.goto('/');
     const blocks = await jsonLdBlocks(page);

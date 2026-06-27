@@ -131,6 +131,7 @@ export default defineConfig({
         ThemeSelect: './src/components/starlight/ThemeSelect.astro',
         SiteTitle: './src/components/starlight/SiteTitle.astro',
         SocialIcons: './src/components/starlight/SocialIcons.astro',
+        Head: './src/components/starlight/Head.astro',
       },
       head: [
         {
