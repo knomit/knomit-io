@@ -3,6 +3,7 @@ import BaseLayout from '../layouts/BaseLayout.astro';
 import FactCard from '../components/FactCard.astro';
 import BranchGraph from '../components/BranchGraph.astro';
 import Icon from '../components/Icon.astro';
+import { DEMO_LIVE } from '../lib/site';
 import '../styles/prose.css';
 
 const toc = [
@@ -629,7 +630,7 @@ const toc = [
       <h2>Ready to go deeper?</h2>
       <div class="concepts-cta__actions">
         <a href="/docs/concepts" class="k-btn">Concept deep-dives in the docs <Icon name="arrow" size={16} /></a>
-        <a href="/explore" class="k-btn k-btn--ghost">See it in the live UI</a>
+        {DEMO_LIVE && <a href="/explore" class="k-btn k-btn--ghost">See it in the live UI</a>}
       </div>
     </div>
   </section>

@@ -2,7 +2,7 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import SectionHeading from '../components/SectionHeading.astro';
 import Icon from '../components/Icon.astro';
-import { GITHUB_URL } from '../lib/site';
+import { GITHUB_URL, DEMO_LIVE } from '../lib/site';
 
 const groups = [
   {
@@ -32,7 +32,7 @@ const groups = [
         title: 'Research & intelligence monitoring',
         body: 'Point agents at sources; they learn typed facts continuously. Synthesis distills patterns and higher-order insight as the corpus grows — exactly what the live demo shows.',
         tag: 'continuous learning · synthesis · the live demo',
-        link: { href: '/explore', label: 'Open the live demo' },
+        link: DEMO_LIVE ? { href: '/explore', label: 'Open the live demo' } : undefined,
       },
       {
         icon: 'discovery',

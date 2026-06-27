@@ -11,6 +11,8 @@ test.describe('marketing site', () => {
     await expect(page.getByRole('link', { name: /View on GitHub/i }).first()).toBeVisible();
     // Demo link is hidden until the hosted instance exists (DEMO_LIVE=false).
     await expect(page.getByRole('link', { name: /See it live/i })).toHaveCount(0);
+    // Footer "Live demo" link must also be absent in production.
+    await expect(page.getByRole('link', { name: /Live demo/i })).toHaveCount(0);
     // Footer present.
     await expect(page.getByRole('contentinfo')).toBeVisible();
   });

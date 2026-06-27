@@ -8,7 +8,7 @@ import FeatureGrid from '../components/FeatureGrid.astro';
 import Steps from '../components/Steps.astro';
 import BlogCard from '../components/BlogCard.astro';
 import Icon from '../components/Icon.astro';
-import { GITHUB_URL, SITE_DESCRIPTION, DEMO_LABEL } from '../lib/site';
+import { GITHUB_URL, SITE_DESCRIPTION } from '../lib/site';
 import { getPublishedPosts, postHref } from '../lib/blog';
 
 const posts = (await getPublishedPosts()).slice(0, 3);
