@@ -119,3 +119,12 @@ test.describe('compare', () => {
     }
   });
 });
+
+test('/security renders and covers signing, encryption, and local-first', async ({ page }) => {
+  const res = await page.request.get('/security');
+  expect(res.status()).toBe(200);
+  await page.goto('/security');
+  for (const term of [/Ed25519/i, /encrypt/i, /local/i, /open source/i]) {
+    await expect(page.getByText(term).first()).toBeVisible();
+  }
+});
