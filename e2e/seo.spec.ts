@@ -52,3 +52,13 @@ test.describe('structured data', () => {
     expect(post.author?.name).toBeTruthy();
   });
 });
+
+test('robots.txt welcomes AI crawlers and points to llms.txt', async ({ page }) => {
+  const res = await page.request.get('/robots.txt');
+  expect(res.status()).toBe(200);
+  const body = await res.text();
+  for (const bot of ['GPTBot', 'ClaudeBot', 'PerplexityBot', 'Google-Extended']) {
+    expect(body, `missing ${bot}`).toContain(bot);
+  }
+  expect(body).toMatch(/llms\.txt/i);
+});

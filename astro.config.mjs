@@ -50,7 +50,12 @@ export default defineConfig({
   // Marketing pages own the root; Starlight is mounted under /docs.
   integrations: [
     react(),
-    sitemap(),
+    sitemap({
+      // The localhost demo iframe target must never appear; everything else is public.
+      filter: (page) => !page.includes('/explore'),
+      changefreq: 'weekly',
+      priority: 0.7,
+    }),
     starlight({
       title: 'knomit',
       description: 'Git-backed memory for AI agents. Knowledge + commit.',

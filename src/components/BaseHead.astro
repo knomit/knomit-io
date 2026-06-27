@@ -5,6 +5,7 @@ import '@fontsource/jetbrains-mono/500.css';
 import '../styles/theme.css';
 import JsonLd from './JsonLd.astro';
 import { organizationSchema, websiteSchema, softwareApplicationSchema } from '../lib/schema';
+import { SITE_TWITTER } from '../lib/site';
 
 interface Props {
   title: string;
@@ -50,6 +51,8 @@ const site = Astro.site!;
 <meta name="twitter:title" content={title} />
 <meta name="twitter:description" content={description} />
 <meta name="twitter:image" content={ogImage} />
+{SITE_TWITTER && <meta name="twitter:site" content={SITE_TWITTER} />}
+{SITE_TWITTER && <meta name="twitter:creator" content={SITE_TWITTER} />}
 
 <!-- Mark JS-capable early so scroll-reveal can hide content without a flash;
      no-JS visitors never get the hidden state. -->

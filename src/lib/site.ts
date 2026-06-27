@@ -25,3 +25,6 @@ export const DEMO_URL = 'http://localhost:19278/';
 export const DEMO_LIVE = false;
 
 export const PORT = 19278;
+
+/** Twitter/X handle incl. leading @, or '' if none yet. Tags render only when set. */
+export const SITE_TWITTER = '';
