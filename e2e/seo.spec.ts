@@ -100,7 +100,7 @@ test.describe('faq', () => {
 test('homepage has an extractable one-sentence definition of knomit', async ({ page }) => {
   await page.goto('/');
   // A self-contained "knomit is ..." sentence is high-value for AI extraction.
-  await expect(page.getByText(/knomit is .*(memory|knowledge base)/i).first()).toBeVisible();
+  await expect(page.getByText(/knomit is .*knowledge/i).first()).toBeVisible();
 });
 
 test('homepage links to the FAQ', async ({ page }) => {

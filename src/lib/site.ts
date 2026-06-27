@@ -9,7 +9,7 @@ export const SITE_DESCRIPTION =
 /** ≤160-char meta description for SERP snippets. The long SITE_DESCRIPTION
  *  stays for on-page copy where the full framing matters. */
 export const SITE_DESCRIPTION_SHORT =
-  'Git-backed memory for AI agents: a distributed knowledge base of typed, provenanced facts — not documents. Open source, MCP-native.';
+  'Git-backed knowledge for AI agents: typed, provenanced facts in a distributed, decentralized knowledge base — not documents. Open source, MCP-native.';
 // Placeholder home — update once the public repo location is finalized.
 export const GITHUB_URL = 'https://github.com/knomit/knomit';
 

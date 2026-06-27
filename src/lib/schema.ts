@@ -31,7 +31,7 @@ export function softwareApplicationSchema(site: URL) {
     operatingSystem: 'macOS, Linux, Windows',
     url: site.origin + '/',
     description:
-      'Git-backed memory for AI agents: a distributed knowledge base of typed, provenanced facts.',
+      'Git-backed knowledge for AI agents: a distributed knowledge base of typed, provenanced facts.',
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
     license: GITHUB_URL,
     isAccessibleForFree: true,

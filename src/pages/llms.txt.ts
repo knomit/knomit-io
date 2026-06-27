@@ -26,7 +26,7 @@ export const GET: APIRoute = async ({ site }) => {
   lines.push(`> ${SITE_DESCRIPTION}`);
   lines.push('');
   lines.push(
-    'knomit is git-backed memory for AI agents: a distributed, decentralized knowledge base built from concise, typed facts — not documents. Each fact carries a kind (epistemic or pragmatic), a confidence, an ontology path, and signed-commit provenance. Peers learn on their own branches and converge on a shared main. Open source; MCP-native.',
+    'knomit is git-backed knowledge for AI agents: a distributed, decentralized knowledge base built from concise, typed facts — not documents. Each fact carries a kind (epistemic or pragmatic), a confidence, an ontology path, and signed-commit provenance. Peers learn on their own branches and converge on a shared main. Open source; MCP-native.',
   );
   lines.push('');
 

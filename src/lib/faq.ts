@@ -6,7 +6,7 @@ export interface FaqItem {
 export const FAQ_ITEMS: FaqItem[] = [
   {
     q: 'What is knomit?',
-    a: 'knomit is git-backed memory for AI agents: a distributed, decentralized knowledge base built from concise, typed facts rather than ingested documents. Each fact is a markdown file carrying a kind (epistemic or pragmatic), a confidence score, an ontology path, and signed-commit provenance. Humans and agents both read and write it, and converge on a shared main branch.',
+    a: 'knomit is git-backed knowledge for AI agents: a distributed, decentralized knowledge base built from concise, typed facts rather than ingested documents. Each fact is a markdown file carrying a kind (epistemic or pragmatic), a confidence score, an ontology path, and signed-commit provenance. Humans and agents both read and write it, and converge on a shared main branch.',
   },
   {
     q: 'How is knomit different from RAG or a vector database?',
