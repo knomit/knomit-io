@@ -1,0 +1,143 @@
+---
+title: Quick start
+description: Clone, build, and run knomit, then connect your first agent over MCP.
+---
+
+import { Steps, Tabs, TabItem, Aside, Card } from '@astrojs/starlight/components';
+
+knomit is a distributed, decentralized knowledge base built from facts —
+knowledge + commit. This page gets you from zero to a running server with a peer
+connected.
+
+## Requirements
+
+- **Go 1.24+** — the entire backend.
+- **Node.js + npm** — builds the embedded React frontend.
+- **Git CLI** — knomit shells out to `git`.
+- **A C compiler** — Xcode Command Line Tools on macOS (`xcode-select --install`),
+  or `gcc` / `build-essential` on Linux. The build is CGO-based (SQLite and the
+  ONNX bindings are compiled in).
+
+<Aside type="note">
+Two native shared libraries — **ONNX Runtime** (embeddings) and **graphqlite**
+(graph queries) — are downloaded automatically into `dist/lib/` by
+`make setup` / `make build`. You don't install them by hand.
+</Aside>
+
+## Build and run
+
+<Steps>
+
+1. Clone the repository and enter it.
+
+   ```sh
+   git clone https://github.com/knomit/knomit.git
+   cd knomit
+   ```
+
+2. Download the native libraries (one-time).
+
+   ```sh
+   make setup
+   ```
+
+3. Build the web frontend and the Go binaries.
+
+   ```sh
+   make build
+   ```
+
+4. Start the server.
+
+   ```sh
+   make run
+   ```
+
+</Steps>
+
+Open <strong>http://localhost:19278/</strong> for the web UI. The default repo
+(`trunk`) is created automatically on first run.
+
+<Aside type="tip" title="No CLI to create repos">
+Additional repos are created, archived, restored, and purged at runtime through
+the web UI ("Manage repos") or the [REST API](/docs/api/) — there is no CLI
+command to create a repo. The default `trunk` repo is always created if missing.
+</Aside>
+
+## Connect an agent over MCP
+
+The simplest setup uses `knomit-bridge` over stdio — it auto-discovers your
+agent branch from the running server, so you never look it up by hand.
+
+<Tabs>
+  <TabItem label="Claude Code (.mcp.json)">
+
+  ```json
+  {
+    "mcpServers": {
+      "knomit": {
+        "command": "dist/knomit-bridge",
+        "args": ["--repo", "trunk", "--source", "trunk", "--profile", "code"]
+      }
+    }
+  }
+  ```
+
+  `--source` is the slug used in `src://` refs (defaults to `--repo` if omitted).
+
+  </TabItem>
+  <TabItem label="Streamable HTTP">
+
+  Connect directly, substituting the branch logged on startup (`/` → `:` in the
+  URL path):
+
+  ```json
+  {
+    "mcpServers": {
+      "knomit": {
+        "type": "streamable-http",
+        "url": "http://localhost:19278/api/v1/repos/trunk/branches/agent:hostname-abc123/mcp"
+      }
+    }
+  }
+  ```
+
+  </TabItem>
+</Tabs>
+
+<Aside type="note">
+knomit's tool descriptions carry all the behavioral guidance the model needs —
+no `CLAUDE.md` setup is required to start using it.
+</Aside>
+
+## Write your first fact
+
+With an agent connected, ask it to remember something. Under the hood it calls
+`knomit_learn`, which writes a markdown fact and commits it:
+
+```markdown
+---
+type: observation
+confidence: 0.8
+domain: [music]
+entities: [alice]
+refs:
+  - knomit://github.com/org/repo/src/preferences.ts
+---
+Alice prefers rock music over jazz.
+```
+
+That write is one atomic, signed git commit on your agent's branch. Browse it in
+the web UI, or query it back with `knomit_query`.
+
+## Where to next
+
+<Card title="Understand the model" icon="open-book">
+Read [Concepts](/docs/concepts/) for facts, the ontology, branches, provenance,
+and the temporal graph.
+</Card>
+
+<Card title="Wire it into tools" icon="puzzle">
+See the [MCP tools reference](/docs/mcp-tools/) and the
+[REST API](/docs/api/).
+</Card>

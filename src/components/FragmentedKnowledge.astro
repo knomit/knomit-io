@@ -1,0 +1,131 @@
+---
+/**
+ * The visual inverse of the hero's clean knowledge graph — the "before."
+ * Two duplicate documents (stored twice, never unified) and a node cluster
+ * fragmenting apart with broken, fading edges. Muted red/amber (problem colors),
+ * low-contrast so it never fights the headline. Drift is subtle + motion-safe.
+ */
+interface Props {
+  class?: string;
+}
+const { class: className = '' } = Astro.props;
+
+// Fragmenting fact nodes — disordered, some drifting loose. No trunk, no order.
+const nodes = [
+  { x: 244, y: 104, r: 6, c: 'var(--k-retracted)' },
+  { x: 306, y: 86, r: 5.5, c: 'var(--k-temporal)' },
+  { x: 356, y: 138, r: 5, c: 'var(--k-text-muted)' },
+  { x: 290, y: 176, r: 6, c: 'var(--k-retracted)' },
+  { x: 372, y: 224, r: 5, c: 'var(--k-temporal)', drift: 'a' },
+  { x: 250, y: 256, r: 4.5, c: 'var(--k-text-muted)' },
+  { x: 330, y: 296, r: 5.5, c: 'var(--k-retracted)', drift: 'b' },
+];
+---
+
+<svg
+  class={`k-fk ${className}`}
+  viewBox="0 0 420 360"
+  fill="none"
+  role="img"
+  aria-label="Knowledge fragmenting: two duplicate documents and a cluster of facts drifting apart with broken, fading links."
+  xmlns="http://www.w3.org/2000/svg"
+>
+  <defs>
+    <linearGradient id="fk-fade" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="var(--k-retracted)" stop-opacity="0.5" />
+      <stop offset="100%" stop-color="var(--k-retracted)" stop-opacity="0" />
+    </linearGradient>
+  </defs>
+
+  <!-- Duplicate documents: two near-identical copies, offset — stored twice. -->
+  <g class="fk-doc fk-doc--back">
+    <rect x="32" y="92" width="118" height="150" rx="9" fill="var(--k-surface-2)" stroke="var(--k-retracted)" stroke-opacity="0.28" stroke-dasharray="3 4" />
+    {[116, 134, 152, 170, 188].map((y, i) => (
+      <rect x="48" y={y} width={i % 2 ? 58 : 86} height="6" rx="3" fill="#3a3030" />
+    ))}
+  </g>
+  <g class="fk-doc fk-doc--front">
+    <rect x="52" y="64" width="118" height="150" rx="9" fill="var(--k-surface-1)" stroke="var(--k-retracted)" stroke-opacity="0.5" />
+    <rect x="68" y="80" width="70" height="7" rx="3.5" fill="#4a3a3a" />
+    {[100, 118, 136, 154, 172].map((y, i) => (
+      <rect x="68" y={y} width={i % 2 ? 58 : 86} height="6" rx="3" fill="#3a3030" />
+    ))}
+  </g>
+
+  <!-- Broken & fading links — no consensus holds the cluster together. -->
+  <g class="fk-edges" stroke-linecap="round" stroke-width="1.6">
+    <path class="fk-edge" d="M250 104 L300 88" stroke="url(#fk-fade)" />
+    <path class="fk-edge" d="M312 90 L350 132" stroke="var(--k-temporal)" stroke-opacity="0.3" stroke-dasharray="2 6" />
+    <!-- a snapped edge: drawn with a gap in the middle -->
+    <path class="fk-edge" d="M248 112 L268 142" stroke="var(--k-retracted)" stroke-opacity="0.35" />
+    <path class="fk-edge" d="M280 158 L290 172" stroke="var(--k-retracted)" stroke-opacity="0.35" />
+    <path class="fk-edge" d="M352 142 L296 174" stroke="var(--k-text-muted)" stroke-opacity="0.25" stroke-dasharray="2 6" />
+    <path class="fk-edge" d="M294 182 L360 220" stroke="url(#fk-fade)" />
+  </g>
+
+  <!-- Fragmenting fact nodes — several drifting loose, disconnected. -->
+  <g class="fk-nodes">
+    {
+      nodes.map((n) => (
+        <circle
+          class={n.drift ? `fk-node fk-node--drift-${n.drift}` : 'fk-node'}
+          cx={n.x}
+          cy={n.y}
+          r={n.r}
+          fill={n.c}
+          fill-opacity="0.85"
+        />
+      ))
+    }
+  </g>
+</svg>
+
+<style>
+  .k-fk {
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    opacity: 0.92;
+  }
+  .fk-doc--back {
+    opacity: 0.55;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    /* the duplicate slowly separates from its original */
+    .fk-doc--back {
+      animation: fk-sep 7s ease-in-out infinite alternate;
+    }
+    /* loose nodes drift further out */
+    .fk-node--drift-a {
+      animation: fk-drift-a 6s ease-in-out infinite alternate;
+    }
+    .fk-node--drift-b {
+      animation: fk-drift-b 7.5s ease-in-out infinite alternate;
+    }
+    /* links flicker — nothing holds */
+    .fk-edge {
+      animation: fk-flicker 4s ease-in-out infinite;
+    }
+    .fk-edge:nth-child(2) { animation-delay: 0.6s; }
+    .fk-edge:nth-child(3) { animation-delay: 1.2s; }
+    .fk-edge:nth-child(5) { animation-delay: 1.8s; }
+  }
+
+  @keyframes fk-sep {
+    from { transform: translate(0, 0); }
+    to { transform: translate(-7px, 8px); }
+  }
+  @keyframes fk-drift-a {
+    from { transform: translate(0, 0); }
+    to { transform: translate(9px, 6px); }
+  }
+  @keyframes fk-drift-b {
+    from { transform: translate(0, 0); }
+    to { transform: translate(7px, 11px); }
+  }
+  @keyframes fk-flicker {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+</style>

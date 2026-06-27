@@ -1,0 +1,105 @@
+---
+title: 'Dogfooding: how knomit knows knomit'
+description: 'knomit is a distributed, fact-based knowledge system — so the first codebase it captures as facts is its own. Here is what that loop looks like, and why typed facts with provenance beat re-derivation.'
+pubDate: 2026-06-24
+author: The knomit team
+tags: [dogfooding, distributed-knowledge, provenance]
+draft: false
+---
+
+import FactCard from '../../components/FactCard.astro';
+
+The fastest way to find out whether a knowledge system is worth anything is to
+make your own work depend on it. So that is what we did: knomit's own repository
+uses knomit. Every non-obvious invariant, design decision, and sharp edge that a
+human or an agent discovers while working on the codebase gets written back as a
+**fact** — and the next peer reads it before touching the same area.
+
+Note the framing: this is not an agent's private *memory*. It is a shared,
+distributed knowledge base of typed facts that both people and agents author and
+converge on. This post walks through that loop, and why facts with **provenance**
+beat re-derivation.
+
+## The problem with starting from zero
+
+Anyone new to a codebase — a fresh agent context, or a new teammate — can read
+the files but not the decisions behind them: why this lock is held across that
+call, which constant must never change, what looks like a bug but is
+load-bearing. That knowledge is usually tribal, and it gets re-derived —
+expensively, often incorrectly — over and over.
+
+That re-derivation is the cost knomit removes. Learning effort is paid once and
+**shared across peers**, not re-paid by each one. As token usage climbs, that
+stops being a nicety and becomes the point.
+
+## A discovery becomes a fact
+
+When an agent uncovers something non-obvious — say, a concurrency invariant in
+the store layer — it doesn't put a comment in a file and hope the next agent
+reads it. It writes a fact:
+
+<FactCard
+  path="kb/invariants/store/branch-lock-spans-notify/572ad08.md"
+  frontmatter={{
+    type: 'principle',
+    confidence: 0.95,
+    domain: ['store', 'concurrency'],
+    entities: ['lockBranch', 'notifyCommit'],
+    refs: ['knomit:/kb/invariants/store/branch-lock/572ad08.md'],
+  }}
+  body={'The per-branch write lock is held through `notifyCommit` — readers never see torn state. Never release it early to "reduce contention".'}
+  commit="b24d73e"
+  signer="agent/dev-7c9"
+/>
+
+That write is a single, signed git commit. The fact carries its own metadata —
+a type, a confidence, the area it applies to, the source files it anchors to —
+and it lands on the peer's own branch, never directly on `main`.
+
+## The next peer reads before it writes
+
+Before editing anything under the store layer, the next peer — agent or human —
+recalls what is already known about that area. The invariant above surfaces, with
+its confidence, its provenance, and a ref to the exact source file it came from.
+The peer verifies the claim still holds against the current code, then builds on
+it instead of rediscovering it.
+
+This is the whole game:
+
+- **Shared** — what one peer learns, every other peer inherits by merge, not by
+  re-deriving it.
+- **Provable** — every fact is a signed commit; you can see who asserted it, when,
+  and why it changed.
+- **Inspectable** — it's markdown in a git repo. Diff it, grep it, review it in a
+  pull request like any other change.
+
+## Why provenance changes behavior
+
+A fact with no provenance is just a string you have to trust. A fact with a
+commit behind it can be *checked*: follow its ref to the source, read the history
+of how its confidence moved, see whether the file it describes has drifted since
+the claim was made. When a fact goes stale, you don't silently propagate it —
+you update or retract it, and that correction is itself a commit.
+
+The result is a knowledge base that gets *more* trustworthy as it grows, instead
+of accreting unverifiable lore.
+
+## Use this post as a template
+
+This is also the template for the weekly use-case article. To write the next
+one, copy this file, change the frontmatter, and tell one concrete story:
+
+```text
+src/content/blog/your-slug.mdx
+---
+title: 'A specific scenario, stated plainly'
+description: 'One or two sentences a reader can act on.'
+pubDate: 2026-07-01
+tags: [distributed-knowledge, your-angle]
+draft: false
+---
+```
+
+Keep it specific: a real scenario, a concrete workflow, and — where it helps —
+a link into the [live demo](/explore) so readers can see the facts for
+themselves.

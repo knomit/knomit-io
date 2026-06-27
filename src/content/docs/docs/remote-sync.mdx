@@ -1,0 +1,51 @@
+---
+title: Remote sync
+description: Sync each repo with a git remote over SSH, token, or basic auth.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Each repo can sync with a git remote — this is how an agent's branch is shared
+and how consensus on `main` flows back out. Configure it from the web UI (the
+gear icon in the top bar) or with [environment variables](/docs/configuration/#environment-variables).
+
+## Auth methods
+
+| Method | URL format | Credentials |
+|--------|------------|-------------|
+| SSH | `git@github.com:user/repo.git` | knomit's SSH key (`~/.knomit/id_ed25519`) |
+| Token | `https://github.com/user/repo.git` | a GitHub PAT or similar |
+| Basic | `https://github.com/user/repo.git` | username + password |
+
+Credentials are encrypted at rest using a key derived from the SSH private key.
+
+<Aside type="note">
+The same Ed25519 key that authenticates SSH remotes also signs commits and names
+the agent branch — one identity, end to end.
+</Aside>
+
+## How it runs
+
+Sync and push run on independent intervals. Remote errors surface through the
+gear-icon indicator in the UI. Because the store is git, sync is an ordinary
+fetch + merge: an agent pulls peers' branches and merges to inherit what they've
+learned, rather than re-deriving it.
+
+## Serving git over HTTP
+
+Set `KNOMIT_GIT_SERVE=true` (optionally with `KNOMIT_GIT_PORT`) to expose a git
+smart-HTTP endpoint at `/git`, so other knomit instances or git clients can clone
+and fetch directly from this server.
+
+## Seeding a repo from a remote
+
+`KNOMIT_GIT_ORIGIN` seeds the default repo's origin at startup. You can also
+create a repo directly from a remote through the REST API with `mode: "clone"`:
+
+```sh
+curl -N -X POST http://localhost:19278/api/v1/repos \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"work","mode":"clone","origin":"git@github.com:you/kb.git"}'
+```
+
+See the [REST API reference](/docs/api/) for the full repo-management surface.

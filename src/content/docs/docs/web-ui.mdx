@@ -1,0 +1,47 @@
+---
+title: Web UI
+description: Browse, search, inspect provenance, time-travel, and trigger synthesis from the embedded web UI.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The server embeds a React single-page app at `/`. It's the same UI the
+[live demo](/explore) runs — browse facts, search, inspect provenance,
+time-travel through history, and monitor tasks in real time over SSE.
+
+<Aside type="tip" title="Try it without installing">
+The [live demo](/explore) is this exact UI, running read-only against knomit's
+own knowledge base. It's the fastest way to see everything below in action.
+</Aside>
+
+## The top bar
+
+- A **repo selector** appears when more than one repo exists.
+- A **gear icon** opens remote-origin configuration (see [Remote sync](/docs/remote-sync/)).
+- A **"Manage repos"** menu creates, archives, restores, and purges repos at
+  runtime — no CLI, no restart.
+
+## What you can do
+
+- **Library & search** — browse the ontology tree and run full-text + vector
+  search across facts.
+- **Inspect a fact** — read its frontmatter, body, and provenance: the signed
+  commit, the refs it anchors to, and how its confidence evolved.
+- **Time-travel** — view the knowledge graph as-of any past commit; refs resolve
+  to the versions that existed at that point in time.
+- **Ontology browser** — navigate topics and categories and see inheritance.
+- **Synthesis & tasks** — trigger a synthesis run and watch progress stream live
+  over server-sent events.
+
+## Keyboard
+
+The UI is keyboard-friendly — search (`/`) and a command palette (`:`) keep you
+on the keyboard while browsing and inspecting.
+
+## Desktop app
+
+`knomit-desktop` is a native [Wails v3](https://v3.wails.io) application: a
+system-tray icon plus a native webview window showing the same UI. It runs the
+knomit server in-process on a looknomitck port (prefers `19278`) and serves the UI
+from embedded assets — so that port is a pure API/MCP endpoint that Claude Code
+and other MCP clients can call. Build it with `make desktop`.

@@ -1,0 +1,74 @@
+---
+title: MCP tools
+description: The knomit MCP tool set, the branch-scoped endpoint, profiles, and the stdio bridge.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+knomit is MCP-native. A peer connects over the Model Context Protocol and gets a
+small, sharp tool set whose descriptions carry all the behavioral guidance the
+model needs — no prompt scaffolding required.
+
+## The tools
+
+| Tool | What it does |
+|------|--------------|
+| `knomit_learn` | Write one or more facts to the knowledge base in a single commit. Deduplicates within a category automatically. |
+| `knomit_query` | Search by free text, entity, domain, path, or confidence threshold. `sort=recent` browses by recency; results are paginated. |
+| `knomit_explain` | Traverse a fact's versioned provenance graph via its refs (paginated BFS), anchored at a commit or at HEAD. |
+| `knomit_update` | Revise an existing fact's fields. |
+| `knomit_retract` | Remove a fact. Git history retains the provenance. |
+| `knomit_review` | Interactive session to review and maintain the knowledge base (prune, distill, reflect). |
+| `knomit_hypothesize` | Generate falsifiable hypotheses from synthesis facts. |
+
+<Aside type="tip" title="Learn before you write; explain before you trust">
+`knomit_query` surfaces what's already known so an agent builds on it instead of
+re-deriving it. `knomit_explain` walks a fact's provenance so the agent can judge
+freshness — every referenced fact is read at the exact version the referrer
+pointed to, so the graph you inspect is the one that existed when the claim was
+made.
+</Aside>
+
+## The endpoint
+
+The MCP endpoint is **branch-scoped** — each agent reads and writes its own
+branch:
+
+```
+/api/v1/repos/{repo}/branches/{branch}/mcp?profile={profile}
+```
+
+The agent branch is logged on startup (`branch=agent/hostname-abc123`) and is
+also available via `GET /api/v1/repos/{repo}` (the `agent_branch` field). Branch
+names use `:` in place of `/` in URL path segments
+(e.g. `agent:hostname-abc123`).
+
+## Profiles
+
+Profiles tailor the MCP instructions to the kind of client connecting:
+
+| Profile | Use case |
+|---------|----------|
+| `code` (default) | Code editors — anchors facts to git commits. |
+| `chat` | Conversational tools — anchors facts to URLs and documents. |
+| `generic` | Minimal instructions for any integration. |
+
+## The stdio bridge
+
+stdio-only MCP clients (Claude Code, Claude Desktop, VS Code, Cursor, …) use
+`knomit-bridge`, the stdio↔HTTP adapter built by `make build`. It auto-discovers
+the agent branch from the running server, so you never look it up by hand:
+
+```json
+{
+  "mcpServers": {
+    "knomit": {
+      "command": "dist/knomit-bridge",
+      "args": ["--repo", "trunk", "--source", "trunk", "--profile", "code"]
+    }
+  }
+}
+```
+
+See the [Quick start](/docs/quick-start/) for the full connection walkthrough and
+the streamable-HTTP alternative.

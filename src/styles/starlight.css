@@ -1,0 +1,52 @@
+/*
+ * Maps knomit's design tokens onto Starlight's CSS variables so /docs reads as
+ * the same product as the marketing site and the app. Dark-only.
+ */
+:root {
+  --sl-color-accent-low: #16321f;
+  --sl-color-accent: #77cc99;
+  --sl-color-accent-high: #c7eccf;
+
+  --sl-color-white: #eeeeee;
+  --sl-color-gray-1: #dddddd;
+  --sl-color-gray-2: #aaaaaa;
+  --sl-color-gray-3: #888888;
+  --sl-color-gray-4: #666666;
+  --sl-color-gray-5: #333333;
+  --sl-color-gray-6: #222222;
+  --sl-color-black: #141414;
+
+  --sl-color-bg: #141414;
+  --sl-color-bg-nav: rgba(20, 20, 20, 0.85);
+  --sl-color-bg-sidebar: #161616;
+  --sl-color-hairline: #262626;
+  --sl-color-text-accent: #88aaff;
+
+  --sl-font: var(--k-font-body);
+  --sl-font-mono: var(--k-font-mono);
+
+  --sl-color-text: #cccccc;
+}
+
+/* Force the dark palette even if a visitor's OS prefers light. */
+:root[data-theme='light'] {
+  color-scheme: dark;
+}
+
+.sl-markdown-content h1,
+.sl-markdown-content h2,
+.sl-markdown-content h3,
+.sl-markdown-content h4 {
+  font-family: var(--k-font-display);
+  letter-spacing: -0.02em;
+}
+
+/* HTTP method badges in the generated REST reference, themed to our semantics. */
+.sl-method-badge {
+  font-family: var(--k-font-mono);
+}
+
+site-title,
+.site-title {
+  font-family: var(--k-font-display);
+}

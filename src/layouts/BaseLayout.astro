@@ -1,0 +1,70 @@
+---
+import BaseHead from '../components/BaseHead.astro';
+import Header from '../components/Header.astro';
+import Footer from '../components/Footer.astro';
+
+interface Props {
+  title: string;
+  description: string;
+  image?: string;
+  article?: boolean;
+  /** Set false on full-bleed pages (e.g. /explore) to drop the chrome. */
+  chrome?: boolean;
+}
+
+const { title, description, image, article, chrome = true } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <BaseHead title={title} description={description} image={image} article={article} />
+  </head>
+  <body>
+    <a href="#main" class="k-skip">Skip to content</a>
+    {chrome && <Header />}
+    <main id="main">
+      <slot />
+    </main>
+    {chrome && <Footer />}
+
+    <style>
+      .k-skip {
+        position: absolute;
+        left: -999px;
+        top: 0.5rem;
+        z-index: 100;
+        background: var(--k-brand);
+        color: #08110b;
+        padding: 0.5rem 0.9rem;
+        border-radius: var(--k-radius-sm);
+        font-weight: 600;
+      }
+      .k-skip:focus {
+        left: 0.5rem;
+      }
+    </style>
+
+    <script>
+      // Motion-safe scroll reveal for elements tagged .k-reveal.
+      const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const els = document.querySelectorAll('.k-reveal');
+      if (prefersReduced || !('IntersectionObserver' in window)) {
+        els.forEach((el) => el.classList.add('is-visible'));
+      } else {
+        const io = new IntersectionObserver(
+          (entries) => {
+            entries.forEach((entry) => {
+              if (entry.isIntersecting) {
+                entry.target.classList.add('is-visible');
+                io.unobserve(entry.target);
+              }
+            });
+          },
+          { rootMargin: '0px 0px -10% 0px', threshold: 0.1 }
+        );
+        els.forEach((el) => io.observe(el));
+      }
+    </script>
+  </body>
+</html>

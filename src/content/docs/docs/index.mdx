@@ -1,0 +1,40 @@
+---
+title: knomit docs
+description: Documentation for knomit — a distributed, decentralized knowledge base built from facts. Quick start, concepts, MCP tools, REST API, web UI, and configuration.
+---
+
+import { Card, CardGrid, LinkButton } from '@astrojs/starlight/components';
+
+A distributed, decentralized knowledge base — built from facts, not documents.
+Knowledge + commit. These docs cover getting running, the model behind it, and
+every interface.
+
+<LinkButton href="/docs/quick-start/" variant="primary">Quick start →</LinkButton>
+<LinkButton href="/explore/" variant="secondary">See the live demo</LinkButton>
+
+<CardGrid>
+  <Card title="Quick start" icon="rocket">
+    Clone, build, run, and connect your first agent over MCP.
+    [Get started →](/docs/quick-start/)
+  </Card>
+  <Card title="Concepts" icon="open-book">
+    Facts, ontology, branches & consensus, provenance, the temporal graph.
+    [Read →](/docs/concepts/)
+  </Card>
+  <Card title="MCP tools" icon="puzzle">
+    The tool set, the branch-scoped endpoint, profiles, and the bridge.
+    [Reference →](/docs/mcp-tools/)
+  </Card>
+  <Card title="REST API" icon="seti:json">
+    HAL/HATEOAS API, generated from knomit's canonical OpenAPI spec.
+    [Browse →](/docs/api/)
+  </Card>
+  <Card title="Web UI" icon="laptop">
+    Browse, search, inspect provenance, and time-travel through history.
+    [Guide →](/docs/web-ui/)
+  </Card>
+  <Card title="Configuration" icon="setting">
+    Data layout, environment variables, and LLM providers for synthesis.
+    [Configure →](/docs/configuration/)
+  </Card>
+</CardGrid>

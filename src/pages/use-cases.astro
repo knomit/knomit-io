@@ -1,0 +1,199 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SectionHeading from '../components/SectionHeading.astro';
+import Icon from '../components/Icon.astro';
+import { GITHUB_URL } from '../lib/site';
+
+const cases = [
+  {
+    icon: 'distributed',
+    title: 'Distributed team knowledge',
+    audience: 'For teams of people and agents',
+    body: 'One source of truth that humans and agents build together. Because facts are plain markdown in git, your team authors them the same way agents do — review knowledge in pull requests, diff how a decision changed, and trust provenance instead of folklore.',
+    points: [
+      'Humans and machines author through the same operations',
+      'Review and merge knowledge like code',
+      'No CMS, no lock-in — facts in git, hosted anywhere',
+    ],
+    link: { href: '/concepts#branches', label: 'Peers, branches & consensus' },
+  },
+  {
+    icon: 'consensus',
+    title: 'Multi-peer consensus, no clobbering',
+    audience: 'For anyone running a fleet of peers',
+    body: 'Many peers, one converging knowledge base, zero stepping on each other. Each peer writes its own branch; consensus reaches main by merge. Learning effort is paid once across the network, not re-paid by every peer.',
+    points: [
+      'Per-peer branches — no shared-write contention',
+      'Merge-to-main consensus by Librarian, CI, or human',
+      'Deduplication is the economic point of distribution',
+    ],
+    link: { href: '/concepts#clusters', label: 'How knowledge clusters' },
+  },
+  {
+    icon: 'discovery',
+    title: 'Knowledge that compounds',
+    audience: 'For knowledge that should grow itself',
+    body: 'Facts evolve and beget facts. Synthesis distills higher-order insights from what the network already knows, and hypotheses extend them — so the corpus gets sharper over time instead of just bigger, and you can see how any belief got here.',
+    points: [
+      'Confidence rises and falls; query the graph as-of any point',
+      'Synthesis distills new facts; hypotheses extend them',
+      'Provenance lets you trace and trust every claim',
+    ],
+    link: { href: '/concepts#temporal', label: 'The temporal graph' },
+  },
+  {
+    icon: 'ontology',
+    title: 'Codebase tribal knowledge',
+    audience: 'For developers with a coding agent',
+    body: 'Capture the invariants, gotchas, and design rationale that never make it into comments. Your coding agent — and your teammates — read them before touching an area, and write new ones when they discover something non-obvious.',
+    points: [
+      'Invariants are load-bearing — re-read before editing',
+      'Facts anchor to source files via the knomit: URI scheme',
+      'Stale facts get updated or retracted, not propagated',
+    ],
+    link: { href: '/blog', label: 'Read the dogfooding story' },
+  },
+];
+---
+
+<BaseLayout
+  title="Use cases — knomit"
+  description="Where distributed, fact-based knowledge pays off: distributed team knowledge, multi-peer consensus, compounding discovery, and codebase tribal knowledge."
+>
+  <section class="k-section uc-hero k-grid-bg">
+    <div class="k-container">
+      <SectionHeading
+        eyebrow="Use cases"
+        title="Where shared, proven knowledge pays off."
+        lead="The same git-native substrate serves one peer, a fleet, and a whole team of people and agents. Four places knomit changes what's possible."
+      />
+    </div>
+  </section>
+
+  <section class="k-section uc-section">
+    <div class="k-container uc-grid">
+      {
+        cases.map((c) => (
+          <article class="k-card uc-card k-reveal">
+            <span class="uc-card__icon">
+              <Icon name={c.icon as any} size={22} />
+            </span>
+            <p class="uc-card__audience k-mono">{c.audience}</p>
+            <h2 class="uc-card__title">{c.title}</h2>
+            <p class="uc-card__body k-text-2">{c.body}</p>
+            <ul class="uc-card__points">
+              {c.points.map((p) => (
+                <li>
+                  <Icon name="arrow" size={15} /> {p}
+                </li>
+              ))}
+            </ul>
+            <a href={c.link.href} class="uc-card__link">
+              {c.link.label} <Icon name="arrow" size={15} />
+            </a>
+          </article>
+        ))
+      }
+    </div>
+  </section>
+
+  <section class="k-section">
+    <div class="k-container uc-cta">
+      <h2>Have a use case of your own?</h2>
+      <p class="k-lead">It's open source. Clone it, point your peers at it, and see.</p>
+      <div class="uc-cta__actions">
+        <a href={GITHUB_URL} class="k-btn" rel="noopener">View on GitHub</a>
+        <a href="/docs/quick-start" class="k-btn k-btn--ghost">Quick start</a>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .uc-hero {
+    border-bottom: 1px solid var(--k-hairline-soft);
+    padding-block: clamp(3rem, 2rem + 4vw, 4.5rem) 1rem;
+  }
+  .uc-hero :global(.k-heading) {
+    margin-bottom: 0;
+  }
+  .uc-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.25rem;
+  }
+  .uc-card {
+    display: flex;
+    flex-direction: column;
+    padding: 1.75rem;
+  }
+  .uc-card__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 11px;
+    color: var(--k-brand);
+    background: var(--k-brand-glow);
+    border: 1px solid rgba(119, 204, 153, 0.25);
+    margin-bottom: 1.1rem;
+  }
+  .uc-card__audience {
+    font-size: 0.78rem;
+    color: var(--k-text-muted);
+    margin-bottom: 0.4rem;
+  }
+  .uc-card__title {
+    font-size: 1.4rem;
+    margin-bottom: 0.7rem;
+  }
+  .uc-card__body {
+    line-height: 1.6;
+    font-size: 0.96rem;
+  }
+  .uc-card__points {
+    list-style: none;
+    margin: 1.25rem 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+  .uc-card__points li {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.6rem;
+    font-size: 0.9rem;
+    color: var(--k-text);
+  }
+  .uc-card__points :global(.k-icon) {
+    color: var(--k-brand);
+    flex-shrink: 0;
+    margin-top: 0.15rem;
+  }
+  .uc-card__link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: auto;
+    padding-top: 0.5rem;
+    font-size: 0.92rem;
+    font-weight: 500;
+  }
+
+  .uc-cta {
+    text-align: center;
+  }
+  .uc-cta h2 {
+    font-size: var(--k-step-h2);
+    margin-bottom: 0.8rem;
+  }
+  .uc-cta__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.85rem;
+    justify-content: center;
+    margin-top: 1.75rem;
+  }
+</style>

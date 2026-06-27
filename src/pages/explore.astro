@@ -1,0 +1,125 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import ExitWidget from '../components/ExitWidget.tsx';
+import KnowledgeGraph from '../components/KnowledgeGraph.astro';
+import Icon from '../components/Icon.astro';
+import { DEMO_LIVE, DEMO_URL, GITHUB_URL } from '../lib/site';
+---
+
+<style is:global>
+  .explore-teaser {
+    padding-block: clamp(3rem, 2rem + 6vw, 7rem);
+  }
+  .explore-teaser__inner {
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: clamp(2rem, 1rem + 4vw, 4rem);
+    align-items: center;
+  }
+  .explore-teaser__title {
+    font-size: var(--k-step-h1);
+    margin: 0.4rem 0 0;
+  }
+  .explore-teaser__lead {
+    margin-top: 1.25rem;
+    max-width: 38rem;
+  }
+  .explore-teaser__cta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.85rem;
+    margin-top: 2rem;
+  }
+  .explore-teaser__list {
+    list-style: none;
+    margin: 2rem 0 0;
+    padding: 0;
+    display: grid;
+    gap: 0.75rem;
+  }
+  .explore-teaser__list li {
+    display: flex;
+    align-items: center;
+    gap: 0.7rem;
+    color: var(--k-text-2);
+    font-size: 0.96rem;
+  }
+  .explore-teaser__list .k-icon {
+    color: var(--k-brand);
+    flex-shrink: 0;
+  }
+  .explore-teaser__art {
+    max-width: 420px;
+    margin-inline: auto;
+  }
+  @media (max-width: 860px) {
+    .explore-teaser__inner {
+      grid-template-columns: 1fr;
+    }
+    .explore-teaser__art {
+      order: -1;
+      max-width: 320px;
+    }
+  }
+</style>
+
+{
+  DEMO_LIVE ? (
+    <BaseLayout
+      title="Live demo — knomit"
+      description="Browse a live knomit knowledge base of AI and cybersecurity facts in the real web UI, read-only."
+      chrome={false}
+    >
+      <!-- The live demo IS the real knomit web UI, full-bleed. -->
+      <iframe
+        class="explore-frame"
+        src={DEMO_URL}
+        title="knomit live demo"
+        loading="eager"
+        referrerpolicy="no-referrer-when-downgrade"
+        style="position:fixed;inset:0;width:100vw;height:100vh;border:0;display:block;"
+      />
+      <ExitWidget client:load />
+      <style is:global>
+        html,
+        body {
+          margin: 0;
+          height: 100%;
+          overflow: hidden;
+        }
+      </style>
+    </BaseLayout>
+  ) : (
+    <BaseLayout
+      title="Live demo — coming soon — knomit"
+      description="The live knomit demo lets you browse a real knowledge base in the actual web UI. Launching soon — explore the docs in the meantime."
+    >
+      <section class="explore-teaser k-grid-bg">
+        <div class="k-container explore-teaser__inner">
+          <div class="explore-teaser__copy">
+            <p class="k-eyebrow">Live demo · coming soon</p>
+            <h1 class="explore-teaser__title">Browse a living knowledge base.</h1>
+            <p class="k-lead explore-teaser__lead">
+              The live demo drops you into the <em>real</em> knomit web UI, running
+              against a public, read-only instance — the actual product, not a
+              screenshot. We're putting the finishing touches on the hosted
+              instance. In the meantime, here's everything else.
+            </p>
+            <div class="explore-teaser__cta">
+              <a href="/docs/quick-start" class="k-btn">Run it yourself <Icon name="arrow" size={17} /></a>
+              <a href={GITHUB_URL} class="k-btn k-btn--ghost" rel="noopener">View on GitHub</a>
+            </div>
+            <ul class="explore-teaser__list">
+              <li><Icon name="search" size={17} /> Library &amp; semantic search over real facts</li>
+              <li><Icon name="provenance" size={17} /> Inspect a fact's signed-commit provenance</li>
+              <li><Icon name="temporal" size={17} /> Time-travel the graph to any past commit</li>
+            </ul>
+          </div>
+          <div class="explore-teaser__art">
+            <KnowledgeGraph />
+          </div>
+        </div>
+      </section>
+    </BaseLayout>
+  )
+}

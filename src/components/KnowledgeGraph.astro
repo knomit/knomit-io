@@ -1,0 +1,226 @@
+---
+/**
+ * The hero punchline. Two agents (left/right) each assert typed facts —
+ * epistemic (◆ green) and pragmatic (▸ amber) — that reference one another.
+ * Each fact's confidence bar fills over time; a pulse travels from every fact
+ * into the central consensus spine on `main`. Tall, dense, motion-safe.
+ */
+interface Props {
+  class?: string;
+}
+const { class: className = '' } = Astro.props;
+
+const W = 100;
+const H = 44;
+
+// Six fact cards — three per agent, staggered down the canvas.
+const facts = [
+  { id: 'a1', x: 14, y: 78, kind: 'epistemic', conf: 0.9, d: '0s' },
+  { id: 'b1', x: 346, y: 64, kind: 'epistemic', conf: 0.94, d: '0.3s' },
+  { id: 'a2', x: 6, y: 244, kind: 'pragmatic', conf: 0.72, d: '0.6s' },
+  { id: 'b2', x: 354, y: 250, kind: 'epistemic', conf: 0.82, d: '0.9s' },
+  { id: 'a3', x: 24, y: 412, kind: 'epistemic', conf: 0.58, d: '1.2s' },
+  { id: 'b3', x: 334, y: 426, kind: 'pragmatic', conf: 0.8, d: '1.5s' },
+];
+
+// Merge edges: each card flows into the nearest consensus node on the spine.
+const merges = [
+  { id: 'a1', d: 'M114 100 C 168 116 202 140 240 156' },
+  { id: 'b1', d: 'M346 86 C 300 104 272 138 240 156' },
+  { id: 'a2', d: 'M106 266 C 160 268 200 270 238 272' },
+  { id: 'b2', d: 'M354 272 C 308 272 270 272 242 272' },
+  { id: 'a3', d: 'M124 434 C 176 428 210 404 240 388' },
+  { id: 'b3', d: 'M334 448 C 298 436 266 406 240 388' },
+];
+---
+
+<svg
+  class={`k-kg ${className}`}
+  viewBox="0 0 480 540"
+  fill="none"
+  role="img"
+  aria-label="Two agents assert typed facts that reference each other; each fact's confidence rises over time and merges into a shared consensus on the main branch."
+  xmlns="http://www.w3.org/2000/svg"
+>
+  <defs>
+    <marker id="kg-arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M0 0 L10 5 L0 10 z" fill="var(--k-ref)" />
+    </marker>
+  </defs>
+
+  <!-- Consensus spine (main) -->
+  <line x1="240" y1="40" x2="240" y2="500" stroke="var(--k-brand)" stroke-width="2.5" stroke-linecap="round" opacity="0.85" />
+  <circle cx="240" cy="48" r="4" fill="var(--k-brand)" />
+  <circle cx="240" cy="492" r="4" fill="var(--k-brand)" />
+  <circle cx="240" cy="156" r="7.5" fill="var(--k-surface-3)" stroke="var(--k-brand)" stroke-width="2" />
+  <circle cx="240" cy="388" r="7.5" fill="var(--k-surface-3)" stroke="var(--k-brand)" stroke-width="2" />
+
+  <!-- Merge edges -->
+  {merges.map((m) => <path class="kg-edge" d={m.d} />)}
+
+  <!-- Reference edges (fact → fact): the knowledge graph -->
+  <path class="kg-ref" d="M64 122 C 180 176 300 206 354 252" marker-end="url(#kg-arrow)" />
+  <path class="kg-ref" d="M346 96 C 240 150 150 206 106 250" marker-end="url(#kg-arrow)" />
+  <path class="kg-ref" d="M128 424 C 220 456 280 446 332 436" marker-end="url(#kg-arrow)" />
+
+  <!-- Central consensus node + pulse ring -->
+  <circle class="kg-consensus" cx="240" cy="272" r="15" />
+  <circle class="kg-consensus-ring" cx="240" cy="272" r="15" />
+  <text x="260" y="270" class="kg-label kg-label--main">main</text>
+  <text x="260" y="283" class="kg-label kg-muted">consensus</text>
+
+  <!-- Agent labels -->
+  <text x="14" y="70" class="kg-label kg-muted">agent A</text>
+  <text x="346" y="56" class="kg-label kg-muted">agent B</text>
+
+  <!-- Fact cards -->
+  {
+    facts.map((f) => {
+      const cx = f.x + 18;
+      const cy = f.y + H / 2;
+      const isEp = f.kind === 'epistemic';
+      const color = isEp ? 'var(--k-brand)' : 'var(--k-temporal)';
+      return (
+        <g class="kg-card" style={`--d:${f.d}`}>
+          <rect x={f.x} y={f.y} width={W} height={H} rx="9" fill="var(--k-surface-2)" stroke="var(--k-hairline)" />
+          {isEp ? (
+            <rect x={cx - 6} y={cy - 6} width="12" height="12" rx="2" transform={`rotate(45 ${cx} ${cy})`} fill={color} />
+          ) : (
+            <path d={`M${cx - 5} ${cy - 6} L${cx + 7} ${cy} L${cx - 5} ${cy + 6} Z`} fill={color} />
+          )}
+          <rect x={f.x + 34} y={f.y + 12} width="50" height="5" rx="2.5" fill="var(--k-hairline)" />
+          <rect x={f.x + 34} y={f.y + 21} width="36" height="5" rx="2.5" fill="#3a3a3a" />
+          <rect x={f.x + 34} y={f.y + 31} width="54" height="5" rx="2.5" fill="#2a2a2a" />
+          <rect
+            class="kg-conf"
+            style={`--c:${f.conf};--d:${f.d}`}
+            x={f.x + 34}
+            y={f.y + 31}
+            width="54"
+            height="5"
+            rx="2.5"
+            fill={color}
+          />
+          <circle cx={f.x + W - 10} cy={f.y + 11} r="2.4" fill="var(--k-brand)" />
+        </g>
+      );
+    })
+  }
+
+  <!-- Pulses: writes flowing into consensus -->
+  {
+    merges.map((m, i) => (
+      <circle
+        class={`kg-pulse kg-pulse--${m.id}`}
+        r="3.2"
+        fill={m.id.startsWith('a') && i === 2 ? 'var(--k-temporal)' : m.id === 'b3' ? 'var(--k-temporal)' : 'var(--k-brand)'}
+      />
+    ))
+  }
+
+  <!-- Legend -->
+  <g class="kg-legend">
+    <rect x="156" y="524" width="9" height="9" rx="1.5" transform="rotate(45 160.5 528.5)" fill="var(--k-brand)" />
+    <text x="174" y="532" class="kg-label kg-muted">epistemic</text>
+    <path d="M250 524 L258 528.5 L250 533 Z" fill="var(--k-temporal)" />
+    <text x="266" y="532" class="kg-label kg-muted">pragmatic</text>
+  </g>
+</svg>
+
+<style>
+  .k-kg {
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    filter: drop-shadow(0 0 40px var(--k-brand-glow));
+  }
+  .kg-edge {
+    stroke: var(--k-brand);
+    stroke-width: 1.5;
+    opacity: 0.3;
+  }
+  .kg-ref {
+    stroke: var(--k-ref);
+    stroke-width: 1.5;
+    stroke-dasharray: 3 5;
+    opacity: 0.5;
+  }
+  .kg-consensus {
+    fill: var(--k-bg);
+    stroke: var(--k-brand);
+    stroke-width: 2.5;
+  }
+  .kg-consensus-ring {
+    fill: none;
+    stroke: var(--k-brand);
+    stroke-width: 2;
+    transform-box: fill-box;
+    transform-origin: center;
+    opacity: 0;
+  }
+  .kg-label {
+    font-family: var(--k-font-mono);
+    font-size: 11px;
+    fill: var(--k-text-2);
+  }
+  .kg-label--main {
+    fill: var(--k-brand);
+    font-size: 12px;
+  }
+  .kg-muted {
+    fill: var(--k-text-muted);
+  }
+  .kg-conf {
+    transform-box: fill-box;
+    transform-origin: left center;
+    transform: scaleX(var(--c));
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .kg-card {
+      opacity: 0;
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: kg-pop 0.55s var(--k-ease) forwards;
+      animation-delay: var(--d);
+    }
+    .kg-conf {
+      animation: kg-conf 3.6s var(--k-ease) infinite alternate;
+      animation-delay: var(--d);
+    }
+    .kg-consensus-ring {
+      animation: kg-ring 2.8s ease-out infinite;
+    }
+    .kg-pulse {
+      offset-rotate: 0deg;
+      opacity: 0;
+      animation: kg-travel 2.8s linear infinite;
+    }
+    .kg-pulse--a1 { offset-path: path('M114 100 C 168 116 202 140 240 156'); animation-delay: 0.2s; }
+    .kg-pulse--b1 { offset-path: path('M346 86 C 300 104 272 138 240 156'); animation-delay: 0.7s; }
+    .kg-pulse--a2 { offset-path: path('M106 266 C 160 268 200 270 238 272'); animation-delay: 1.2s; }
+    .kg-pulse--b2 { offset-path: path('M354 272 C 308 272 270 272 242 272'); animation-delay: 1.7s; }
+    .kg-pulse--a3 { offset-path: path('M124 434 C 176 428 210 404 240 388'); animation-delay: 2.2s; }
+    .kg-pulse--b3 { offset-path: path('M334 448 C 298 436 266 406 240 388'); animation-delay: 2.7s; }
+  }
+
+  @keyframes kg-pop {
+    from { opacity: 0; transform: scale(0.85) translateY(6px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes kg-conf {
+    from { transform: scaleX(0.2); }
+    to { transform: scaleX(var(--c)); }
+  }
+  @keyframes kg-travel {
+    0% { offset-distance: 0%; opacity: 0; }
+    12% { opacity: 1; }
+    88% { opacity: 1; }
+    100% { offset-distance: 100%; opacity: 0; }
+  }
+  @keyframes kg-ring {
+    0% { transform: scale(1); opacity: 0.5; }
+    70% { transform: scale(2.2); opacity: 0; }
+    100% { transform: scale(2.2); opacity: 0; }
+  }
+</style>

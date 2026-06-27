@@ -1,0 +1,91 @@
+---
+title: Configuration
+description: Data layout, environment variables, and LLM provider configuration for synthesis.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Place a `knomit.toml` next to the binary or in the data directory
+(`~/.knomit/knomit.toml`). Every setting can also be supplied as an environment
+variable.
+
+## Data layout
+
+All data lives under `KNOMIT_HOME` (default `~/.knomit`):
+
+```text
+~/.knomit/
+  repos/
+    trunk.db         # default repo (auto-created)
+    work.db          # additional repos (created via the API/UI)
+    archive/         # archived repos (<ksuid>.db + <ksuid>.json manifest)
+  models/            # shared ONNX embedder files
+  id_ed25519         # SSH identity (shared across repos)
+  id_ed25519.pub
+```
+
+Repos are discovered by scanning `~/.knomit/repos/` for `*.db` files at startup;
+the filename (minus `.db`) is the repo name, and names must match `[a-z0-9_-]+`.
+The default `trunk` repo is always created if missing.
+
+## Environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `KNOMIT_HOME` | `~/.knomit` | Path to the data directory |
+| `KNOMIT_REPO` | — | Alias for `KNOMIT_HOME` (backward compat) |
+| `KNOMIT_HOST` | `""` | Listen host |
+| `KNOMIT_PORT` | `19278` | HTTP server port |
+| `KNOMIT_SOCKET` | — | Unix socket path; enables the socket listener when set |
+| `KNOMIT_LLM_MODEL` | `gemini-2.5-flash` | Model name for synthesis |
+| `KNOMIT_LLM_PROVIDER` | auto-detected | `anthropic`, `gemini`, `bedrock`, `claude-cli`, `gemini-cli` |
+| `KNOMIT_API_KEY` | — | LLM API key |
+| `KNOMIT_LLM_CACHE` | `false` | Enable LLM prompt caching |
+| `KNOMIT_LLM_BATCH` | `false` | Enable LLM batch processing |
+| `KNOMIT_GIT_ORIGIN` | — | Remote origin URL (seeds the default repo) |
+| `KNOMIT_GIT_SERVE` | `false` | Enable git smart-HTTP at `/git` |
+| `KNOMIT_GIT_PORT` | — | Port for the git smart-HTTP listener |
+| `KNOMIT_REMOTE_AUTH` | auto-detected | `token`, `basic`, or `ssh` |
+| `KNOMIT_REMOTE_TOKEN` | — | Token for remote auth |
+| `KNOMIT_REMOTE_USER` | — | Username for basic auth |
+| `KNOMIT_REMOTE_PASSWORD` | — | Password for basic auth |
+| `KNOMIT_REMOTE_SSH_KEY` | `~/.knomit/id_ed25519` | Path to the SSH key |
+| `ANTHROPIC_API_KEY` | — | Anthropic API key |
+| `GOOGLE_AI_API_KEY` | — | Gemini API key |
+| `AWS_ACCESS_KEY_ID` | — | AWS access key for Bedrock |
+| `AWS_SECRET_ACCESS_KEY` | — | AWS secret key for Bedrock |
+| `AWS_REGION` | `us-east-1` | AWS region for Bedrock |
+| `ONNXRUNTIME_SHARED_LIBRARY` | — | Override the ONNX Runtime library path |
+
+## LLM configuration
+
+Synthesis is the **only** LLM-backed feature. Configure a provider via the model
+name and credentials:
+
+| Provider | Variables |
+|----------|-----------|
+| Gemini | `KNOMIT_LLM_MODEL=gemini-2.5-flash` · `GOOGLE_AI_API_KEY=…` |
+| Anthropic | `KNOMIT_LLM_MODEL=claude-sonnet-4-6` · `ANTHROPIC_API_KEY=…` |
+| Bedrock | `KNOMIT_LLM_MODEL=us.anthropic.claude-sonnet-4-6-v1` · `AWS_ACCESS_KEY_ID=…` · `AWS_SECRET_ACCESS_KEY=…` |
+| Claude CLI | `KNOMIT_LLM_PROVIDER=claude-cli` — uses the `claude` CLI (no API key; works with Anthropic Max) |
+| Gemini CLI | `KNOMIT_LLM_PROVIDER=gemini-cli` — uses the `gemini` CLI (no API key; works with Google AI Pro) |
+
+The default model is `gemini-2.5-flash`. For API providers the provider is
+auto-detected from the model name; CLI providers must be set explicitly via
+`KNOMIT_LLM_PROVIDER`.
+
+<Aside type="note" title="No key, no problem — for reads">
+If you only browse, search, and query, you never need an LLM key. It's required
+only to run synthesis. A read-only instance (like the public demo) needs no
+provider credentials at all.
+</Aside>
+
+## Verifying integrity
+
+The `knomit verify` subcommand runs integrity checks against a live on-disk repo:
+
+```sh
+knomit verify                 # verify the default repo
+knomit verify --name work     # verify a specific repo
+knomit verify --all --deep    # every repo, including fact-format checks
+```

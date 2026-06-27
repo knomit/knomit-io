@@ -1,0 +1,21 @@
+/** Shared, single-source site constants. */
+export const SITE_NAME = 'knomit';
+export const SITE_TAGLINE = 'Knowledge + commit.';
+/** One-line product category, used under the logo and in fallbacks. */
+export const SITE_SUBLINE =
+  'A distributed, decentralized knowledge base — built from facts, not documents.';
+export const SITE_DESCRIPTION =
+  'A distributed, decentralized knowledge base built from concise, typed facts — not documents. Confidence, provenance, and ontology; facts evolve and discovery spawns new ones. Humans and agents converge on one source of truth.';
+// Placeholder home — update once the public repo location is finalized.
+export const GITHUB_URL = 'https://github.com/knomit/knomit';
+
+// The live demo. The public instance will live at https://kb.knomit.io; for now
+// the iframe points at a local server for testing. Swap DEMO_URL back when the
+// hosted instance is up.
+export const DEMO_LABEL = 'kb.knomit.io';
+export const DEMO_URL = 'http://localhost:19278/';
+
+/** When true, /explore embeds the live UI; when false it shows the teaser. */
+export const DEMO_LIVE = true;
+
+export const PORT = 19278;

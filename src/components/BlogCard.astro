@@ -1,0 +1,80 @@
+---
+import { formatDate } from '../lib/format';
+
+interface Props {
+  href: string;
+  title: string;
+  description: string;
+  pubDate: Date;
+  tags?: string[];
+  author?: string;
+}
+const { href, title, description, pubDate, tags = [] } = Astro.props;
+---
+
+<article class="k-card k-blogcard k-reveal">
+  <a href={href} class="k-blogcard__link">
+    <time class="k-blogcard__date k-mono" datetime={pubDate.toISOString()}>
+      {formatDate(pubDate)}
+    </time>
+    <h3 class="k-blogcard__title">{title}</h3>
+    <p class="k-blogcard__desc k-text-2">{description}</p>
+    {
+      tags.length > 0 && (
+        <ul class="k-blogcard__tags">
+          {tags.slice(0, 3).map((t) => (
+            <li class="k-tag k-mono">{t}</li>
+          ))}
+        </ul>
+      )
+    }
+  </a>
+</article>
+
+<style>
+  .k-blogcard {
+    padding: 0;
+    overflow: hidden;
+  }
+  .k-blogcard__link {
+    display: block;
+    padding: 1.4rem;
+    color: inherit;
+    height: 100%;
+  }
+  .k-blogcard__link:hover {
+    text-decoration: none;
+  }
+  .k-blogcard__date {
+    font-size: 0.78rem;
+    color: var(--k-text-muted);
+  }
+  .k-blogcard__title {
+    font-size: 1.15rem;
+    margin: 0.55rem 0 0.5rem;
+    color: var(--k-text);
+  }
+  .k-blogcard:hover .k-blogcard__title {
+    color: var(--k-brand);
+  }
+  .k-blogcard__desc {
+    font-size: 0.92rem;
+    line-height: 1.5;
+  }
+  .k-blogcard__tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    list-style: none;
+    margin: 1rem 0 0;
+    padding: 0;
+  }
+  .k-tag {
+    font-size: 0.72rem;
+    color: var(--k-ref);
+    background: var(--k-ref-glow);
+    border: 1px solid rgba(136, 170, 255, 0.2);
+    padding: 0.15rem 0.5rem;
+    border-radius: 999px;
+  }
+</style>

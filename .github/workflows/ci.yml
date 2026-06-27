@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    env:
+      # The build-time sync pulls knomit's OpenAPI spec. Until the knomit repo is
+      # public, provide a read-scoped token as a repo secret; afterwards the
+      # default ref fetch works without one.
+      KNOMIT_REF: ${{ vars.KNOMIT_REF || 'main' }}
+      GITHUB_TOKEN: ${{ secrets.KNOMIT_SYNC_TOKEN }}
+      SITE_URL: https://knomit.io
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build (runs prebuild sync)
+        run: npm run build
+
+      - name: Type & content check
+        run: npm run check
+
+      - name: Install Playwright browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Smoke tests
+        run: npm test
+
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7

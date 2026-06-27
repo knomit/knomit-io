@@ -1,0 +1,52 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import Logo from '../assets/logo.svg';
+import Icon from '../components/Icon.astro';
+---
+
+<BaseLayout title="Not found — knomit" description="That page isn't in this branch of history.">
+  <section class="nf">
+    <div class="k-container nf__inner">
+      <Logo width={56} height={56} />
+      <p class="k-mono nf__code">404</p>
+      <h1 class="nf__title">No fact at this path.</h1>
+      <p class="k-lead nf__lead">
+        That page isn't in this branch of history. Try one of these instead.
+      </p>
+      <div class="nf__links">
+        <a href="/" class="k-btn">Home</a>
+        <a href="/docs/quick-start" class="k-btn k-btn--ghost">Docs <Icon name="arrow" size={16} /></a>
+        <a href="/blog" class="k-btn k-btn--ghost">Blog</a>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .nf {
+    min-height: 60vh;
+    display: grid;
+    place-items: center;
+    text-align: center;
+    padding-block: 5rem;
+  }
+  .nf__code {
+    color: var(--k-brand);
+    font-size: 0.95rem;
+    letter-spacing: 0.2em;
+    margin: 1.25rem 0 0.5rem;
+  }
+  .nf__title {
+    font-size: var(--k-step-h1);
+  }
+  .nf__lead {
+    margin: 1rem auto 2rem;
+    max-width: 32rem;
+  }
+  .nf__links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    justify-content: center;
+  }
+</style>

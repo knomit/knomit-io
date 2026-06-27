@@ -1,0 +1,582 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import FactCard from '../components/FactCard.astro';
+import BranchGraph from '../components/BranchGraph.astro';
+import Icon from '../components/Icon.astro';
+import '../styles/prose.css';
+
+const toc = [
+  { id: 'facts', label: 'Facts as markdown' },
+  { id: 'kinds', label: 'Epistemic vs pragmatic' },
+  { id: 'ontology', label: 'Ontology & inheritance' },
+  { id: 'clusters', label: 'How knowledge clusters' },
+  { id: 'branches', label: 'Peers, branches & consensus' },
+  { id: 'provenance', label: 'Provenance & signing' },
+  { id: 'temporal', label: 'The temporal graph' },
+  { id: 'refs', label: 'The knomit: URI scheme' },
+];
+---
+
+<BaseLayout
+  title="Concepts — how knomit works"
+  description="Facts as markdown with provenance, the ontology hierarchy and inheritance, agent branches and consensus on main, signed-commit provenance, the temporal graph, and the knomit: URI scheme."
+>
+  <section class="k-section concepts-hero k-grid-bg">
+    <div class="k-container">
+      <p class="k-eyebrow">Concepts</p>
+      <h1 class="concepts-hero__title">How knomit works</h1>
+      <p class="k-lead concepts-hero__lead">
+        knomit is a distributed, decentralized knowledge base built from facts on
+        git. A handful of ideas explain the whole system — each one falls out of a
+        single decision: make git the only source of truth, and represent
+        knowledge as facts, not documents.
+      </p>
+      <nav class="concepts-toc" aria-label="On this page">
+        {toc.map((t) => <a href={`#${t.id}`} class="concepts-toc__link">{t.label}</a>)}
+      </nav>
+    </div>
+  </section>
+
+  <div class="k-container concepts">
+    <!-- Facts -->
+    <section id="facts" class="concept-block">
+      <div class="concept-block__text k-prose-content">
+        <h2>A fact is a markdown file — not a document</h2>
+        <p>
+          Knowledge in knomit is a <strong>fact</strong>: one concise, atomic
+          claim — not a chunk of an ingested document. Each is a plain markdown
+          file: YAML frontmatter for structured metadata, a markdown body for the
+          claim. The file <em>is</em> the fact — no database rows, no binary
+          blobs, no opaque embeddings.
+        </p>
+        <p>
+          Confidence, domains, entities, and provenance refs travel in the
+          frontmatter. A <code>confidence</code> is a degree of belief that can
+          rise and fall; <code>refs</code> relate the fact to others, forming a
+          graph. Because it's just a file, humans edit it with any text editor and
+          agents write it over MCP — both paths land at the same file, through the
+          same operations.
+        </p>
+      </div>
+      <div class="concept-block__art">
+        <FactCard
+          path="kb/technology/ai/models/e4fecdf6.md"
+          frontmatter={{
+            type: 'hypothesis',
+            confidence: 0.58,
+            domain: ['ai', 'evaluation', 'agentic-ai'],
+            entities: ['METR', 'SWE-Bench'],
+            refs: ['knomit:/kb/technology/ai/models/d3ac8540.md'],
+          }}
+          body={'A major benchmark org will publish an **agentic-duration** evaluation framework by Q2 2027, displacing SWE-Bench as the primary coding-AI standard.'}
+          commit="b3a9f14"
+          signer="agent/forecaster-9b2"
+          evolution="0.50 → 0.58"
+        />
+      </div>
+    </section>
+
+    <!-- Kinds: epistemic vs pragmatic -->
+    <section id="kinds" class="concept-block concept-block--reverse">
+      <div class="concept-block__text k-prose-content">
+        <h2>Epistemic vs pragmatic</h2>
+        <p>
+          Every fact carries a <strong>kind</strong> that tells the consumer how
+          to apply it. <strong>Epistemic</strong> facts describe what <em>is</em> —
+          observations, concepts, syntheses, hypotheses — knowledge to weigh as
+          evidence, with a confidence that can move. <strong>Pragmatic</strong>
+          facts prescribe what to <em>do</em> — policies and heuristics — rules to
+          follow or lean on.
+        </p>
+        <p>
+          The leaf <code>type</code> refines this further
+          (<code>observation</code>, <code>principle</code>, <code>pattern</code>,
+          <code>synthesis</code>, <code>hypothesis</code>, <code>methodology</code>,
+          and more), but the epistemic/pragmatic split is the load-bearing one: it
+          is the difference between <em>knowing</em> and <em>acting</em>.
+        </p>
+      </div>
+      <div class="concept-block__art">
+        <div class="kinds-card" aria-hidden="true">
+          <div class="kinds-col">
+            <p class="kinds-col__h k-mono">epistemic — what is</p>
+            <span class="kinds-tag k-mono">observation</span>
+            <span class="kinds-tag k-mono">concept</span>
+            <span class="kinds-tag k-mono">synthesis</span>
+            <span class="kinds-tag k-mono">hypothesis</span>
+          </div>
+          <div class="kinds-col">
+            <p class="kinds-col__h kinds-col__h--prag k-mono">pragmatic — what to do</p>
+            <span class="kinds-tag kinds-tag--prag k-mono">policy</span>
+            <span class="kinds-tag kinds-tag--prag k-mono">heuristic</span>
+            <span class="kinds-tag kinds-tag--prag k-mono">pattern</span>
+            <span class="kinds-tag kinds-tag--prag k-mono">methodology</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Ontology -->
+    <section id="ontology" class="concept-block">
+      <div class="concept-block__text k-prose-content">
+        <h2>Ontology & inheritance</h2>
+        <p>
+          Facts live in a directory tree under the ontology root
+          (<code>kb/</code>). That tree is not just organization — it carries
+          meaning. A fact placed at a higher level applies to everything beneath
+          it: a fact at <code>kb/geography/</code> is inherited by
+          <code>kb/geography/europe/uk/london/</code>.
+        </p>
+        <p>
+          Each fact also declares its subject along three independent axes — an
+          ontology path, cross-cutting <strong>domain</strong> tags, and named
+          <strong>entities</strong>. Together they make the corpus
+          introspectable: an agent can ask not just "what do I know about X?" but
+          "what is the <em>shape</em> of everything I know?"
+        </p>
+      </div>
+      <div class="concept-block__art">
+        <div class="tree-diagram" aria-hidden="true">
+          <div class="tree-node tree-node--root">kb/store/</div>
+          <div class="tree-branch">
+            <div class="tree-node">kb/store/concurrency/</div>
+            <div class="tree-node tree-node--leaf">…/branch-lock/</div>
+          </div>
+          <p class="tree-caption k-mono">a fact here applies to everything below</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Clusters -->
+    <section id="clusters" class="concept-block concept-block--reverse">
+      <div class="concept-block__text k-prose-content">
+        <h2>How knowledge clusters</h2>
+        <p>
+          Beyond what each fact says about itself, the corpus has emergent
+          structure the author never declared. Facts cluster two ways: by
+          <strong>meaning</strong> — embedding similarity groups facts that talk
+          about the same thing, wherever they were filed — and by
+          <strong>classification</strong> — shared ontology paths, domains, and
+          entities group facts by how they were declared.
+        </p>
+        <p>
+          Surfacing these clusters reveals what the knowledge base is really
+          about — not just "what do I know about X?" but "what is the
+          <em>shape</em> of everything I know?" Semantic search runs over the same
+          git-native files, so it's complementary to the structure, never a
+          replacement for it.
+        </p>
+      </div>
+      <div class="concept-block__art">
+        <div class="cluster-card" aria-hidden="true">
+          <span class="cluster-dot" style="--x:20%;--y:28%;--c:var(--k-brand)"></span>
+          <span class="cluster-dot" style="--x:32%;--y:40%;--c:var(--k-brand)"></span>
+          <span class="cluster-dot" style="--x:26%;--y:54%;--c:var(--k-brand)"></span>
+          <span class="cluster-dot" style="--x:68%;--y:30%;--c:var(--k-ref)"></span>
+          <span class="cluster-dot" style="--x:78%;--y:44%;--c:var(--k-ref)"></span>
+          <span class="cluster-dot" style="--x:70%;--y:58%;--c:var(--k-ref)"></span>
+          <span class="cluster-dot" style="--x:50%;--y:74%;--c:var(--k-temporal)"></span>
+          <span class="cluster-dot" style="--x:42%;--y:84%;--c:var(--k-temporal)"></span>
+          <span class="cluster-label k-mono" style="left:18%;top:16%">meaning</span>
+          <span class="cluster-label k-mono" style="left:66%;top:18%">classification</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Branches -->
+    <section id="branches" class="concept-block">
+      <div class="concept-block__text k-prose-content">
+        <h2>Peers, branches &amp; consensus</h2>
+        <p>
+          knomit is distributed and decentralized by construction. Every peer —
+          human or agent — operates on a long-lived personal branch
+          (<code>agent/&lt;id&gt;</code>, derived from machine hostname plus a
+          short hash of its key). All learn, update, and retract operations land
+          on that branch. <strong>No peer writes <code>main</code> directly.</strong>
+        </p>
+        <p>
+          Consensus is reached deliberately: a peer's facts are reviewed,
+          approved, and merged into <code>main</code> — by a Librarian agent, a CI
+          policy, or a human merge. <strong>No peer merges another's branch
+          directly</strong>; <code>main</code> is the single point of agreement.
+          Each peer then pulls <code>main</code> and merges it locally, inheriting
+          the agreed truth instead of re-deriving it. Learning effort is shared,
+          not re-paid.
+        </p>
+      </div>
+      <div class="concept-block__art">
+        <BranchGraph />
+      </div>
+    </section>
+
+    <!-- Provenance -->
+    <section id="provenance" class="concept-block concept-block--reverse">
+      <div class="concept-block__text k-prose-content">
+        <h2>Provenance & signing</h2>
+        <p>
+          Every write — learn, update, retract, subsume, sync — is a commit
+          authored under an identity-carrying address. Agent commits use
+          <code>&lt;agent-id&gt;+&lt;operation&gt;@agents.knomit.io</code> as the
+          author; humans use their own email with <code>+operation</code>
+          subaddressing. Commits are signed with the agent's Ed25519 key.
+        </p>
+        <p>
+          That makes the <strong>(who, what, when, why)</strong> tuple
+          cryptographic rather than hand-waved. The same key that signs commits
+          also names the branch and authenticates remote sync — one identity,
+          end to end.
+        </p>
+      </div>
+      <div class="concept-block__art">
+        <div class="prov-card k-mono" aria-hidden="true">
+          <div class="prov-row"><span class="prov-k">commit</span> <span class="prov-v prov-v--green">a1ef27c</span></div>
+          <div class="prov-row"><span class="prov-k">author</span> <span class="prov-v prov-v--blue">dev-7c9+learn@agents.knomit.io</span></div>
+          <div class="prov-row"><span class="prov-k">signed</span> <span class="prov-v prov-v--green">Ed25519 ✓</span></div>
+          <div class="prov-row"><span class="prov-k">op</span> <span class="prov-v">learn</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Temporal -->
+    <section id="temporal" class="concept-block">
+      <div class="concept-block__text k-prose-content">
+        <h2>The temporal graph</h2>
+        <p>
+          knomit treats git history as a first-class temporal axis, not an
+          implementation detail. Each commit is a moment of belief: the state of
+          the fact graph as some agent understood it at that instant. The
+          <code>git log</code> of a fact <em>is</em> its epistemic history — how
+          the claim evolved, when confidence shifted, when sources were added.
+        </p>
+        <p>
+          So you can time-travel. Ask what was known <em>as-of</em> any commit,
+          and the entire graph rewinds: every ref resolves to whatever its target
+          was <strong>at that point in time</strong>, even if it has since been
+          updated or retracted. The graph is a record of what was believed and
+          when — never silently overwritten with "now".
+        </p>
+      </div>
+      <div class="concept-block__art">
+        <div class="timeline" aria-hidden="true">
+          <div class="timeline__track"></div>
+          <div class="timeline__node"><span class="k-mono">0.6</span></div>
+          <div class="timeline__node"><span class="k-mono">0.8</span></div>
+          <div class="timeline__node timeline__node--now"><span class="k-mono">0.95</span></div>
+          <p class="timeline__cap k-mono">confidence, over commits →</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Refs -->
+    <section id="refs" class="concept-block concept-block--reverse">
+      <div class="concept-block__text k-prose-content">
+        <h2>The <code>knomit:</code> URI scheme</h2>
+        <p>
+          Refs anchor a fact to its source material — the evidence behind the
+          claim — using the <code>knomit:</code> URI scheme. A ref can point
+          inside the current knowledge base, at an external repository, or at any
+          web resource.
+        </p>
+        <table>
+          <thead>
+            <tr><th>Form</th><th>Meaning</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>knomit:/kb/...</code></td><td>Current knowledge base</td></tr>
+            <tr><td><code>knomit://github.com/org/repo/...</code></td><td>External repo</td></tr>
+            <tr><td><code>https://example.com/doc</code></td><td>Any web resource</td></tr>
+          </tbody>
+        </table>
+        <p>
+          Because refs resolve at commit-time, the provenance graph you walk with
+          <code>knomit_explain</code> is always the one that existed when the
+          referrer made its claim.
+        </p>
+      </div>
+      <div class="concept-block__art">
+        <div class="uri-card k-mono" aria-hidden="true">
+          <span class="uri-scheme">knomit://</span><span class="uri-host">arxiv.org/abs/2506.01234</span><span class="uri-path">#section-3</span>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section class="k-section">
+    <div class="k-container concepts-cta">
+      <h2>Ready to go deeper?</h2>
+      <div class="concepts-cta__actions">
+        <a href="/docs/concepts" class="k-btn">Concept deep-dives in the docs <Icon name="arrow" size={16} /></a>
+        <a href="/explore" class="k-btn k-btn--ghost">See it in the live UI</a>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .concepts-hero {
+    border-bottom: 1px solid var(--k-hairline-soft);
+    padding-block: clamp(3rem, 2rem + 4vw, 5rem);
+  }
+  .concepts-hero__title {
+    font-size: var(--k-step-h1);
+    margin: 0.4rem 0 0;
+  }
+  .concepts-hero__lead {
+    margin-top: 1.25rem;
+    max-width: 44rem;
+  }
+  .concepts-toc {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: 2rem;
+  }
+  .concepts-toc__link {
+    font-family: var(--k-font-mono);
+    font-size: 0.82rem;
+    color: var(--k-text-2);
+    border: 1px solid var(--k-hairline);
+    padding: 0.35rem 0.7rem;
+    border-radius: 999px;
+  }
+  .concepts-toc__link:hover {
+    color: var(--k-brand);
+    border-color: var(--k-brand);
+    text-decoration: none;
+  }
+
+  .concepts {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(3.5rem, 2rem + 6vw, 6rem);
+    padding-block: clamp(3rem, 2rem + 4vw, 5rem);
+  }
+  .concept-block {
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: clamp(2rem, 1rem + 4vw, 4rem);
+    align-items: center;
+    scroll-margin-top: 80px;
+  }
+  .concept-block--reverse .concept-block__art {
+    order: -1;
+  }
+  .concept-block__text h2 {
+    font-size: var(--k-step-h2);
+    margin-bottom: 1rem;
+  }
+  .concept-block__art {
+    min-width: 0;
+  }
+
+  /* Mini diagrams */
+  .tree-diagram {
+    background: var(--k-surface-1);
+    border: 1px solid var(--k-hairline-soft);
+    border-radius: var(--k-radius);
+    padding: 1.75rem;
+  }
+  .tree-node {
+    font-family: var(--k-font-mono);
+    font-size: 0.85rem;
+    padding: 0.55rem 0.8rem;
+    border-radius: var(--k-radius-sm);
+    border: 1px solid var(--k-hairline);
+    background: var(--k-surface-2);
+    color: var(--k-text-2);
+    width: fit-content;
+  }
+  .tree-node--root {
+    color: var(--k-brand);
+    border-color: rgba(119, 204, 153, 0.4);
+  }
+  .tree-branch {
+    margin-left: 1.5rem;
+    margin-top: 0.6rem;
+    border-left: 2px solid var(--k-hairline);
+    padding-left: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .tree-node--leaf {
+    color: var(--k-ref);
+  }
+  .tree-caption {
+    margin-top: 1.1rem;
+    font-size: 0.76rem;
+    color: var(--k-text-muted);
+  }
+
+  .prov-card,
+  .uri-card {
+    background: var(--k-surface-1);
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius);
+    padding: 1.4rem;
+    font-size: 0.85rem;
+  }
+  .prov-row {
+    display: flex;
+    gap: 0.75rem;
+    padding: 0.3rem 0;
+  }
+  .prov-k {
+    color: var(--k-text-muted);
+    width: 4.5rem;
+    flex-shrink: 0;
+  }
+  .prov-v--green {
+    color: var(--k-brand);
+  }
+  .prov-v--blue {
+    color: var(--k-ref);
+  }
+
+  .uri-card {
+    font-size: 0.95rem;
+    word-break: break-all;
+  }
+  .uri-scheme {
+    color: var(--k-text-muted);
+  }
+  .uri-host {
+    color: var(--k-ref);
+  }
+  .uri-path {
+    color: var(--k-brand);
+  }
+
+  .timeline {
+    position: relative;
+    background: var(--k-surface-1);
+    border: 1px solid var(--k-hairline-soft);
+    border-radius: var(--k-radius);
+    padding: 2.5rem 1.75rem 1.75rem;
+    display: flex;
+    align-items: center;
+    gap: 2rem;
+  }
+  .timeline__track {
+    position: absolute;
+    left: 1.75rem;
+    right: 1.75rem;
+    top: 50%;
+    height: 2px;
+    background: linear-gradient(90deg, var(--k-retracted), var(--k-temporal), var(--k-brand));
+    opacity: 0.5;
+  }
+  .timeline__node {
+    position: relative;
+    z-index: 1;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--k-surface-2);
+    border: 2px solid var(--k-temporal);
+    font-size: 0.8rem;
+    color: var(--k-temporal);
+  }
+  .timeline__node--now {
+    border-color: var(--k-brand);
+    color: var(--k-brand);
+    box-shadow: 0 0 16px var(--k-brand-glow);
+  }
+  .timeline__cap {
+    position: absolute;
+    bottom: 0.6rem;
+    right: 1.75rem;
+    font-size: 0.74rem;
+    color: var(--k-text-muted);
+  }
+
+  /* Kinds (epistemic vs pragmatic) */
+  .kinds-card {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    background: var(--k-surface-1);
+    border: 1px solid var(--k-hairline-soft);
+    border-radius: var(--k-radius);
+    padding: 1.5rem;
+  }
+  .kinds-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .kinds-col__h {
+    font-size: 0.72rem;
+    color: var(--k-brand);
+    margin-bottom: 0.3rem;
+  }
+  .kinds-col__h--prag {
+    color: var(--k-temporal);
+  }
+  .kinds-tag {
+    font-size: 0.78rem;
+    padding: 0.35rem 0.6rem;
+    border-radius: var(--k-radius-sm);
+    border: 1px solid rgba(119, 204, 153, 0.3);
+    background: var(--k-brand-glow);
+    color: var(--k-brand-2);
+    text-align: center;
+  }
+  .kinds-tag--prag {
+    border-color: rgba(229, 162, 60, 0.3);
+    background: var(--k-temporal-glow);
+    color: var(--k-temporal);
+  }
+
+  /* Clusters scatter */
+  .cluster-card {
+    position: relative;
+    aspect-ratio: 4 / 3;
+    background: var(--k-surface-1);
+    border: 1px solid var(--k-hairline-soft);
+    border-radius: var(--k-radius);
+    overflow: hidden;
+  }
+  .cluster-dot {
+    position: absolute;
+    left: var(--x);
+    top: var(--y);
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--c);
+    box-shadow: 0 0 12px var(--c);
+    opacity: 0.85;
+  }
+  .cluster-label {
+    position: absolute;
+    font-size: 0.72rem;
+    color: var(--k-text-muted);
+  }
+
+  .concepts-cta {
+    text-align: center;
+  }
+  .concepts-cta h2 {
+    font-size: var(--k-step-h2);
+    margin-bottom: 1.5rem;
+  }
+  .concepts-cta__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.85rem;
+    justify-content: center;
+  }
+
+  @media (max-width: 860px) {
+    .concept-block,
+    .concept-block--reverse {
+      grid-template-columns: 1fr;
+    }
+    .concept-block--reverse .concept-block__art {
+      order: 0;
+    }
+  }
+</style>

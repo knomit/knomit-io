@@ -1,0 +1,95 @@
+---
+/** "How it works" — numbered steps with a connecting spine, motion-safe reveal. */
+interface Step {
+  n: string;
+  title: string;
+  body: string;
+  code?: string;
+}
+interface Props {
+  steps: Step[];
+}
+const { steps } = Astro.props;
+---
+
+<ol class="k-steps">
+  {
+    steps.map((s) => (
+      <li class="k-step k-reveal">
+        <div class="k-step__marker" aria-hidden="true">
+          <span class="k-step__num">{s.n}</span>
+        </div>
+        <div class="k-step__content">
+          <h3 class="k-step__title">{s.title}</h3>
+          <p class="k-step__body k-text-2">{s.body}</p>
+          {s.code && <pre class="k-step__code k-mono">{s.code}</pre>}
+        </div>
+      </li>
+    ))
+  }
+</ol>
+
+<style>
+  .k-steps {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.5rem;
+    position: relative;
+  }
+  .k-step {
+    display: grid;
+    grid-template-columns: 48px 1fr;
+    gap: 1.1rem;
+    padding: 1.1rem 0;
+    position: relative;
+  }
+  .k-step:not(:last-child) .k-step__marker::after {
+    content: '';
+    position: absolute;
+    top: 40px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 2px;
+    height: calc(100% + 0.5rem);
+    background: linear-gradient(var(--k-brand), transparent);
+    opacity: 0.4;
+  }
+  .k-step__marker {
+    position: relative;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: var(--k-brand-glow);
+    border: 1px solid rgba(119, 204, 153, 0.35);
+  }
+  .k-step__num {
+    font-family: var(--k-font-mono);
+    font-weight: 500;
+    color: var(--k-brand);
+    font-size: 0.95rem;
+  }
+  .k-step__title {
+    font-size: 1.2rem;
+    margin-bottom: 0.4rem;
+    padding-top: 0.35rem;
+  }
+  .k-step__body {
+    line-height: 1.6;
+    max-width: 44rem;
+  }
+  .k-step__code {
+    margin-top: 0.8rem;
+    padding: 0.8rem 1rem;
+    background: var(--k-surface-1);
+    border: 1px solid var(--k-hairline-soft);
+    border-radius: var(--k-radius-sm);
+    font-size: 0.82rem;
+    color: var(--k-brand-2);
+    overflow-x: auto;
+    white-space: pre;
+  }
+</style>

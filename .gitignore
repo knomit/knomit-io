@@ -1,1 +1,25 @@
+# local planning packet (kept out of the published repo)
 local/
+
+# dependencies
+node_modules/
+
+# build output
+dist/
+.astro/
+
+# generated at build time by scripts/sync.mjs (pulled from the knomit source)
+src/generated/*
+!src/generated/.gitkeep
+
+# test artifacts
+test-results/
+playwright-report/
+.playwright/
+.playwright-mcp/
+
+# env & os
+.env
+.env.*
+!.env.example
+.DS_Store

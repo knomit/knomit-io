@@ -1,0 +1,55 @@
+---
+import Icon from './Icon.astro';
+
+interface Feature {
+  icon: string;
+  title: string;
+  body: string;
+}
+interface Props {
+  features: Feature[];
+}
+const { features } = Astro.props;
+---
+
+<div class="k-features">
+  {
+    features.map((f) => (
+      <article class="k-card k-feature k-reveal">
+        <span class="k-feature__icon">
+          <Icon name={f.icon as any} size={22} />
+        </span>
+        <h3 class="k-feature__title">{f.title}</h3>
+        <p class="k-feature__body k-text-2">{f.body}</p>
+      </article>
+    ))
+  }
+</div>
+
+<style>
+  .k-features {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(248px, 1fr));
+    gap: 1rem;
+  }
+  .k-feature__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 10px;
+    color: var(--k-brand);
+    background: var(--k-brand-glow);
+    border: 1px solid rgba(119, 204, 153, 0.25);
+    margin-bottom: 1rem;
+  }
+  .k-feature__title {
+    font-size: 1.1rem;
+    margin-bottom: 0.5rem;
+  }
+  .k-feature__body {
+    font-size: 0.94rem;
+    line-height: 1.55;
+  }
+</style>

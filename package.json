@@ -1,0 +1,38 @@
+{
+  "name": "knomit-site",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Marketing, docs, and blog site for knomit — git-backed memory for AI agents.",
+  "scripts": {
+    "sync": "node --env-file-if-exists=.env scripts/sync.mjs",
+    "prebuild": "node --env-file-if-exists=.env scripts/sync.mjs",
+    "dev": "node --env-file-if-exists=.env scripts/sync.mjs && astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "check": "astro check",
+    "test": "playwright test"
+  },
+  "dependencies": {
+    "@astrojs/mdx": "^4.3.6",
+    "@astrojs/react": "^4.4.1",
+    "@astrojs/rss": "^4.0.12",
+    "@astrojs/sitemap": "^3.6.0",
+    "@astrojs/starlight": "^0.36.0",
+    "@fontsource/jetbrains-mono": "^5.2.5",
+    "@fontsource-variable/space-grotesk": "^5.2.5",
+    "astro": "^5.16.0",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "sharp": "^0.34.4",
+    "starlight-openapi": "^0.21.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.4",
+    "@playwright/test": "^1.56.0",
+    "@types/react": "^19.2.2",
+    "@types/react-dom": "^19.2.1",
+    "typescript": "^5.9.3"
+  }
+}
