@@ -1,5 +1,6 @@
 # local planning packet (kept out of the published repo)
 local/
+docs/
 
 # dependencies
 node_modules/
