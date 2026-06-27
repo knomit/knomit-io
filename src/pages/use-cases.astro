@@ -4,98 +4,141 @@ import SectionHeading from '../components/SectionHeading.astro';
 import Icon from '../components/Icon.astro';
 import { GITHUB_URL } from '../lib/site';
 
-const cases = [
+const groups = [
   {
-    icon: 'distributed',
-    title: 'Distributed team knowledge',
-    audience: 'For teams of people and agents',
-    body: 'One source of truth that humans and agents build together. Because facts are plain markdown in git, your team authors them the same way agents do — review knowledge in pull requests, diff how a decision changed, and trust provenance instead of folklore.',
-    points: [
-      'Humans and machines author through the same operations',
-      'Review and merge knowledge like code',
-      'No CMS, no lock-in — facts in git, hosted anywhere',
+    eyebrow: 'For developers & their coding agents',
+    lead: 'Knowledge that lives where the work happens.',
+    cases: [
+      {
+        icon: 'ontology',
+        title: 'Codebase tribal knowledge',
+        body: 'Invariants, gotchas, and design rationale that never make it into comments. Your coding agent — and your teammates — read them before touching an area, and write new ones when they discover something non-obvious.',
+        tag: 'invariants · gotchas · decisions — in the repo',
+      },
+      {
+        icon: 'provenance',
+        title: 'Agents that document their own decisions',
+        body: 'When an agent makes a call — picks an approach, rejects an alternative, resolves a tradeoff — it records it as a typed, signed fact. Not memory: actionable knowledge. The next agent reads the rationale instead of re-deriving it, and you can trace exactly what was known when any choice was made.',
+        tag: 'self-documenting · signed · traceable',
+      },
     ],
-    link: { href: '/concepts#branches', label: 'Peers, branches & consensus' },
   },
   {
-    icon: 'consensus',
-    title: 'Multi-peer consensus, no clobbering',
-    audience: 'For anyone running a fleet of peers',
-    body: 'Many peers, one converging knowledge base, zero stepping on each other. Each peer writes its own branch; consensus reaches main by merge. Learning effort is paid once across the network, not re-paid by every peer.',
-    points: [
-      'Per-peer branches — no shared-write contention',
-      'Merge-to-main consensus by Librarian, CI, or human',
-      'Deduplication is the economic point of distribution',
+    eyebrow: 'For researchers & analysts',
+    lead: 'A corpus that sharpens itself.',
+    cases: [
+      {
+        icon: 'search',
+        title: 'Research & intelligence monitoring',
+        body: 'Point agents at sources; they learn typed facts continuously. Synthesis distills patterns and higher-order insight as the corpus grows — exactly what the live demo shows.',
+        tag: 'continuous learning · synthesis · the live demo',
+        link: { href: '/explore', label: 'Open the live demo' },
+      },
+      {
+        icon: 'discovery',
+        title: 'Hypothesis-driven research',
+        body: 'Observations distill into syntheses; syntheses extend into falsifiable hypotheses with settlement criteria. When evidence arrives, the hypothesis transitions to observation — and git records the exact moment the loop closed.',
+        tag: 'observe → synthesize → hypothesize → confirm',
+        link: { href: '/concepts#synthesis', label: 'Synthesis & hypotheses' },
+      },
+      {
+        icon: 'evolve',
+        title: 'Knowledge that compounds',
+        body: 'Facts beget facts; confidence rises and falls; query the graph as-of any point in time — so the corpus gets sharper over time, not just bigger.',
+        tag: 'confidence moves · query as-of any commit',
+        link: { href: '/concepts#temporal', label: 'The temporal graph' },
+      },
     ],
-    link: { href: '/concepts#clusters', label: 'How knowledge clusters' },
   },
   {
-    icon: 'discovery',
-    title: 'Knowledge that compounds',
-    audience: 'For knowledge that should grow itself',
-    body: 'Facts evolve and beget facts. Synthesis distills higher-order insights from what the network already knows, and hypotheses extend them — so the corpus gets sharper over time instead of just bigger, and you can see how any belief got here.',
-    points: [
-      'Confidence rises and falls; query the graph as-of any point',
-      'Synthesis distills new facts; hypotheses extend them',
-      'Provenance lets you trace and trust every claim',
+    eyebrow: 'For fleets & open networks',
+    lead: 'Many minds, one converging truth.',
+    cases: [
+      {
+        icon: 'consensus',
+        title: 'Distributed team knowledge',
+        body: 'One source of truth that humans and agents build together. Because facts are plain markdown in git, you review knowledge in pull requests and trust provenance instead of folklore.',
+        tag: 'author together · review like code',
+        link: { href: '/concepts#branches', label: 'Peers, branches & consensus' },
+      },
+      {
+        icon: 'cluster',
+        title: 'Competitive agent benchmarking',
+        body: 'Spin a fleet at one task; each agent self-documents its approach and findings on its own branch; all converge to a shared repo. Synthesis distills where approaches agreed, where confidence diverged, and what only one agent found — a knowledge graph of why, not just a leaderboard.',
+        tag: 'fleet · per-branch findings · distilled comparison',
+      },
+      {
+        icon: 'distributed',
+        title: 'Open knowledge networks',
+        body: 'A public knomit repo anyone contributes to via pull request — a shared commons with full provenance, where deduplication means the network pays each learning cost once.',
+        tag: 'public repo · PR contributions · paid once',
+      },
     ],
-    link: { href: '/concepts#temporal', label: 'The temporal graph' },
   },
   {
-    icon: 'ontology',
-    title: 'Codebase tribal knowledge',
-    audience: 'For developers with a coding agent',
-    body: 'Capture the invariants, gotchas, and design rationale that never make it into comments. Your coding agent — and your teammates — read them before touching an area, and write new ones when they discover something non-obvious.',
-    points: [
-      'Invariants are load-bearing — re-read before editing',
-      'Facts anchor to source files via the knomit: URI scheme',
-      'Stale facts get updated or retracted, not propagated',
+    eyebrow: 'For decentralized & edge deployment',
+    lead: 'It\'s just git — so it goes anywhere, and composes any way.',
+    cases: [
+      {
+        icon: 'mcp',
+        title: 'Knowledge processing pipelines',
+        body: 'Instances compose. One instance points at a repo hosted by another, so you can wire a DAG: a raw-ingestion node feeds a distillation node feeds a consensus node. An ETL pipeline for facts, where every stage is itself a queryable knomit.',
+        tag: 'compose instances · ingest → distill → consensus',
+      },
+      {
+        icon: 'fact',
+        title: 'Offline-first & edge agents',
+        body: 'Every peer holds the entire knowledge base locally as a git repo. An agent in the field, airgapped, or simply disconnected has full recall and keeps learning on its branch — then syncs when it reconnects. The network is for consensus, not for access.',
+        tag: 'local-first · works disconnected · syncs later',
+      },
     ],
-    link: { href: '/blog', label: 'Read the dogfooding story' },
   },
 ];
 ---
 
 <BaseLayout
   title="Use cases — knomit"
-  description="Where distributed, fact-based knowledge pays off: distributed team knowledge, multi-peer consensus, compounding discovery, and codebase tribal knowledge."
+  description="Ten things you can build on a git-native, fact-based knowledge base — for developers and coding agents, researchers, fleets and open networks, and decentralized edge deployment."
 >
   <section class="k-section uc-hero k-grid-bg">
     <div class="k-container">
       <SectionHeading
         eyebrow="Use cases"
         title="Where shared, proven knowledge pays off."
-        lead="The same git-native substrate serves one peer, a fleet, and a whole team of people and agents. Four places knomit changes what's possible."
+        lead="The same git-native substrate serves a solo developer, a research fleet, and a whole network of people and agents. A pool of what people build with it."
       />
     </div>
   </section>
 
-  <section class="k-section uc-section">
-    <div class="k-container uc-grid">
-      {
-        cases.map((c) => (
-          <article class="k-card uc-card k-reveal">
-            <span class="uc-card__icon">
-              <Icon name={c.icon as any} size={22} />
-            </span>
-            <p class="uc-card__audience k-mono">{c.audience}</p>
-            <h2 class="uc-card__title">{c.title}</h2>
-            <p class="uc-card__body k-text-2">{c.body}</p>
-            <ul class="uc-card__points">
-              {c.points.map((p) => (
-                <li>
-                  <Icon name="arrow" size={15} /> {p}
-                </li>
-              ))}
-            </ul>
-            <a href={c.link.href} class="uc-card__link">
-              {c.link.label} <Icon name="arrow" size={15} />
-            </a>
-          </article>
-        ))
-      }
-    </div>
-  </section>
+  {
+    groups.map((group) => (
+      <section class="k-section uc-group">
+        <div class="k-container">
+          <header class="uc-group__head">
+            <p class="k-eyebrow">{group.eyebrow}</p>
+            <p class="uc-group__lead">{group.lead}</p>
+          </header>
+          <div class="uc-grid">
+            {group.cases.map((c) => (
+              <article class="k-card uc-card k-reveal">
+                <span class="uc-card__icon">
+                  <Icon name={c.icon as any} size={22} />
+                </span>
+                <h2 class="uc-card__title">{c.title}</h2>
+                <p class="uc-card__body k-text-2">{c.body}</p>
+                <p class="uc-card__tag k-mono">{c.tag}</p>
+                {c.link && (
+                  <a href={c.link.href} class="uc-card__link">
+                    {c.link.label} <Icon name="arrow" size={15} />
+                  </a>
+                )}
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+    ))
+  }
 
   <section class="k-section">
     <div class="k-container uc-cta">
@@ -139,11 +182,6 @@ const cases = [
     border: 1px solid rgba(119, 204, 153, 0.25);
     margin-bottom: 1.1rem;
   }
-  .uc-card__audience {
-    font-size: 0.78rem;
-    color: var(--k-text-muted);
-    margin-bottom: 0.4rem;
-  }
   .uc-card__title {
     font-size: 1.4rem;
     margin-bottom: 0.7rem;
@@ -152,34 +190,43 @@ const cases = [
     line-height: 1.6;
     font-size: 0.96rem;
   }
-  .uc-card__points {
-    list-style: none;
-    margin: 1.25rem 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.55rem;
-  }
-  .uc-card__points li {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.6rem;
-    font-size: 0.9rem;
-    color: var(--k-text);
-  }
-  .uc-card__points :global(.k-icon) {
-    color: var(--k-brand);
-    flex-shrink: 0;
-    margin-top: 0.15rem;
-  }
   .uc-card__link {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    margin-top: auto;
+    margin-top: 0;
     padding-top: 0.5rem;
     font-size: 0.92rem;
     font-weight: 500;
+  }
+
+  .uc-group {
+    padding-block: clamp(2rem, 1.25rem + 3vw, 3.25rem);
+  }
+  .uc-group + .uc-group {
+    padding-top: 0;
+  }
+  .uc-group__head {
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.9rem;
+    border-bottom: 1px solid var(--k-hairline-soft);
+  }
+  .uc-group__lead {
+    font-size: 1.15rem;
+    color: var(--k-text);
+    margin-top: 0.3rem;
+  }
+  .uc-card__tag {
+    margin-top: auto;
+    padding-top: 1rem;
+    font-size: 0.76rem;
+    color: var(--k-text-muted);
+    letter-spacing: 0.01em;
+  }
+  /* When a card has both a tag and a link, the tag shouldn't eat the spacer */
+  .uc-card__tag + .uc-card__link {
+    margin-top: 0.6rem;
+    padding-top: 0;
   }
 
   .uc-cta {
