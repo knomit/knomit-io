@@ -33,13 +33,13 @@ export default function ExitWidget() {
           align-items: center;
           height: 46px;
           border-radius: 999px;
-          background: rgba(20, 20, 20, 0.92);
-          border: 1px solid #333;
+          background: rgba(22, 22, 22, 0.96);
+          border: 1px solid rgba(119, 204, 153, 0.32);
           color: #eee;
           text-decoration: none;
           overflow: hidden;
           backdrop-filter: blur(8px);
-          box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.7);
+          box-shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(119, 204, 153, 0.06);
           font: 500 0.92rem/1 system-ui, -apple-system, sans-serif;
           transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease;
         }
