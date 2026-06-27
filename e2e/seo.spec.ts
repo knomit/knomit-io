@@ -62,3 +62,23 @@ test('robots.txt welcomes AI crawlers and points to llms.txt', async ({ page }) 
   }
   expect(body).toMatch(/llms\.txt/i);
 });
+
+test.describe('llms.txt', () => {
+  test('llms.txt exists, is plain text, and links docs + blog', async ({ page }) => {
+    const res = await page.request.get('/llms.txt');
+    expect(res.status()).toBe(200);
+    expect(res.headers()['content-type']).toMatch(/text\/plain/);
+    const body = await res.text();
+    expect(body).toMatch(/^# knomit/m);
+    expect(body).toMatch(/\/docs\/quick-start/);
+    expect(body).toMatch(/## (Docs|Blog)/);
+  });
+
+  test('llms-full.txt exists and embeds real content', async ({ page }) => {
+    const res = await page.request.get('/llms-full.txt');
+    expect(res.status()).toBe(200);
+    const body = await res.text();
+    expect(body.length).toBeGreaterThan(2000);
+    expect(body).toMatch(/knomit/);
+  });
+});
