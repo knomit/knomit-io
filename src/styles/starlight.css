@@ -157,6 +157,23 @@ starlight-toc a[aria-current='true'] {
   color: var(--k-text);
 }
 
+/* Vertical rhythm for the docs body.
+   The marketing reset zeroes Starlight's low-specificity :where() flow spacing,
+   which left paragraphs (and headings, wrapped in .sl-heading-wrapper) clobbering
+   each other. Restore it explicitly:
+     - flow elements get a 1rem gap from the previous sibling,
+     - headings get a larger gap ABOVE (section separation),
+     - and breathing room BELOW, before their content. */
+.sl-markdown-content > * + * {
+  margin-top: 1rem;
+}
+.sl-markdown-content > .sl-heading-wrapper {
+  margin-top: 3rem;
+}
+.sl-markdown-content > .sl-heading-wrapper + * {
+  margin-top: 0.85rem;
+}
+
 /* Inline code, matched to the marketing prose treatment. */
 .sl-markdown-content code:not(:where(.expressive-code *)) {
   background: var(--k-surface-2);
@@ -212,6 +229,22 @@ starlight-toc a[aria-current='true'] {
 /* The REST API reference is a standalone Scalar page (src/pages/docs/api.astro),
    themed there via Scalar's own CSS variables — not styled here. */
 
+/* ---- Tables ------------------------------------------------------------- */
+/* Reference tables carry long identifiers (env vars, fact paths). Inline code
+   defaults to overflow-wrap:anywhere, which breaks them mid-token — ugly. Keep
+   identifiers intact and let the table scroll horizontally when a row genuinely
+   doesn't fit; prose cells still wrap normally. */
+.sl-markdown-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.sl-markdown-content :is(td, th) code {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
 /* ---- Footer / pagination ------------------------------------------------ */
 .pagination-links a {
   border: 1px solid var(--k-hairline);
@@ -220,4 +253,101 @@ starlight-toc a[aria-current='true'] {
 .pagination-links a:hover {
   border-color: #444;
   background: var(--k-surface-2);
+}
+
+/* ---- Collapsible side panels ------------------------------------------- */
+/* Toggle handles (injected by the head script) plus the collapsed-state rules.
+   State is persisted in localStorage and applied pre-paint on <html>, so it
+   survives navigation without a flash. */
+
+/* Left nav: drop the pane and reclaim its inline offset.
+   Note: don't touch --sl-content-inline-start — the header reuses it to size the
+   logo/title column, so zeroing it hides the logo. Clear the content padding
+   directly instead. */
+@media (min-width: 50rem) {
+  html.klps-left-collapsed .sidebar-pane {
+    display: none;
+  }
+  html.klps-left-collapsed .main-frame {
+    padding-inline-start: 0;
+  }
+}
+
+/* Right TOC: drop the rail and let the content re-center in the freed space. */
+@media (min-width: 72rem) {
+  html.klps-right-collapsed .right-sidebar-container {
+    display: none;
+  }
+  html.klps-right-collapsed .main-pane {
+    width: 100%;
+    --sl-content-margin-inline: auto;
+  }
+}
+
+/* Edge-tab toggles — fixed, vertically centered, always reachable (they live
+   outside the panels, so a collapsed panel can still be reopened). */
+.klps-toggle {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: calc(var(--sl-z-index-navbar) - 1);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 52px;
+  padding: 0;
+  color: var(--k-text-muted);
+  background: var(--k-surface-1);
+  border: 1px solid var(--k-hairline);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.klps-toggle:hover {
+  color: var(--k-brand);
+  border-color: var(--k-brand);
+  background: var(--k-surface-2);
+}
+.klps-toggle svg {
+  width: 13px;
+  height: 13px;
+  transition: transform 0.2s ease;
+}
+
+/* Left tab rides the sidebar divider; rounded on its outer (content) side. */
+.klps-toggle--left {
+  inset-inline-start: calc(var(--sl-sidebar-width) - 11px);
+  border-radius: 0 var(--k-radius-sm) var(--k-radius-sm) 0;
+}
+html.klps-left-collapsed .klps-toggle--left {
+  inset-inline-start: 0;
+  border-inline-start: none;
+}
+html.klps-left-collapsed .klps-toggle--left svg {
+  transform: rotate(180deg);
+}
+
+/* Right tab rides the viewport's right edge; rounded on its inner side. */
+.klps-toggle--right {
+  inset-inline-end: 0;
+  border-radius: var(--k-radius-sm) 0 0 var(--k-radius-sm);
+  border-inline-end: none;
+}
+.klps-toggle--right svg {
+  transform: rotate(180deg);
+}
+html.klps-right-collapsed .klps-toggle--right svg {
+  transform: rotate(0deg);
+}
+
+/* Only show a handle where its panel actually exists at this breakpoint. */
+@media (min-width: 50rem) {
+  html[data-has-sidebar] .klps-toggle--left {
+    display: inline-flex;
+  }
+}
+@media (min-width: 72rem) {
+  html[data-has-toc] .klps-toggle--right {
+    display: inline-flex;
+  }
 }

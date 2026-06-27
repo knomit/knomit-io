@@ -1,0 +1,94 @@
+---
+title: Claude Code integration
+description: knomit as a persistent knowledge base for Claude Code — the 10 slash commands, the 4 editor hooks, and one-time scaffolding with claude init.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+knomit integrates with Claude Code as a **persistent, shared knowledge base** —
+durable, typed, signed facts with provenance that your agents build on instead of
+re-deriving.
+
+This is **not** an agent's private memory store that stashes and replays notes:
+it is a temporal graph of lessons — learned and discovered — that links, evolves,
+and can be read as of any moment in its history.
+
+The integration is a balanced hybrid where **hooks** automate the obvious capture
+and recall moments, **skills** (slash commands) handle the deliberate ones, and a
+**CLAUDE.md** block carries the philosophy and when-to-use guidance. It
+deliberately does *not* auto-inject facts via `PreToolUse` — recall is a tool the
+agent reaches for, not a firehose.
+
+## One-time setup
+
+From a project's root:
+
+```bash
+knomit-bridge claude init --source <slug> [--repo <name>] [--profile code|chat|generic]
+```
+
+This renders embedded templates into the project:
+
+| File | Ownership |
+|------|-----------|
+| `.mcp.json` | merge-required (a companion file is written if one already exists) |
+| `.claude/settings.json` (hook registration) | merge-required |
+| `CLAUDE.md` (knomit usage block) | merge-required |
+| `.claude/skills/knomit-*/SKILL.md` (all 10 commands) | **owned** — always (over)written |
+
+- `--source` is the source-code slug used in generated `src://` refs (e.g.
+  `src://knomit/internal/store/service.go@<sha>`). It defaults to `--repo` if
+  omitted.
+- `--repo` defaults to the current directory's basename.
+
+<Aside type="caution">
+The skills are deployed **only** by `claude init` from embedded templates — never
+hand-edit `.claude/skills/`. They are overwritten on the next run.
+</Aside>
+
+## The 10 slash commands
+
+| Command | When to use |
+|---------|-------------|
+| `/knomit-recall <area>` | Before non-trivial work — surface invariants, decisions, anti-patterns for an area |
+| `/knomit-remember` | Right after a discovery, a user correction, or a bug fix that exposed a hidden invariant |
+| `/knomit-decided <slug>` | The moment a tradeoff is resolved (incl. an `AskUserQuestion` answer), before starting the work it authorizes |
+| `/knomit-why <fact-path>` | Before relying on a fact — walk its provenance and flag stale anchors |
+| `/knomit-update <fact-path>` | A fact's body/confidence/refs drifted — fix it in place |
+| `/knomit-retract <fact-path>` | A fact is wrong or its subject no longer exists — remove it |
+| `/knomit-bootstrap <area>` | An area has zero facts and you're about to work in it — seed foundational facts |
+| `/knomit-review` | After a burst of fact-writing or a refactor — prune (dedup), distill (synthesis), reflect (methodology) |
+| `/knomit-hypothesize` | **User-requested only** — generate falsifiable predictions from synthesis facts |
+| `/knomit-principle` | **User-invoked only** — author a designer principle (agents must not invoke; validation rejects agent attempts) |
+
+## The 4 hooks
+
+Registered in `.claude/settings.json`, each runs `knomit-bridge claude hook
+<event>`:
+
+| Event | Claude Code trigger | What it does |
+|-------|---------------------|--------------|
+| `session-start` | SessionStart | Pre-warms the session: emits known principles, recent facts, and the per-area TOC as a system reminder |
+| `post-edit` | PostToolUse(`Edit`/`Write`/`MultiEdit`) | If an edited file matches a fact's entities, nudges `/knomit-update` or `/knomit-retract` for possibly-stale facts |
+| `post-ask` | PostToolUse(`AskUserQuestion`) | After a resolved `AskUserQuestion` with non-obvious tradeoffs, nudges `/knomit-decided` before the authorized work begins |
+| `pre-compact` | PreCompact | Scans a wider window for capture-worthy moments and suggests `/knomit-remember` / `/knomit-decided` |
+
+<Aside type="note">
+`SessionStart` stdout is auto-wrapped as a system reminder, so that hook emits
+plain text; the other hooks inject context as
+`{"hookSpecificOutput":{"additionalContext":"…"}}` JSON. `SessionEnd` is **not**
+used — Claude Code discards its output — so the Stop / `pre-compact` paths cover
+that role instead.
+</Aside>
+
+## Intent detection
+
+The "is this moment worth capturing?" signal is computed **entirely in the
+bridge** via regex — there is no server-side `/detect` endpoint. Intents
+(correction, discovery, decision, fix-bug, gotcha…) are *conversational signals*,
+not fact kinds: a "fix-bug" moment might become an `incident` or a `gotcha` fact.
+
+## Profiles
+
+`claude init --profile` selects the MCP instruction set; `code` is the default and
+the right choice for a code repo. See [MCP tools](/docs/mcp-tools/#profiles).

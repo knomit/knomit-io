@@ -3,7 +3,7 @@ title: Quick start
 description: Clone, build, and run knomit, then connect your first agent over MCP.
 ---
 
-import { Steps, Tabs, TabItem, Aside, Card } from '@astrojs/starlight/components';
+import { Steps, Tabs, TabItem, Aside, Card, CardGrid } from '@astrojs/starlight/components';
 
 knomit is a distributed, decentralized knowledge base built from facts —
 knowledge + commit. This page gets you from zero to a running server with a peer
@@ -57,6 +57,13 @@ Two native shared libraries — **ONNX Runtime** (embeddings) and **graphqlite**
 
 Open <strong>http://localhost:19278/</strong> for the web UI. The default repo
 (`trunk`) is created automatically on first run.
+
+<Aside type="tip" title="Prefer a native app?">
+Instead of `make run`, build the [desktop app](/docs/desktop/) with `make
+desktop` — a system-tray app (`Knomit.app` on macOS, a `.desktop` launcher on
+Linux) that runs the server in-process and lets MCP clients auto-discover it. No
+terminal needed to keep knomit running.
+</Aside>
 
 <Aside type="tip" title="No CLI to create repos">
 Additional repos are created, archived, restored, and purged at runtime through
@@ -132,12 +139,20 @@ the web UI, or query it back with `knomit_query`.
 
 ## Where to next
 
-<Card title="Understand the model" icon="open-book">
-Read [Concepts](/docs/concepts/) for facts, the ontology, branches, provenance,
-and the temporal graph.
-</Card>
-
-<Card title="Wire it into tools" icon="puzzle">
-See the [MCP tools reference](/docs/mcp-tools/) and the
-[REST API](/docs/api/).
-</Card>
+<CardGrid>
+  <Card title="Give your agent a knowledge base" icon="seti:clojure">
+    Wire knomit into [Claude Code](/docs/claude-code/) or
+    [Claude Cowork](/docs/claude-cowork/) — slash commands, hooks, and the bridge.
+  </Card>
+  <Card title="Understand the model" icon="open-book">
+    Read [Concepts](/docs/concepts/) for facts, the ontology, branches,
+    provenance, and the temporal graph.
+  </Card>
+  <Card title="See how it fits together" icon="document">
+    The [Overview & architecture](/docs/overview/) — the three artifacts and how
+    a request flows.
+  </Card>
+  <Card title="Wire it into tools" icon="puzzle">
+    The [MCP tools reference](/docs/mcp-tools/) and the [REST API](/docs/api/).
+  </Card>
+</CardGrid>

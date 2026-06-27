@@ -1,20 +1,22 @@
 ---
 title: Concepts
-description: Facts (epistemic vs pragmatic), the ontology, clustering, peers and consensus, provenance and signing, the temporal graph, and the knomit URI scheme.
+description: Facts (epistemic vs pragmatic), the ontology and inheritance, clustering and subsumption, peers and consensus, provenance and signing, the temporal graph, the knomit URI scheme, synthesis, and the MCP loop.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
 knomit is a distributed, decentralized knowledge base built from **facts, not
-documents** on git. This page is the reference companion to the visual
-[Concepts overview](/concepts) — the ideas that together explain the whole
-system.
+documents** on git. A handful of ideas explain the whole system — each one falls
+out of a single decision: make git the only source of truth, and represent
+knowledge as facts. This page is the reference companion to the visual
+[Concepts overview](/concepts).
 
-## Facts are markdown files
+## A fact is a markdown file
 
-Every fact is a plain markdown file: YAML frontmatter for structured metadata, a
-markdown body for the claim. The file **is** the fact — no database rows, no
-binary blobs, no opaque embeddings.
+Knowledge in knomit is a **fact**: one concise, atomic claim — not a chunk of an
+ingested document. Each is a plain markdown file: YAML frontmatter for structured
+metadata, a markdown body for the claim. The file **is** the fact — no database
+rows, no binary blobs, no opaque embeddings.
 
 ```markdown
 ---
@@ -29,54 +31,94 @@ refs:
 Alice prefers rock music over jazz.
 ```
 
-The `type` field classifies the kind of knowledge: `observation` (default),
-`concept`, `process`, `principle`, `pattern`, `reference`, `synthesis`,
-`insight`, `hypothesis`, or `methodology`.
+Confidence, domains, entities, and provenance refs travel in the frontmatter.
+`confidence` is a degree of belief that can rise and fall; `refs` relate the fact
+to others, forming a graph. Because it's just a file, humans edit it with any text
+editor and agents write it over MCP — both paths land at the same file, through
+the same operations.
+
+## Epistemic vs pragmatic
+
+Every fact carries a **kind** that tells the consumer how to apply it.
+**Epistemic** facts describe what *is* — knowledge to weigh as evidence, with a
+confidence that can move. **Pragmatic** facts prescribe what to *do* — rules to
+follow or lean on. The leaf `type` refines this further:
+
+| Kind | Types |
+|------|-------|
+| **Epistemic** — what *is* | `observation` (default), `concept`, `process`, `principle`, `pattern`, `reference`, `synthesis`, `insight`, `hypothesis`, `methodology` |
+| **Pragmatic** — what to *do* | `policy`, `heuristic` |
+
+The epistemic/pragmatic split is the load-bearing one: it is the difference
+between *knowing* and *acting*. Only epistemic facts seed
+[synthesis](/docs/synthesis/).
 
 ## Ontology & inheritance
 
-The directory tree under the ontology root (`kb/` by default) forms an
-ontological hierarchy. **Facts placed at higher levels apply to everything below
-them** — a fact at `kb/geography/` is inherited by
-`kb/geography/europe/uk/london/`.
+Facts live in a directory tree under the ontology root (`kb/` by default). That
+tree is not just organization — it carries meaning. **A fact placed at a higher
+level applies to everything beneath it**: a fact at `kb/invariants/` is inherited
+by `kb/invariants/concurrency/branch-lock/`.
 
-Each fact also declares its subject along three independent axes: its ontology
-path, cross-cutting `domain` tags, and named `entities`. Together they make the
-corpus introspectable — you can ask not just what is known about a subject, but
-what the *shape* of the whole knowledge base is.
+Each fact also declares its subject along three independent axes — its ontology
+path, cross-cutting `domain` tags, and named `entities` — which together make the
+corpus introspectable. The ontology is configurable; knomit ships with two:
+**General Knowledge** (a broad taxonomy derived from Wikipedia's main topics) and
+**Source Code Knowledge** (a codebase taxonomy with topics like `invariants`,
+`conventions`, `decisions`, and `gotchas`).
 
-## Agent identity & branches
+## How knowledge clusters
 
-Each knomit instance generates an Ed25519 SSH keypair at `~/.knomit/id_ed25519`.
-The key fingerprint determines the agent branch name
-(`agent/hostname-<fingerprint>`), so each machine gets its own branch. The same
-key is used for SSH remote auth and for commit signing.
+Beyond what each fact says about itself, the corpus has emergent structure the
+author never declared. Facts cluster by **meaning** — embedding similarity groups
+facts that talk about the same thing, wherever they were filed — and by
+**classification** — shared ontology paths, domains, and entities. The distill
+pass synthesizes each cluster into a `synthesis` fact, then re-clusters and
+distills again, producing a hierarchy from raw observations at the leaves to
+higher-order insight at the top.
 
-**No agent writes `main` directly.** All learn/update/retract operations land on
-the agent's own branch.
+## Subsumption — never learned twice
 
-## Consensus by merge
+When a fact is written via `knomit_learn`, knomit runs a near-duplicate check in
+the same category using embedding similarity **before committing**. If a match is
+found, the incoming fact **subsumes** the existing one — or is absorbed by it —
+producing a single fact that carries refs to both sources. Two chunks that say the
+same thing never pile up.
 
-Consensus into `main` is reached deliberately — by a Librarian agent, a CI
-policy, or a human merge — and flows back out to every agent. Many agents (and
-humans) contribute without clobbering each other, because merging, not mutation,
-is how knowledge becomes shared. Learning effort is paid once across the swarm,
-not re-paid by each agent.
+A special case: a `hypothesis` is subsumed by a newer `observation` when the world
+catches up to the prediction. The fact survives, its type transitions, and git
+history records the exact moment evidence closed the loop.
+
+## Peers, branches & consensus
+
+knomit is distributed and decentralized by construction. Every peer — human or
+agent — operates on a long-lived personal branch (`agent/<id>`, derived from
+machine hostname plus a short hash of its Ed25519 key). All learn, update, and
+retract operations land on that branch. **No peer writes `main` directly.**
+
+Consensus is reached deliberately: a peer's facts are reviewed and merged into
+`main` — by a Librarian agent, a CI policy, or a human merge. Each peer then pulls
+`main` and merges it locally, inheriting the agreed truth instead of re-deriving
+it. **Learning effort is shared, not re-paid.** (Merge, never squash — see
+[Remote sync](/docs/remote-sync/#the-consensus-model).)
 
 ## Provenance & signing
 
-Every learning moment is an atomic git commit, giving full provenance tracking.
-Writes are authored under identity-carrying addresses (agents use
+Every write — learn, update, retract, subsume, sync — is an atomic commit authored
+under an identity-carrying address. Agents use
 `<agent-id>+<operation>@agents.knomit.io`; humans use their own email with
-`+operation` subaddressing) and signed, making the **(who, what, when, why)**
-tuple cryptographic.
+`+operation` subaddressing. Commits are signed with the agent's Ed25519 key, which
+makes the **(who, what, when, why)** tuple cryptographic rather than hand-waved.
+The same key signs commits, names the branch, and authenticates remote sync — one
+identity, end to end.
 
 ## The temporal graph
 
-Git history is a first-class temporal axis. Each commit is a moment of belief.
-Refs resolve **at commit-time, not at HEAD**: reading a fact as-of commit `C`
-follows its refs to whatever those targets were at `C`, even if they have since
-changed. The graph is a record of what was believed and when.
+knomit treats git history as a first-class temporal axis, not an implementation
+detail. Each commit is a moment of belief. Refs resolve **at commit-time, not at
+HEAD**: reading a fact as-of commit `C` follows its refs to whatever those targets
+were at `C`, even if they have since been updated or retracted. The graph is a
+record of what was believed and when — never silently overwritten with "now".
 
 <Aside type="note" title="Git is the only source of truth">
 The SQLite search index, embeddings, and commit/graph caches are all
@@ -85,20 +127,34 @@ commits), the temporal model (history), and the distribution model
 (push/pull/merge); everything else is ephemeral cache.
 </Aside>
 
-## Refs and the `knomit:` URI scheme
+## The `knomit:` URI scheme
 
-Refs anchor facts to their source material using the `knomit:` URI scheme:
+Refs anchor a fact to its source material — the evidence behind the claim. A ref
+points to another fact in the same knowledge base, or to any web resource:
 
 | Form | Meaning | Example |
 |------|---------|---------|
-| Relative (no authority) | Current knowledge base | `knomit:/kb/technology/debugging/pool-fix.md` |
-| Absolute (with host) | External repo | `knomit://github.com/org/repo/src/main.ts` |
-| Plain URL | Any web resource | `https://example.com/doc` |
+| Relative (no authority) | Fact in the current knowledge base | `knomit:/kb/technology/debugging/pool-fix.md` |
+| Absolute (with host) | Fact in an external repo | `knomit://github.com/org/repo/src/main.ts` |
+| Plain URL | Any web resource — article, paper, commit | `https://example.com/doc` |
 
-## Synthesis
+## Synthesis & hypotheses
 
-Synthesis is automated knowledge-base maintenance: it prunes stale and duplicate
-facts, then distills higher-order insights using RAPTOR (recursive abstractive
-processing) across multiple depth levels. It is **incremental** — only facts that
-changed since the last run are processed — and it is the only LLM-backed feature.
-See [Configuration](/docs/configuration/#llm-configuration) for providers.
+**Review** (`knomit_review`) is a session-based maintenance loop with three
+passes: *prune* (remove redundant or stale facts), *distill* (cluster related
+facts into a `synthesis` fact no individual source makes on its own), and
+*reflect* (record `methodology` facts from resolved hypothesis transitions).
+**Hypothesize** (`knomit_hypothesize`) is a separate, explicit pass that writes
+falsifiable `hypothesis` facts — and skipping is the expected default. Synthesis
+is the only LLM-backed feature. See [Synthesis & discovery](/docs/synthesis/) for
+the full pipeline, RAPTOR, and the discovery effort dial.
+
+## The MCP operational loop
+
+MCP is the primary interface for humans (via Claude Code and editors) and agents
+alike. Seven tools cover the full fact lifecycle — their descriptions carry all
+the behavioral guidance a model needs, no prompt scaffolding required. Each agent
+connects to a **branch-scoped endpoint**, so reads and writes land on its own
+branch automatically; isolation is structural, not convention. Three profiles
+(`code`, `chat`, `generic`) tailor the tool descriptions to the client. See
+[MCP tools](/docs/mcp-tools/).

@@ -1,0 +1,100 @@
+---
+title: Synthesis & discovery
+description: How knomit maintains and grows the corpus — prune/distill/reflect, RAPTOR, hypotheses, the discovery effort dial, and methodology in the loop.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Beyond storing facts, knomit actively *maintains and grows* the corpus. All of it
+runs through one engine, driven by either the MCP tools
+([`knomit_review`](/docs/mcp-tools/#knomit_review--maintain-the-kb),
+[`knomit_hypothesize`](/docs/mcp-tools/#knomit_hypothesize--generate-predictions))
+or the HTTP synthesis-run endpoints. The work is **work-stealing**: it borrows
+cycles from the calling model, one work item at a time, rather than running a
+separate headless service.
+
+## The pipeline
+
+A session presents one work item at a time; the model responds, the next item is
+served, until the phase completes. Sessions track three independent axes:
+
+- **status** — lifecycle: `active` · `completed` · `abandoned`
+- **phase** — workflow: `work` · `reflect` · `done` (advanced by atomic CAS transitions)
+- **effort** — the discovery dial: `normal` · `medium` · `high`
+
+<Aside type="note">
+Only **epistemic** facts seed the pipeline — pragmatic facts (policies,
+heuristics) never enter synthesis.
+</Aside>
+
+## `knomit_review` — prune · distill · reflect
+
+| Stage | What it does |
+|-------|--------------|
+| **Prune** (dedup) | Detects near-duplicate facts and merges them. Tiebreak: a non-hypothesis always wins; then higher confidence; then more sources. Domains and entities are unioned. |
+| **Distill** (synthesis) | Clusters related facts and distills them into a higher-order `synthesis` fact. Evidence weight uses `SumProductNorm = Σ(c·s) / (Σ(c·s)+1)`; hypothesis sources are excluded from the weight. |
+| **Reflect** (methodology) | Reflects on hypothesis→outcome transitions to record reasoning lessons as `methodology` facts. Reinforcement appends the methodology's path to the transition fact's `refs` — git is the only source of truth, no side-channel counter. New-methodology proposals are hard-capped (`KNOMIT_REFLECT_PROPOSE_CAP`, default 1) and gated by a novelty/cosine floor (`KNOMIT_REFLECT_NOVELTY_THRESHOLD`). |
+
+`knomit_review` does **not** generate new hypotheses.
+
+### RAPTOR — multi-depth distillation
+
+Distillation is recursive: synthesis facts can themselves be clustered and
+distilled again at greater depth, RAPTOR-style. This runs through the **same**
+work-item queue; the item's priority orders the depth, so deeper summaries build
+on shallower ones without a separate scheduler.
+
+## `knomit_hypothesize` — generate predictions
+
+Walks `synthesis` facts on the agent branch and, per item, lets the model decide
+whether to write a falsifiable `hypothesis` fact (skipping is the expected outcome
+for most). It is a **distinct, user-initiated** operation — never an auto-follow-up
+to `review`. On a later dedup collision with a confirmed observation, the
+hypothesis is retracted and the observation links to it via `refs`.
+
+## The discovery effort dial
+
+`effort` (`normal` · `medium` · `high`) is a dial on the existing `review` /
+`hypothesize` operations rather than a separate tool — and it doubles as a budget.
+`normal` reproduces pre-discovery behaviour **byte-for-byte** (a hard invariant);
+`medium` / `high` engage the **structural-bridge** engine, which finds
+cross-cluster shared tokens (domain and/or entity, per `KNOMIT_DISCOVERY_BRIDGE`)
+the author never declared, and turns them into proposals:
+
+| Direction | Shape | Routed to | Produces |
+|-----------|-------|-----------|----------|
+| Forward | consequences | `knomit_review` | `synthesis` facts |
+| Backward | keystones | `knomit_hypothesize` | `hypothesis` facts |
+
+Discovery is **model-less to verify** — a strict default-skip prompt plus an
+ingest gate chain, no adversarial model:
+
+- `KNOMIT_DISCOVERY_CONFIDENCE_THRESHOLD` (default 0.5) — minimum confidence to
+  write a proposal.
+- `KNOMIT_DISCOVERY_BLAST_RADIUS_THRESHOLD` (default 1, 0 disables) — a backward
+  keystone proposal's anchor must transitively reach at least this many live
+  dependents (transitive reverse-`DERIVED_FROM` count live at HEAD).
+
+An optional **scope filter** (`domain` / `entities` args) bounds the seed pool;
+empty = whole corpus. Discovery never feeds on its own output.
+
+<Aside type="tip" title="The origin axis">
+Facts record how they were created — `authored`, `distilled`
+(synthesis-pipeline output), or `discovered` (emergent) — queryable via the
+`origin` filter on `knomit_query`.
+</Aside>
+
+## Methodology in the loop
+
+When the model reasons, knomit can surface relevant past methodology.
+`RelevantMethodology` ranks `methodology` facts by a composite score
+(`0.6·vector + 0.4·tag_overlap`, floored at `KNOMIT_METHODOLOGY_MIN_SCORE`,
+default 0.15). Methodology facts are identified by `type=methodology`, never by
+path. The server never auto-cites — it injects candidate methodology into the
+prompt and the model decides.
+
+## LLM provider
+
+Synthesis and distillation use an LLM, configured by `[llm]` (default provider
+`gemini`, model `gemini-2.5-flash`). Embeddings are a separate, local model — see
+[Embeddings](/docs/embeddings/) and [Configuration](/docs/configuration/#llm-configuration).

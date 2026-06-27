@@ -1,0 +1,71 @@
+---
+title: Embeddings
+description: EmbeddingGemma over a local ONNX runtime, why embeddings are mandatory, and the per-model calibrated retrieval thresholds.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Every fact is embedded into a vector for semantic search, clustering, dedup, and
+discovery. Embeddings run **locally and in-process** (ONNX Runtime via
+`onnxruntime_go` + `daulet/tokenizers`) — there is no external embedding API.
+
+<Aside type="caution" title="Embeddings are mandatory by design">
+The service **refuses to start without an embedder**, and a fact is **never
+indexed without a vector**. This keeps every fact retrievable and the
+graph/cluster machinery sound.
+</Aside>
+
+## The model: EmbeddingGemma
+
+| Property | Value |
+|----------|-------|
+| Default id | `embeddinggemma` (`KNOMIT_EMBED_MODEL` / `[embeddings] model`) |
+| Dimensions | 768 |
+| Max tokens | 2048 |
+| ONNX inputs / outputs | `input_ids`, `attention_mask` → `sentence_embedding` |
+| Pooling | none — the export emits an already pooled + normalized `sentence_embedding` |
+| Query template | `task: search result \| query: {content}` |
+| Doc template | `title: {title} \| text: {content}` |
+
+Source (Hugging Face `onnx-community/embeddinggemma-300m-ONNX`): `model_fp16.onnx`
+(+ `.onnx_data` weights) and `tokenizer.json`. A legacy `nomic-v1.5` model remains
+in the registry for historical comparison.
+
+## Where it lives & how to fetch it
+
+Model files are cached under `KNOMIT_HOME/models/<id>/` (e.g.
+`~/.knomit/models/embeddinggemma/`). Pre-download without booting the server:
+
+```bash
+knomit warm-models                        # configured model
+knomit warm-models --model embeddinggemma
+```
+
+The ONNX Runtime shared library is located at runtime via
+`ONNXRUNTIME_SHARED_LIBRARY` (or `onnx_lib_path`); it is fetched into
+`dist/<platform>/lib/` at build time by `fetchlibs`.
+
+## Per-model calibrated thresholds
+
+Cosine-similarity distributions differ sharply between models — EmbeddingGemma
+runs much *cooler* than nomic. So all six retrieval thresholds are **per-model
+fields on the model descriptor**, not global constants:
+
+| Threshold | EmbeddingGemma | Used for |
+|-----------|----------------|----------|
+| Dedup | 0.82 | near-duplicate detection in `review` prune |
+| ReflectNovelty | 0.69 | reject near-duplicate methodologies (`KNOMIT_REFLECT_NOVELTY_THRESHOLD` overrides) |
+| SimilarTo | 0.18 | "related facts" |
+| SearchFloor | 0.05 | recall floor for `min_similarity=0` |
+| RerankHigh | 0.43 | rerank band (high) |
+| RerankLow | 0.10 | rerank band (low) |
+
+These are derived empirically by the build-only `calibrate` tool, which measures a
+model's geometry against a real corpus. When swapping embedding models,
+re-calibrate — do not reuse another model's thresholds.
+
+<Aside type="note">
+Switching the embedding model changes the vector space, so the search index must
+be rebuilt (`POST /…/index-rebuilds`). The index is a derived cache; git remains
+the source of truth, so a rebuild is always safe.
+</Aside>

@@ -1,6 +1,6 @@
 ---
 title: MCP tools
-description: The knomit MCP tool set, the branch-scoped endpoint, profiles, and the stdio bridge.
+description: The knomit MCP tool set, the branch-scoped endpoint, profiles, and the stdio bridge — with full per-tool parameters.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -35,7 +35,7 @@ The MCP endpoint is **branch-scoped** — each agent reads and writes its own
 branch:
 
 ```
-/api/v1/repos/{repo}/branches/{branch}/mcp?profile={profile}
+POST /api/v1/repos/{repo}/branches/{branch}/mcp?profile={code|chat|generic}
 ```
 
 The agent branch is logged on startup (`branch=agent/hostname-abc123`) and is
@@ -45,19 +45,27 @@ names use `:` in place of `/` in URL path segments
 
 ## Profiles
 
-Profiles tailor the MCP instructions to the kind of client connecting:
+There are exactly **three MCP server instances**, one per profile, shared across
+all repos; each tool handler resolves the target repo/branch from the request
+context. The profile changes only the **instructions** sent to the calling model
+— the same seven tools are registered in every profile:
 
-| Profile | Use case |
-|---------|----------|
-| `code` (default) | Code editors — anchors facts to git commits. |
-| `chat` | Conversational tools — anchors facts to URLs and documents. |
-| `generic` | Minimal instructions for any integration. |
+| Profile | Default for | Instruction emphasis |
+|---------|-------------|----------------------|
+| `code` | software development (the bridge default) | structured technical knowledge: architecture, API contracts, debugging, conventions; reference source in `refs` |
+| `chat` | conversational use | insights, preferences, decisions; natural-language bodies; conservative confidence |
+| `generic` | general knowledge | any domain; descriptive tags; self-contained bodies |
+
+Per-session instructions are computed from the repo's ontology via an
+`AfterInitialize` hook, so the model is told the exact topics and categories that
+repo accepts.
 
 ## The stdio bridge
 
-stdio-only MCP clients (Claude Code, Claude Desktop, VS Code, Cursor, …) use
-`knomit-bridge`, the stdio↔HTTP adapter built by `make build`. It auto-discovers
-the agent branch from the running server, so you never look it up by hand:
+stdio-only MCP clients (Claude Code, Claude Desktop, Claude Cowork, VS Code,
+Cursor, …) use `knomit-bridge`, the stdio↔HTTP adapter built by `make build`. It
+auto-discovers the agent branch from the running server, so you never look it up
+by hand:
 
 ```json
 {
@@ -71,4 +79,134 @@ the agent branch from the running server, so you never look it up by hand:
 ```
 
 See the [Quick start](/docs/quick-start/) for the full connection walkthrough and
-the streamable-HTTP alternative.
+the streamable-HTTP alternative, and the [CLI reference](/docs/cli-reference/) for
+every bridge flag.
+
+## Tool reference
+
+<Aside type="note">
+Tool descriptions in the running server are prompt engineering for the calling
+model, not human documentation. The reference below paraphrases intent; the live
+schema is always authoritative.
+</Aside>
+
+### `knomit_learn` — write facts
+
+Write one or more facts in a single git commit.
+
+| Param | Type | Req | Default | Notes |
+|-------|------|-----|---------|-------|
+| `moment_name` | string | ✓ | | Short label for this learning moment (becomes part of the commit) |
+| `facts` | array | ✓ | | One or more fact objects (below) |
+
+Each fact object:
+
+| Field | Type | Req | Default | Notes |
+|-------|------|-----|---------|-------|
+| `topic` | string | ✓ | | Top-level ontology topic |
+| `category` | string | ✓ | | Category path within the topic (e.g. `languages/go/concurrency`) |
+| `title` | string | ✓ | | Short descriptive title |
+| `body` | string | ✓ | | Fact body, natural language |
+| `kind` | string | | `epistemic` | `epistemic` (descriptive) or `pragmatic` (prescriptive) |
+| `type` | string | | `observation` | Leaf type — depends on `kind` (see below) |
+| `domain` | string[] | | | Cross-cutting domain tags |
+| `entities` | string[] | | | Entities the fact mentions |
+| `confidence` | number | | `0.7` | 0.0–1.0 |
+| `sources` | integer | | `1` | Independent sources |
+| `refs` | string[] | | | External URLs or source refs |
+
+**Types** — epistemic: `observation`, `concept`, `process`, `principle`,
+`pattern`, `reference`, `synthesis`, `insight`, `hypothesis`, `methodology`.
+Pragmatic: `policy`, `heuristic`. A single batch may **not** mix observed types
+with inferred types (`hypothesis` / `methodology`).
+
+### `knomit_query` — search
+
+Returns lightweight rows (title, type, domain, score, ~400-char snippet) — not
+full bodies. Paginated via an opaque `cursor`. At least one of `text`,
+`entities`, `domain`, `applies_to`, `path`, `type`, `origin`, or
+`min_confidence` is required (unless paging with `cursor`, or using
+`sort=recent`).
+
+| Param | Type | Notes |
+|-------|------|-------|
+| `text` | string | Full-text / semantic query |
+| `entities` | string[] | All must be present (AND) |
+| `domain` | string[] | Domain tags |
+| `applies_to` | string[] | Ancestor-or-equal domain match (scope includes these) |
+| `domain_exact` | bool | Exact canonical tag match only (default false) |
+| `path` | string | Path prefix |
+| `type` | string[] | Filter to epistemic types |
+| `origin` | string[] | `authored` · `distilled` · `discovered` |
+| `min_confidence` | number | 0–1 |
+| `min_similarity` | number | Cosine floor for text search; 0 = model's calibrated recall floor |
+| `sort` | string | `relevance` (default) or `recent` (browse, needs no other filter) |
+| `limit` | number | Default 20, max 100 (snippet mode); 3/5 with `include_body` |
+| `include_body` | bool | Full bodies (small pages only) |
+| `cursor` | string | Page token; freezes filters |
+
+### `knomit_explain` — walk provenance
+
+Explains a fact by walking its **versioned** provenance graph, anchored at a
+commit. The root fact is returned in full (with revision `history`); every
+referenced fact is returned as a lean summary read **at the exact version the
+referrer pointed to**. Summaries may be flagged `deleted` (retracted since) or
+`superseded` (newer at HEAD).
+
+| Param | Type | Req | Notes |
+|-------|------|-----|-------|
+| `file` | string | ✓ | Fact path (e.g. `kb/technology/go/abc123.md`) |
+| `commit` | string | | Anchor commit; omit for HEAD. Drill into a summary by re-calling with its `path` + `commit` |
+| `cursor` | string | | Session id to page the walk |
+
+### `knomit_update` — revise a fact in place
+
+| Param | Type | Req | Notes |
+|-------|------|-----|-------|
+| `file` | string | ✓ | Fact path |
+| `moment_name` | string | ✓ | Label for the update |
+| `updates` | object | ✓ | Only the fields to change |
+
+`updates` fields: `title`, `body`, `kind`, `type`, `confidence`, `sources`,
+`domain` (replaces), `entities` (replaces), `refs` (**appended**, not replaced).
+
+### `knomit_retract` — remove a fact
+
+| Param | Type | Req | Notes |
+|-------|------|-----|-------|
+| `file` | string | ✓ | Fact path to retract |
+| `moment_name` | string | ✓ | Label for the retraction |
+
+Retraction is a commit, not a hard delete — the fact remains in history and
+resolves under commit-anchored reads (e.g. `?fallback=before`).
+
+### `knomit_review` — maintain the KB
+
+Prune redundant facts, distill clusters into synthesis facts, and reflect on
+hypothesis transitions to record methodology. **Does not** generate new
+hypotheses. A session loop: call with no args to start, then with `session_id` +
+`response` (your JSON decisions for the previous work item) to continue. See
+[Synthesis & discovery](/docs/synthesis/).
+
+| Param | Type | Notes |
+|-------|------|-------|
+| `session_id` | string | Omit to start a new session |
+| `response` | string | JSON decisions for the previous work item |
+| `effort` | string | `normal` (default) · `medium` · `high` — medium/high engage the bridge discovery engine |
+| `domain` | string[] | Scope filter on the seed pool (empty = whole corpus) |
+| `entities` | string[] | Scope filter on the seed pool |
+
+### `knomit_hypothesize` — generate predictions
+
+Generate new `hypothesis` facts from synthesis facts on the agent branch.
+**Distinct from `review`** and only to be invoked on explicit user request (never
+as an auto-follow-up). Per work item the model decides whether to write a
+hypothesis; skipping is the expected outcome for most.
+
+| Param | Type | Notes |
+|-------|------|-------|
+| `session_id` | string | Omit to start |
+| `response` | string | Acknowledgement for the previous work item |
+| `effort` | string | `normal` (default) · `medium` · `high` — medium/high engage the backward (keystone) bridge engine |
+| `domain` | string[] | Scope filter (empty = whole corpus) |
+| `entities` | string[] | Scope filter |

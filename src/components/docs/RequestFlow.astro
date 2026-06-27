@@ -1,0 +1,154 @@
+---
+// Request-flow diagram for the docs Overview page.
+// Matches the marketing concept diagrams: inline SVG over theme CSS variables,
+// surface-1 fills with colour-coded hairline borders, mono labels.
+//
+// Shape: clients converge on the server (left), the server diverges to its two
+// stores (right) — git as the source of truth, the SQLite index as a cache.
+---
+
+<figure class="rf">
+  <svg
+    class="rf__svg"
+    viewBox="0 0 784 250"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    role="img"
+    aria-label="A request flows from an MCP client through knomit-bridge to the knomit server, and from a web or HTTP client directly to the server over REST. The server commits facts to git, the source of truth, and indexes them into a rebuildable SQLite cache."
+  >
+    <defs>
+      <marker id="rf-arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="var(--k-text-muted)" />
+      </marker>
+      <filter id="rf-glow" x="-40%" y="-40%" width="180%" height="180%">
+        <feGaussianBlur stdDeviation="5" result="b" />
+        <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+      </filter>
+    </defs>
+
+    <!-- edges (under the boxes) -->
+    <g stroke="var(--k-text-muted)" stroke-width="1.4">
+      <!-- MCP client -> bridge -->
+      <line x1="144" y1="100" x2="190" y2="100" marker-end="url(#rf-arrow)" />
+      <!-- bridge -> server -->
+      <path d="M316 108 L366 118" marker-end="url(#rf-arrow)" />
+      <!-- HTTP client -> server -->
+      <path d="M144 190 L344 190 C360 190 360 180 366 173" marker-end="url(#rf-arrow)" />
+      <!-- server -> git -->
+      <path d="M492 128 C544 116 592 116 642 116" marker-end="url(#rf-arrow)" />
+      <!-- server -> store -->
+      <path d="M492 168 C544 182 592 196 642 196" marker-end="url(#rf-arrow)" />
+    </g>
+
+    <!-- edge labels -->
+    <g class="rf__edge" text-anchor="middle">
+      <text x="170" y="84">stdio</text>
+      <text x="170" y="93">JSON-RPC</text>
+      <text x="344" y="99">HTTP</text>
+      <text x="244" y="181">REST /api/v1</text>
+      <text x="566" y="104">commit · signed</text>
+      <text x="566" y="208">index · cache</text>
+    </g>
+
+    <!-- MCP client -->
+    <rect class="rf__box rf__box--ref" x="16" y="70" width="128" height="60" rx="8" />
+    <text class="rf__title rf__t--ref" x="80" y="96" text-anchor="middle">MCP client</text>
+    <text class="rf__sub" x="80" y="113" text-anchor="middle">Claude Code · Desktop · Cowork</text>
+
+    <!-- Web / HTTP client -->
+    <rect class="rf__box rf__box--ref" x="16" y="160" width="128" height="60" rx="8" />
+    <text class="rf__title rf__t--ref" x="80" y="186" text-anchor="middle">Web UI / HTTP client</text>
+    <text class="rf__sub" x="80" y="203" text-anchor="middle">REST consumer</text>
+
+    <!-- bridge -->
+    <rect class="rf__box rf__box--brand" x="196" y="70" width="120" height="60" rx="8" />
+    <text class="rf__title rf__t--brand" x="256" y="96" text-anchor="middle">knomit-bridge</text>
+    <text class="rf__sub" x="256" y="113" text-anchor="middle">stdio ↔ HTTP proxy</text>
+
+    <!-- server (hero) -->
+    <rect class="rf__box rf__box--server" x="372" y="72" width="120" height="146" rx="9" filter="url(#rf-glow)" />
+    <text class="rf__title rf__t--brand" x="432" y="132" text-anchor="middle">knomit server</text>
+    <text class="rf__sub" x="432" y="151" text-anchor="middle">REST · MCP</text>
+    <text class="rf__sub" x="432" y="166" text-anchor="middle">web UI · git-serve</text>
+
+    <!-- git -->
+    <rect class="rf__box rf__box--temporal" x="648" y="90" width="120" height="56" rx="8" />
+    <text class="rf__title rf__t--temporal" x="708" y="114" text-anchor="middle">git</text>
+    <text class="rf__sub" x="708" y="131" text-anchor="middle">source of truth</text>
+
+    <!-- store -->
+    <rect class="rf__box rf__box--muted" x="648" y="168" width="120" height="56" rx="8" />
+    <text class="rf__title rf__t--muted" x="708" y="192" text-anchor="middle">store</text>
+    <text class="rf__sub" x="708" y="209" text-anchor="middle">SQLite cache · rebuildable</text>
+  </svg>
+
+  <figcaption class="rf__cap">
+    Git is the only source of truth; the SQLite store is a rebuildable cache the
+    server indexes for search, the graph, and the commit log.
+  </figcaption>
+</figure>
+
+<style>
+  .rf {
+    margin: 1.5rem 0;
+    background: var(--k-surface-1, #1a1a1a);
+    border: 1px solid var(--k-hairline-soft, #262626);
+    border-radius: var(--k-radius, 12px);
+    padding: 1.25rem 1.25rem 1rem;
+  }
+  .rf__svg {
+    width: 100%;
+    height: auto;
+    display: block;
+    overflow: visible;
+  }
+  .rf__box {
+    fill: var(--k-surface-1, #1a1a1a);
+    stroke: var(--k-hairline, #333);
+    stroke-width: 1.5;
+  }
+  .rf__box--ref { stroke: var(--k-ref, #88aaff); }
+  .rf__box--brand { stroke: var(--k-brand, #77cc99); }
+  .rf__box--temporal { stroke: var(--k-temporal, #e5a23c); }
+  .rf__box--muted { stroke: var(--k-hairline, #333); }
+  .rf__box--server {
+    stroke: var(--k-brand, #77cc99);
+    stroke-width: 2;
+  }
+
+  .rf__title {
+    font-family: var(--k-font-mono, ui-monospace, monospace);
+    font-size: 11px;
+    font-weight: 600;
+    fill: var(--k-text, #eee);
+  }
+  .rf__t--ref { fill: var(--k-ref, #88aaff); }
+  .rf__t--brand { fill: var(--k-brand, #77cc99); }
+  .rf__t--temporal { fill: var(--k-temporal, #e5a23c); }
+  .rf__t--muted { fill: var(--k-text-2, #aaa); }
+
+  .rf__sub {
+    font-family: var(--k-font-mono, ui-monospace, monospace);
+    font-size: 7.5px;
+    fill: var(--k-text-muted, #666);
+  }
+  .rf__edge text {
+    font-family: var(--k-font-mono, ui-monospace, monospace);
+    font-size: 8px;
+    fill: var(--k-text-muted, #666);
+    letter-spacing: 0.02em;
+  }
+
+  .rf__cap {
+    margin-top: 0.9rem;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: var(--k-text-muted, #666);
+    text-align: center;
+  }
+
+  @media (max-width: 640px) {
+    .rf { padding: 1rem 0.6rem 0.75rem; }
+    .rf__cap { font-size: 0.72rem; }
+  }
+</style>

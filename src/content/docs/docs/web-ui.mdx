@@ -38,10 +38,8 @@ own knowledge base. It's the fastest way to see everything below in action.
 The UI is keyboard-friendly — search (`/`) and a command palette (`:`) keep you
 on the keyboard while browsing and inspecting.
 
-## Desktop app
-
-`knomit-desktop` is a native [Wails v3](https://v3.wails.io) application: a
-system-tray icon plus a native webview window showing the same UI. It runs the
-knomit server in-process on a looknomitck port (prefers `19278`) and serves the UI
-from embedded assets — so that port is a pure API/MCP endpoint that Claude Code
-and other MCP clients can call. Build it with `make desktop`.
+<Aside type="tip" title="Run it as a native app">
+The same UI ships as a system-tray [desktop app](/docs/desktop/)
+(`knomit-desktop`) that runs the server in-process and lets MCP clients
+auto-discover it — the easiest way to keep knomit running on your machine.
+</Aside>
