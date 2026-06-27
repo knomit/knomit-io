@@ -6,6 +6,10 @@ export const SITE_SUBLINE =
   'A distributed, decentralized knowledge base — built from facts, not documents.';
 export const SITE_DESCRIPTION =
   'A distributed, decentralized knowledge base built from concise, typed facts — not documents. Confidence, provenance, and ontology; facts evolve and discovery spawns new ones. Humans and agents converge on one source of truth.';
+/** ≤160-char meta description for SERP snippets. The long SITE_DESCRIPTION
+ *  stays for on-page copy where the full framing matters. */
+export const SITE_DESCRIPTION_SHORT =
+  'Git-backed memory for AI agents: a distributed knowledge base of typed, provenanced facts — not documents. Open source, MCP-native.';
 // Placeholder home — update once the public repo location is finalized.
 export const GITHUB_URL = 'https://github.com/knomit/knomit';
 
