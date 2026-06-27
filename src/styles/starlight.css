@@ -1,52 +1,223 @@
 /*
- * Maps knomit's design tokens onto Starlight's CSS variables so /docs reads as
- * the same product as the marketing site and the app. Dark-only.
+ * Maps knomit's design tokens (theme.css) onto Starlight's CSS variables so
+ * /docs reads as the same product as the marketing site and the app.
+ *
+ * Dark-only, on purpose — the product is dark-only and the theme switcher is
+ * removed (see src/components/starlight/). customCss is injected UNLAYERED, so
+ * these rules win over Starlight's `@layer starlight.core` defaults without
+ * needing high specificity or !important.
  */
-:root {
+:root,
+:root[data-theme='dark'],
+:root[data-theme='light'] {
+  color-scheme: dark;
+
+  /* Accent (UI: active states, focus rings, selection) = brand green. */
   --sl-color-accent-low: #16321f;
   --sl-color-accent: #77cc99;
   --sl-color-accent-high: #c7eccf;
 
+  /* Neutral ramp, lifted from the app shell. */
   --sl-color-white: #eeeeee;
   --sl-color-gray-1: #dddddd;
   --sl-color-gray-2: #aaaaaa;
   --sl-color-gray-3: #888888;
   --sl-color-gray-4: #666666;
   --sl-color-gray-5: #333333;
-  --sl-color-gray-6: #222222;
+  --sl-color-gray-6: #1f1f1f;
+  --sl-color-gray-7: #1a1a1a;
   --sl-color-black: #141414;
 
+  /* Surfaces. */
   --sl-color-bg: #141414;
-  --sl-color-bg-nav: rgba(20, 20, 20, 0.85);
-  --sl-color-bg-sidebar: #161616;
+  --sl-color-bg-nav: rgba(20, 20, 20, 0.72);
+  --sl-color-bg-sidebar: #141414;
+  --sl-color-bg-inline-code: #222222;
   --sl-color-hairline: #262626;
-  --sl-color-text-accent: #88aaff;
+  --sl-color-hairline-light: #1f1f1f;
+  --sl-color-hairline-shade: #1a1a1a;
+
+  /* Text. Body is the calm ramp; links carry the ref-blue UI semantics. */
+  --sl-color-text: #cccccc;
+  --sl-color-text-accent: #88aaff; /* refs & links — same meaning as the app */
+  --sl-color-text-invert: #08110b; /* text on a brand-green fill */
+
+  /* Asides, themed to the app's color language but kept subdued — the hue
+     lives in a thin left border + the title, never a saturated fill (see the
+     .starlight-aside rules below). note = ref, tip = brand, caution =
+     temporal, danger = retracted. The `-low` washes sit a hair above the page
+     background so the panel reads as a quiet surface, not a colored block. */
+  --sl-color-blue: #88aaff;
+  --sl-color-blue-low: #16191f;
+  --sl-color-blue-high: #aebfe6;
+  --sl-color-green: #77cc99;
+  --sl-color-green-low: #15191a;
+  --sl-color-green-high: #a6cdb4;
+  --sl-color-orange: #e5a23c;
+  --sl-color-orange-low: #1b1813;
+  --sl-color-orange-high: #d3b483;
+  --sl-color-red: #ff8888;
+  --sl-color-red-low: #1d1617;
+  --sl-color-red-high: #e0a3a3;
+  /* tip uses purple by default in Starlight — remap it onto the brand. */
+  --sl-color-purple: #77cc99;
+  --sl-color-purple-low: #15191a;
+  --sl-color-purple-high: #a6cdb4;
 
   --sl-font: var(--k-font-body);
   --sl-font-mono: var(--k-font-mono);
 
-  --sl-color-text: #cccccc;
+  /* A touch more vertical air for the top bar, matching the marketing header. */
+  --sl-nav-height: 3.75rem;
 }
 
-/* Force the dark palette even if a visitor's OS prefers light. */
-:root[data-theme='light'] {
-  color-scheme: dark;
+/* ---- Header ------------------------------------------------------------- */
+/* Sticky, translucent, blurred — the marketing header treatment. */
+.header {
+  border-bottom: 1px solid var(--k-hairline-soft);
+  backdrop-filter: saturate(150%) blur(12px);
+  -webkit-backdrop-filter: saturate(150%) blur(12px);
 }
 
+/* Drop Starlight's vertical divider before the (now nav) right group. */
+.social-icons::after {
+  display: none;
+}
+
+/* ---- Search pill -------------------------------------------------------- */
+site-search button {
+  background: var(--k-surface-1);
+  border: 1px solid var(--k-hairline);
+  border-radius: var(--k-radius-sm);
+  color: var(--k-text-2);
+}
+site-search button:hover {
+  border-color: #444;
+  color: var(--k-text);
+}
+site-search button kbd {
+  background: var(--k-surface-3);
+  color: var(--k-text-muted);
+  border-radius: 4px;
+  font-family: var(--k-font-mono);
+}
+
+/* ---- Sidebar ------------------------------------------------------------ */
+.sidebar-pane {
+  border-inline-end: 1px solid var(--k-hairline-soft);
+}
+/* Group headings ("Start here", "Interfaces", …) in the display face. */
+.sidebar-content .group-label .large {
+  font-family: var(--k-font-display);
+  letter-spacing: -0.01em;
+  color: var(--k-text);
+}
+/* Quiet the resting links. */
+.sidebar-content a {
+  color: var(--k-text-2);
+}
+.sidebar-content a:hover {
+  color: var(--k-text);
+  background-color: var(--k-hairline-soft);
+}
+/* The current page: brand-tinted, not the invisible blue-on-blue default. */
+.sidebar-content a[aria-current='page'],
+.sidebar-content a[aria-current='page']:hover,
+.sidebar-content a[aria-current='page']:focus {
+  color: var(--k-brand);
+  background-color: var(--k-brand-glow);
+  font-weight: 600;
+}
+
+/* ---- Right-hand table of contents -------------------------------------- */
+starlight-toc a {
+  color: var(--k-text-2);
+  border-inline-start: 2px solid transparent;
+}
+starlight-toc a:hover {
+  color: var(--k-text);
+}
+starlight-toc a[aria-current='true'] {
+  color: var(--k-brand);
+  border-inline-start-color: var(--k-brand);
+  font-weight: 600;
+}
+.right-sidebar {
+  border-inline-start: 1px solid var(--k-hairline-soft);
+}
+
+/* ---- Page content ------------------------------------------------------- */
+.content-panel h1,
 .sl-markdown-content h1,
 .sl-markdown-content h2,
 .sl-markdown-content h3,
 .sl-markdown-content h4 {
   font-family: var(--k-font-display);
   letter-spacing: -0.02em;
+  color: var(--k-text);
 }
 
-/* HTTP method badges in the generated REST reference, themed to our semantics. */
-.sl-method-badge {
-  font-family: var(--k-font-mono);
+/* Inline code, matched to the marketing prose treatment. */
+.sl-markdown-content code:not(:where(.expressive-code *)) {
+  background: var(--k-surface-2);
+  border: 1px solid var(--k-hairline-soft);
+  padding: 0.08em 0.4em;
+  border-radius: 5px;
+  font-size: 0.86em;
+  color: var(--k-brand-2);
 }
 
-site-title,
-.site-title {
+/* Body links: ref-blue with a soft underline, like the rest of the site. */
+.sl-markdown-content a:not(:where(.not-content *)) {
+  color: var(--k-ref);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(136, 170, 255, 0.4);
+}
+.sl-markdown-content a:not(:where(.not-content *)):hover {
+  text-decoration-color: var(--k-ref);
+}
+
+/* List markers pick up the brand, as on the marketing pages. */
+.sl-markdown-content :is(ul, ol) li::marker {
+  color: var(--k-brand);
+}
+
+/* ---- Asides / callouts -------------------------------------------------- */
+/* Subdued by design: a quiet surface panel with a thin colored left rule. The
+   semantic hue shows only in that rule, the icon, and the title — never as a
+   saturated background wash. */
+.starlight-aside {
+  background-color: var(--k-surface-1);
+  border-inline-start: 3px solid var(--sl-color-asides-border);
+  border-radius: var(--k-radius-sm);
+  padding: 1rem 1.25rem;
+}
+.starlight-aside__title {
+  color: var(--sl-color-asides-text-accent);
   font-family: var(--k-font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.starlight-aside__icon {
+  color: var(--sl-color-asides-text-accent);
+}
+.starlight-aside__content {
+  color: var(--k-text-2);
+}
+.starlight-aside__content a {
+  color: var(--k-ref);
+}
+
+/* The REST API reference is a standalone Scalar page (src/pages/docs/api.astro),
+   themed there via Scalar's own CSS variables — not styled here. */
+
+/* ---- Footer / pagination ------------------------------------------------ */
+.pagination-links a {
+  border: 1px solid var(--k-hairline);
+  background: var(--k-surface-1);
+}
+.pagination-links a:hover {
+  border-color: #444;
+  background: var(--k-surface-2);
 }

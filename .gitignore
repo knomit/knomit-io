@@ -1,6 +1,8 @@
 # local planning packet (kept out of the published repo)
 local/
-docs/
+# root-only: the planning packet, NOT nested dirs like src/pages/docs or
+# src/content/docs (an unanchored `docs/` would swallow those too).
+/docs/
 .claude/plans/
 .superpowers/
 
@@ -14,6 +16,7 @@ dist/
 # generated at build time by scripts/sync.mjs (pulled from the knomit source)
 src/generated/*
 !src/generated/.gitkeep
+public/openapi.yaml
 
 # test artifacts
 test-results/

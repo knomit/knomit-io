@@ -1,0 +1,123 @@
+---
+import { ScalarComponent } from '@scalar/astro';
+import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+
+// The REST API reference renders as a single Scalar page, but inside the
+// Starlight shell so the docs sidebar (Start here / Interfaces / Operate) stays
+// put. The spec is synced to public/openapi.yaml by scripts/sync.mjs, so Scalar
+// fetches it at /openapi.yaml and exposes a download.
+const description =
+  "knomit's full REST API: every endpoint, parameter, and schema on one page, generated from the canonical OpenAPI spec.";
+
+// Map Scalar's design tokens onto knomit's palette. Dark-only and subdued: the
+// method colors reuse the app's semantics (read = ref blue, create = brand,
+// update = temporal amber, destroy = retracted red) instead of Scalar's
+// brighter defaults.
+const scalarTheme = `
+.scalar-app,
+.dark-mode {
+  --scalar-font: var(--k-font-body);
+  --scalar-font-code: var(--k-font-mono);
+
+  --scalar-color-1: #eeeeee;
+  --scalar-color-2: #aaaaaa;
+  --scalar-color-3: #777777;
+  --scalar-color-accent: #88aaff;
+  --scalar-background-1: #141414;
+  --scalar-background-2: #1a1a1a;
+  --scalar-background-3: #222222;
+  --scalar-background-accent: rgba(136, 170, 255, 0.1);
+  --scalar-border-color: #262626;
+
+  /* HTTP method colors, in the app's muted semantics. */
+  --scalar-color-green: #77cc99;
+  --scalar-color-blue: #88aaff;
+  --scalar-color-red: #ff8888;
+  --scalar-color-orange: #e5a23c;
+  --scalar-color-yellow: #e5a23c;
+  --scalar-color-purple: #b79cff;
+
+  --scalar-radius: 8px;
+  --scalar-radius-lg: 12px;
+}
+
+/* Headings in the display face, matching the rest of the site. */
+.scalar-app h1,
+.scalar-app h2,
+.scalar-app h3,
+.references-header {
+  font-family: var(--k-font-display);
+  letter-spacing: -0.02em;
+}
+
+/* Scalar paints its own background; keep it flush with the page. */
+.scalar-api-reference {
+  --scalar-background-1: #141414;
+  background: transparent;
+}
+`;
+---
+
+<StarlightPage
+  frontmatter={{
+    title: 'REST API',
+    description,
+    tableOfContents: false,
+    pagefind: false,
+    template: 'doc',
+  }}
+>
+  <div class="api-reference-embed not-content">
+    <ScalarComponent
+      renderMode="static"
+      configuration={{
+        url: '/openapi.yaml',
+        theme: 'none',
+        layout: 'classic',
+        forceDarkModeState: 'dark',
+        hideDarkModeToggle: true,
+        // No Scalar product chrome (Configure / Share / Deploy) in our docs.
+        // showToolbar is the switch that actually hides it across environments;
+        // its 'showDeveloperTools' replacement does not, despite the deprecation
+        // notice. The deprecation is a console-only warning.
+        showToolbar: 'never',
+        hideClientButton: true,
+        hideTestRequestButton: true,
+        // Keep the one search bar in the docs header (Starlight's), not a
+        // second one inside the reference. Browse the API by tag.
+        hideSearch: true,
+        defaultOpenAllTags: false,
+        customCss: scalarTheme,
+        metaData: {
+          title: 'REST API — knomit',
+          description,
+        },
+      }}
+    />
+  </div>
+</StarlightPage>
+
+<style is:global>
+  /* On the API page only, give the content column the full width Scalar wants
+     (the right TOC is already off) and drop the prose chrome. */
+  body:has(.api-reference-embed) {
+    --sl-content-width: 60rem;
+  }
+  body:has(.api-reference-embed) .sl-markdown-content {
+    margin-top: 0;
+  }
+  /* Drop Starlight's page title + top border: Scalar provides its own header. */
+  body:has(.api-reference-embed) .content-panel:first-of-type {
+    display: none;
+  }
+  body:has(.api-reference-embed) .content-panel + .content-panel {
+    border-top: 0;
+  }
+  .api-reference-embed {
+    /* Reserve height while Scalar boots so the page doesn't grow under you
+       (no layout "dance" on load/navigation). */
+    min-height: 80vh;
+    /* Let the reference use the column edge-to-edge. */
+    margin-inline: calc(-1 * clamp(0.5rem, 2vw, 1.5rem));
+  }
+</style>

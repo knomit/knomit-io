@@ -4,7 +4,6 @@ import starlight from '@astrojs/starlight';
 import mdx from '@astrojs/mdx';
 import react from '@astrojs/react';
 import sitemap from '@astrojs/sitemap';
-import starlightOpenAPI, { openAPISidebarGroups } from 'starlight-openapi';
 
 const SITE = process.env.SITE_URL || 'https://knomit.io';
 // Placeholder home — update once the public repo location is finalized.
@@ -29,21 +28,26 @@ export default defineConfig({
       favicon: '/favicon.svg',
       social: [{ icon: 'github', label: 'GitHub', href: GITHUB }],
       customCss: ['./src/styles/theme.css', './src/styles/starlight.css'],
+      // Dark-only code blocks, framed like the marketing terminal cards.
+      expressiveCode: {
+        themes: ['github-dark'],
+        styleOverrides: {
+          borderRadius: 'var(--k-radius)',
+          borderColor: 'var(--k-hairline)',
+          codeBackground: 'var(--k-surface-1)',
+          frames: {
+            editorBackground: 'var(--k-surface-1)',
+            terminalBackground: 'var(--k-surface-1)',
+            terminalTitlebarBackground: 'var(--k-surface-2)',
+            terminalTitlebarBorderBottomColor: 'var(--k-hairline)',
+            shadowColor: 'transparent',
+          },
+        },
+      },
       // Mount Starlight under /docs rather than taking over the whole site.
       routeMiddleware: [],
       disable404Route: true,
       pagination: true,
-      plugins: [
-        // REST API reference, generated from knomit's canonical OpenAPI spec.
-        starlightOpenAPI([
-          {
-            base: 'docs/api',
-            label: 'REST API',
-            schema: './src/generated/openapi.yaml',
-            sidebarMethodBadges: true,
-          },
-        ]),
-      ],
       sidebar: [
         {
           label: 'Start here',
@@ -57,7 +61,8 @@ export default defineConfig({
           items: [
             { label: 'MCP tools', slug: 'docs/mcp-tools' },
             { label: 'Web UI', slug: 'docs/web-ui' },
-            ...openAPISidebarGroups,
+            // The REST reference is a single Scalar page outside Starlight.
+            { label: 'REST API', link: '/docs/api' },
           ],
         },
         {
@@ -69,7 +74,11 @@ export default defineConfig({
         },
       ],
       components: {
-        // Use the marketing header/footer chrome where it makes sense later.
+        // Dark-only product, branded to match the marketing chrome.
+        ThemeProvider: './src/components/starlight/ThemeProvider.astro',
+        ThemeSelect: './src/components/starlight/ThemeSelect.astro',
+        SiteTitle: './src/components/starlight/SiteTitle.astro',
+        SocialIcons: './src/components/starlight/SocialIcons.astro',
       },
       head: [
         {

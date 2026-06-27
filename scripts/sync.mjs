@@ -127,6 +127,16 @@ async function main() {
   for (const artifact of ARTIFACTS) {
     await syncOne(artifact);
   }
+
+  // Publish the spec under public/ so the REST API page (Scalar) can fetch it
+  // at /openapi.yaml and offer it as a download.
+  const specSrc = path.join(OUT_DIR, 'openapi.yaml');
+  if (await exists(specSrc)) {
+    const publicSpec = path.join(ROOT, 'public', 'openapi.yaml');
+    await mkdir(path.dirname(publicSpec), { recursive: true });
+    await writeFile(publicSpec, await readFile(specSrc, 'utf8'), 'utf8');
+    console.log(`  ✓ public/openapi.yaml  (served at /openapi.yaml)`);
+  }
 }
 
 main().catch((err) => {
