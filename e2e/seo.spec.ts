@@ -107,3 +107,15 @@ test('homepage links to the FAQ', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('link', { name: /^FAQ$/i }).first()).toBeVisible();
 });
+
+test.describe('compare', () => {
+  test('/compare renders a comparison table with the key dimensions', async ({ page }) => {
+    const res = await page.request.get('/compare');
+    expect(res.status()).toBe(200);
+    await page.goto('/compare');
+    await expect(page.getByRole('table')).toBeVisible();
+    for (const term of [/RAG/i, /vector/i, /provenance/i, /dedup|subsum/i]) {
+      await expect(page.getByText(term).first()).toBeVisible();
+    }
+  });
+});

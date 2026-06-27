@@ -1,0 +1,70 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SectionHeading from '../components/SectionHeading.astro';
+
+const cols = ['knomit', 'RAG / vector DB', 'Flat memory files', 'Agent-memory SaaS'];
+
+// Each row: [dimension, knomit, rag, flat, saas]
+const rows: string[][] = [
+  ['Unit of knowledge', 'Atomic typed facts', 'Document chunks', 'Free-form notes', 'Key/value or summaries'],
+  ['Deduplication', 'Subsumes into one fact + refs', 'Stores duplicate chunks', 'Manual', 'Varies / opaque'],
+  ['Provenance', 'Ed25519-signed git commits', 'None', 'None', 'Usually none'],
+  ['Confidence', 'First-class, evolves over time', 'None', 'None', 'Rare'],
+  ['Time travel', 'Read the graph as-of any commit', 'No', 'No', 'No'],
+  ['Consensus across peers', 'git branches → review → main', 'N/A', 'Copy/paste', 'Vendor-controlled'],
+  ['Storage', 'Plain git repo, host anywhere', 'Vendor vector store', 'Local files', 'Vendor cloud'],
+  ['Offline', 'Yes (local embeddings)', 'Depends', 'Yes', 'No'],
+  ['Open source', 'Yes', 'Varies', 'Yes', 'Usually no'],
+  ['Agent interface', 'MCP-native (recall + learn)', 'Retrieval only', 'None', 'SDK / API'],
+];
+---
+
+<BaseLayout
+  title="knomit vs RAG, vector DBs & agent memory — comparison"
+  description="How knomit compares to RAG, vector databases, flat memory files, and agent-memory SaaS across dedup, provenance, confidence, consensus, and offline use."
+>
+  <section class="k-section">
+    <div class="k-container">
+      <SectionHeading
+        eyebrow="Comparison"
+        title="knomit vs the alternatives."
+        lead="Most tools store and retrieve text. knomit stores typed facts with confidence, provenance, and consensus. Here is the difference, dimension by dimension."
+      />
+      <div class="cmp-wrap">
+        <table class="cmp">
+          <thead>
+            <tr>
+              <th scope="col">Dimension</th>
+              {cols.map((c) => <th scope="col">{c}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr>
+                <th scope="row">{r[0]}</th>
+                {r.slice(1).map((cell, i) => (
+                  <td class={i === 0 ? 'cmp__knomit' : ''}>{cell}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="cmp__note k-text-2">
+        knomit is not a replacement for every store — semantic search still
+        runs under the hood. The difference is <em>what</em> it indexes: concise,
+        classified facts you can explain and trust, not raw chunks.
+      </p>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .cmp-wrap { overflow-x: auto; margin-top: 2rem; border: 1px solid var(--k-hairline); border-radius: var(--k-radius); }
+  .cmp { width: 100%; border-collapse: collapse; font-size: 0.92rem; min-width: 720px; }
+  .cmp th, .cmp td { text-align: left; padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--k-hairline-soft); vertical-align: top; }
+  .cmp thead th { font-weight: 600; background: var(--k-surface-1); position: sticky; top: 0; }
+  .cmp th[scope='row'] { font-weight: 600; color: var(--k-text); white-space: nowrap; }
+  .cmp__knomit { color: var(--k-brand); font-weight: 500; }
+  .cmp__note { max-width: 60ch; margin-top: 1.5rem; }
+</style>
