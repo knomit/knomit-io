@@ -30,4 +30,15 @@ test.describe('structured data', () => {
     expect(org.name).toBe('knomit');
     expect(org.url).toMatch(/knomit\.io/);
   });
+
+  test('blog post emits BlogPosting with dates', async ({ page }) => {
+    await page.goto('/blog');
+    await page.getByRole('link', { name: /Dogfooding/i }).first().click();
+    const blocks = await jsonLdBlocks(page);
+    const post = blocks.find((b) => b['@type'] === 'BlogPosting');
+    expect(post, 'no BlogPosting block').toBeTruthy();
+    expect(post.headline).toMatch(/Dogfooding/i);
+    expect(post.datePublished).toBeTruthy();
+    expect(post.author?.name).toBeTruthy();
+  });
 });
