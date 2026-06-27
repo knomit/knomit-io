@@ -96,3 +96,14 @@ test.describe('faq', () => {
     expect(faq.mainEntity[0].acceptedAnswer.text.length).toBeGreaterThan(20);
   });
 });
+
+test('homepage has an extractable one-sentence definition of knomit', async ({ page }) => {
+  await page.goto('/');
+  // A self-contained "knomit is ..." sentence is high-value for AI extraction.
+  await expect(page.getByText(/knomit is .*(memory|knowledge base)/i).first()).toBeVisible();
+});
+
+test('homepage links to the FAQ', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.getByRole('link', { name: /^FAQ$/i }).first()).toBeVisible();
+});

@@ -10,6 +10,7 @@ import BlogCard from '../components/BlogCard.astro';
 import Icon from '../components/Icon.astro';
 import { GITHUB_URL, SITE_DESCRIPTION_SHORT } from '../lib/site';
 import { getPublishedPosts, postHref } from '../lib/blog';
+import { FAQ_ITEMS } from '../lib/faq';
 
 const posts = (await getPublishedPosts()).slice(0, 3);
 
@@ -111,8 +112,9 @@ const steps = [
         <p class="k-eyebrow">Distributed knowledge · Knowledge + commit</p>
         <h1 class="hero__title">Learn it once.<br />Everywhere knows.</h1>
         <p class="k-lead hero__lead">
-          A distributed knowledge base built from concise, typed
-          <strong>facts</strong> — not ingested documents. Each fact carries
+          <strong>knomit is git-backed memory for AI agents</strong> — a
+          distributed knowledge base built from concise, typed
+          <strong>facts</strong>, not ingested documents. Each fact carries
           confidence, provenance, and refs to others; facts evolve, and discovery
           gives birth to new ones. Every peer — human or agent — learns on its own
           branch and converges on a shared <code>main</code>.
@@ -292,6 +294,28 @@ const steps = [
       </section>
     )
   }
+
+  <!-- FAQ (inline, links to full /faq) -->
+  <section class="k-section">
+    <div class="k-container">
+      <SectionHeading
+        eyebrow="FAQ"
+        title="Common questions."
+        align="center"
+      />
+      <dl class="home-faq">
+        {FAQ_ITEMS.slice(0, 5).map((item) => (
+          <div class="home-faq__item k-reveal">
+            <dt class="home-faq__q">{item.q}</dt>
+            <dd class="home-faq__a k-text-2">{item.a}</dd>
+          </div>
+        ))}
+      </dl>
+      <p class="home-faq__more">
+        <a href="/faq" class="k-btn k-btn--ghost">All questions <Icon name="arrow" size={16} /></a>
+      </p>
+    </div>
+  </section>
 
   <!-- Footer CTA -->
   <section class="k-section">
@@ -537,6 +561,13 @@ const steps = [
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
     gap: 1.25rem;
   }
+
+  /* Inline FAQ */
+  .home-faq { max-width: 52rem; margin: 2rem auto 0; display: grid; gap: 1.5rem; }
+  .home-faq__item { border-left: 2px solid var(--k-hairline); padding-left: 1.1rem; }
+  .home-faq__q { font-weight: 600; margin-bottom: 0.4rem; }
+  .home-faq__a { line-height: 1.6; font-size: 0.95rem; }
+  .home-faq__more { text-align: center; margin-top: 2rem; }
 
   /* CTA */
   .cta {

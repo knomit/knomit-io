@@ -85,12 +85,11 @@ const toc = [
       <div class="concept-block__text k-prose-content">
         <h2>Epistemic vs pragmatic</h2>
         <p>
-          Every fact carries a <strong>kind</strong> that tells the consumer how
-          to apply it. <strong>Epistemic</strong> facts describe what <em>is</em> —
-          observations, concepts, syntheses, hypotheses — knowledge to weigh as
-          evidence, with a confidence that can move. <strong>Pragmatic</strong>
-          facts prescribe what to <em>do</em> — policies and heuristics — rules to
-          follow or lean on.
+          Every fact is one of two kinds: <strong>epistemic</strong> facts describe
+          what <em>is</em> — observations, concepts, syntheses, hypotheses —
+          knowledge to weigh as evidence, with a confidence that can move;
+          <strong>pragmatic</strong> facts prescribe what to <em>do</em> — policies
+          and heuristics — rules to follow or lean on.
         </p>
         <p>
           The leaf <code>type</code> refines this further
@@ -124,11 +123,10 @@ const toc = [
       <div class="concept-block__text k-prose-content">
         <h2>Ontology & inheritance</h2>
         <p>
-          Facts live in a directory tree under the ontology root
-          (<code>kb/</code>). That tree is not just organization — it carries
-          meaning. A fact placed at a higher level applies to everything beneath
-          it: a fact at <code>kb/invariants/</code> is inherited by
-          <code>kb/invariants/concurrency/branch-lock/</code>.
+          The ontology is a directory tree under <code>kb/</code> that is not just
+          organization — it carries meaning: a fact placed at a higher level applies
+          to everything beneath it, so a fact at <code>kb/invariants/</code> is
+          inherited by <code>kb/invariants/concurrency/branch-lock/</code>.
         </p>
         <p>
           The ontology is configurable. knomit ships with two:
@@ -173,10 +171,9 @@ const toc = [
       <div class="concept-block__text k-prose-content">
         <h2>How knowledge clusters</h2>
         <p>
-          Beyond what each fact says about itself, the corpus has emergent
-          structure the author never declared. Facts cluster by
-          <strong>meaning</strong> — embedding similarity groups facts that talk
-          about the same thing, wherever they were filed — and by
+          Clustering is emergent structure the author never declared: facts group by
+          <strong>meaning</strong> — embedding similarity puts facts about the same
+          thing together, wherever they were filed — and by
           <strong>classification</strong> — shared ontology paths, domains, and
           entities group facts by how they were declared.
         </p>
