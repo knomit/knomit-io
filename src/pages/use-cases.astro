@@ -182,11 +182,6 @@ const groups = [
     border: 1px solid rgba(119, 204, 153, 0.25);
     margin-bottom: 1.1rem;
   }
-  .uc-card__audience {
-    font-size: 0.78rem;
-    color: var(--k-text-muted);
-    margin-bottom: 0.4rem;
-  }
   .uc-card__title {
     font-size: 1.4rem;
     margin-bottom: 0.7rem;
@@ -195,34 +190,43 @@ const groups = [
     line-height: 1.6;
     font-size: 0.96rem;
   }
-  .uc-card__points {
-    list-style: none;
-    margin: 1.25rem 0;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.55rem;
-  }
-  .uc-card__points li {
-    display: flex;
-    align-items: flex-start;
-    gap: 0.6rem;
-    font-size: 0.9rem;
-    color: var(--k-text);
-  }
-  .uc-card__points :global(.k-icon) {
-    color: var(--k-brand);
-    flex-shrink: 0;
-    margin-top: 0.15rem;
-  }
   .uc-card__link {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
-    margin-top: auto;
+    margin-top: 0;
     padding-top: 0.5rem;
     font-size: 0.92rem;
     font-weight: 500;
+  }
+
+  .uc-group {
+    padding-block: clamp(2rem, 1.25rem + 3vw, 3.25rem);
+  }
+  .uc-group + .uc-group {
+    padding-top: 0;
+  }
+  .uc-group__head {
+    margin-bottom: 1.5rem;
+    padding-bottom: 0.9rem;
+    border-bottom: 1px solid var(--k-hairline-soft);
+  }
+  .uc-group__lead {
+    font-size: 1.15rem;
+    color: var(--k-text);
+    margin-top: 0.3rem;
+  }
+  .uc-card__tag {
+    margin-top: auto;
+    padding-top: 1rem;
+    font-size: 0.76rem;
+    color: var(--k-text-muted);
+    letter-spacing: 0.01em;
+  }
+  /* When a card has both a tag and a link, the tag shouldn't eat the spacer */
+  .uc-card__tag + .uc-card__link {
+    margin-top: 0.6rem;
+    padding-top: 0;
   }
 
   .uc-cta {
