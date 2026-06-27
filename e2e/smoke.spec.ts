@@ -32,13 +32,13 @@ test.describe('blog', () => {
   test('index lists the seed post', async ({ page }) => {
     await page.goto('/blog');
     await expect(page.getByRole('heading', { name: /Real-world use cases/i })).toBeVisible();
-    const post = page.getByRole('link', { name: /knomit knows knomit/i });
+    const post = page.getByRole('link', { name: /Dogfooding/i });
     await expect(post.first()).toBeVisible();
   });
 
   test('a post renders with byline and navigates back', async ({ page }) => {
     await page.goto('/blog');
-    await page.getByRole('link', { name: /knomit knows knomit/i }).first().click();
+    await page.getByRole('link', { name: /Dogfooding/i }).first().click();
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/Dogfooding/i);
     await page.getByRole('link', { name: '← Blog' }).click();
     await expect(page).toHaveURL(/\/blog\/?$/);
