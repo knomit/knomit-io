@@ -1,6 +1,8 @@
 # local planning packet (kept out of the published repo)
 local/
 docs/
+.claude/plans/
+.superpowers/
 
 # dependencies
 node_modules/
