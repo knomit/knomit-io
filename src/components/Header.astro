@@ -1,6 +1,6 @@
 ---
 import Logo from '../assets/logo.svg';
-import { GITHUB_URL } from '../lib/site';
+import { GITHUB_URL, DEMO_LIVE } from '../lib/site';
 
 const nav = [
   { label: 'Concepts', href: '/concepts' },
@@ -35,7 +35,7 @@ const isActive = (href: string) =>
     </nav>
 
     <div class="k-header__actions">
-      <a href="/explore" class="k-header__link k-header__link--demo">See it live</a>
+      {DEMO_LIVE && <a href="/explore" class="k-header__link k-header__link--demo">See it live</a>}
       <a href={GITHUB_URL} class="k-btn k-btn--ghost k-header__gh" rel="noopener">
         <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">
           <path
@@ -53,7 +53,7 @@ const isActive = (href: string) =>
 
   <nav class="k-header__mobile" aria-label="Mobile" hidden>
     {nav.map((item) => <a href={item.href} class="k-header__link">{item.label}</a>)}
-    <a href="/explore" class="k-header__link">See it live</a>
+    {DEMO_LIVE && <a href="/explore" class="k-header__link">See it live</a>}
     <a href={GITHUB_URL} class="k-header__link" rel="noopener">GitHub</a>
   </nav>
 </header>

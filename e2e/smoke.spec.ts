@@ -9,7 +9,8 @@ test.describe('marketing site', () => {
     );
     // Primary + secondary CTAs.
     await expect(page.getByRole('link', { name: /View on GitHub/i }).first()).toBeVisible();
-    await expect(page.getByRole('link', { name: /See it live/i }).first()).toBeVisible();
+    // Demo link is hidden until the hosted instance exists (DEMO_LIVE=false).
+    await expect(page.getByRole('link', { name: /See it live/i })).toHaveCount(0);
     // Footer present.
     await expect(page.getByRole('contentinfo')).toBeVisible();
   });
@@ -55,20 +56,10 @@ test.describe('docs', () => {
 });
 
 test.describe('explore', () => {
-  test('renders the live-demo experience (teaser or iframe)', async ({ page }) => {
+  test('renders the teaser while the hosted demo is gated', async ({ page }) => {
     await page.goto('/explore');
-    const iframe = page.locator('iframe.explore-frame');
-    if ((await iframe.count()) > 0) {
-      // Phase 2: full-bleed iframe + parent ExitWidget that returns to the site.
-      await expect(iframe).toBeVisible();
-      const exit = page.getByRole('link', { name: /Back to/i });
-      await expect(exit).toBeVisible();
-      await expect(exit).toHaveAttribute('href', '/');
-    } else {
-      // Phase 1: coming-soon teaser.
-      await expect(page.getByText(/coming soon/i).first()).toBeVisible();
-      await expect(page.getByRole('link', { name: /Run it yourself/i })).toBeVisible();
-    }
+    await expect(page.locator('iframe.explore-frame')).toHaveCount(0);
+    await expect(page.getByRole('heading', { name: /Browse a living knowledge base/i })).toBeVisible();
   });
 });
 

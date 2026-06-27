@@ -15,7 +15,9 @@ export const GITHUB_URL = 'https://github.com/knomit/knomit';
 export const DEMO_LABEL = 'kb.knomit.io';
 export const DEMO_URL = 'http://localhost:19278/';
 
-/** When true, /explore embeds the live UI; when false it shows the teaser. */
-export const DEMO_LIVE = true;
+/** When true, /explore embeds the live UI; when false it shows the teaser.
+ *  Keep false in production until the hosted instance (kb.knomit.io) is up —
+ *  DEMO_URL points at localhost and must never ship in an iframe. */
+export const DEMO_LIVE = false;
 
 export const PORT = 19278;
