@@ -70,29 +70,8 @@ fetches that spec (and the product README) on every build, so the reference
   carried from the product UI (mint-green `#7c9` brand, layered darks, semantic
   blue/amber/red). Change them in one place.
 
-## The live demo (`/explore`)
-
-`/explore` is **Phase 2**. Today it renders a "coming soon" teaser; flip
-`DEMO_LIVE` in [`src/lib/site.ts`](src/lib/site.ts) to `true` (and point
-`DEMO_URL` at the demo host) to switch to the full-bleed iframe of the real
-`demo.knomit.io` UI with the floating back-to-site `ExitWidget`.
-
-The demo instance is owned by the knomit repo, not this one. It must serve
-`Content-Security-Policy: frame-ancestors https://knomit.io` (not
-`X-Frame-Options: DENY`) and allow CORS from `https://knomit.io`.
-
 ## Deploy
 
-- **knomit.io** → Cloudflare Pages. Build command `npm run build`, output `dist/`.
-  Provide a `KNOMIT_SYNC_TOKEN` build secret while the knomit repo is private; set
-  `SITE_URL` for canonical/OG URLs. PR preview deploys recommended.
-- **demo.knomit.io** → the knomit binary on a small VM behind Caddy, repos mounted
-  read-only (Phase 2; ops-owned).
-
-## Delivery phases
-
-- **Phase 1 (this repo, launchable now):** landing, `/concepts`, `/use-cases`,
-  `/docs` incl. the generated REST reference, `/blog` + RSS. No knomit-repo
-  changes or VM required.
-- **Phase 2:** the live `/explore` demo, gated on the `demo.knomit.io` instance
-  and its framing/CORS config.
+**knomit.io** → Cloudflare Pages. Build command `npm run build`, output `dist/`.
+Provide a `KNOMIT_SYNC_TOKEN` build secret while the knomit repo is private; set
+`SITE_URL` for canonical/OG URLs. PR preview deploys are recommended.
