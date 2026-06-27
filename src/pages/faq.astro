@@ -1,0 +1,42 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SectionHeading from '../components/SectionHeading.astro';
+import { FAQ_ITEMS } from '../lib/faq';
+import { faqPageSchema } from '../lib/schema';
+
+const jsonLd = faqPageSchema(FAQ_ITEMS.map((i) => ({ q: i.q, a: i.a })));
+---
+
+<BaseLayout
+  title="knomit FAQ — git-backed memory for AI agents"
+  description="Answers to common questions about knomit: what it is, how it differs from RAG, MCP support, open source, offline use, provenance, and synthesis."
+  jsonLd={jsonLd}
+>
+  <section class="k-section">
+    <div class="k-container k-prose">
+      <SectionHeading
+        eyebrow="FAQ"
+        title="Questions, answered."
+        lead="What knomit is, how it differs from the tools you already use, and how the pieces fit."
+      />
+      <dl class="faq">
+        {FAQ_ITEMS.map((item) => (
+          <div class="faq__item">
+            <dt><h2 class="faq__q">{item.q}</h2></dt>
+            <dd class="faq__a k-text-2">{item.a}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .faq { margin-top: 2rem; display: grid; gap: 1.75rem; }
+  .faq__item {
+    border-left: 2px solid var(--k-hairline);
+    padding-left: 1.1rem;
+  }
+  .faq__q { font-size: 1.15rem; margin: 0 0 0.5rem; }
+  .faq__a { line-height: 1.65; max-width: 60ch; }
+</style>

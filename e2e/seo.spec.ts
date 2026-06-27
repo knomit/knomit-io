@@ -82,3 +82,17 @@ test.describe('llms.txt', () => {
     expect(body).toMatch(/knomit/);
   });
 });
+
+test.describe('faq', () => {
+  test('/faq renders questions and emits FAQPage schema', async ({ page }) => {
+    const res = await page.request.get('/faq');
+    expect(res.status()).toBe(200);
+    await page.goto('/faq');
+    await expect(page.getByRole('heading', { name: /what is knomit/i })).toBeVisible();
+    const blocks = await jsonLdBlocks(page);
+    const faq = blocks.find((b) => b['@type'] === 'FAQPage');
+    expect(faq, 'no FAQPage block').toBeTruthy();
+    expect(faq.mainEntity.length).toBeGreaterThanOrEqual(8);
+    expect(faq.mainEntity[0].acceptedAnswer.text.length).toBeGreaterThan(20);
+  });
+});
