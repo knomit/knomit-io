@@ -1,5 +1,10 @@
 import { test, expect } from '@playwright/test';
 
+async function jsonLdBlocks(page) {
+  const raw = await page.locator('script[type="application/ld+json"]').allTextContents();
+  return raw.map((t) => JSON.parse(t));
+}
+
 test.describe('meta descriptions', () => {
   const pages = ['/', '/concepts', '/use-cases', '/blog'];
   for (const path of pages) {
@@ -12,4 +17,17 @@ test.describe('meta descriptions', () => {
       expect(desc!.length, `${path} description too long: ${desc!.length}`).toBeLessThanOrEqual(160);
     });
   }
+});
+
+test.describe('structured data', () => {
+  test('homepage emits Organization and WebSite', async ({ page }) => {
+    await page.goto('/');
+    const blocks = await jsonLdBlocks(page);
+    const types = blocks.map((b) => b['@type']);
+    expect(types).toContain('Organization');
+    expect(types).toContain('WebSite');
+    const org = blocks.find((b) => b['@type'] === 'Organization');
+    expect(org.name).toBe('knomit');
+    expect(org.url).toMatch(/knomit\.io/);
+  });
 });

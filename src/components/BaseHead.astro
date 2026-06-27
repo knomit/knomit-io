@@ -3,6 +3,8 @@ import '@fontsource-variable/space-grotesk';
 import '@fontsource/jetbrains-mono/400.css';
 import '@fontsource/jetbrains-mono/500.css';
 import '../styles/theme.css';
+import JsonLd from './JsonLd.astro';
+import { organizationSchema, websiteSchema, softwareApplicationSchema } from '../lib/schema';
 
 interface Props {
   title: string;
@@ -10,11 +12,14 @@ interface Props {
   /** Page-specific OG image path (absolute or site-relative). */
   image?: string;
   article?: boolean;
+  /** Page-specific JSON-LD appended after the site-wide Organization/WebSite. */
+  jsonLd?: Record<string, unknown> | Record<string, unknown>[];
 }
 
-const { title, description, image = '/og.png', article = false } = Astro.props;
+const { title, description, image = '/og.png', article = false, jsonLd } = Astro.props;
 const canonical = new URL(Astro.url.pathname, Astro.site);
 const ogImage = new URL(image, Astro.site);
+const site = Astro.site!;
 ---
 
 <meta charset="utf-8" />
@@ -51,3 +56,7 @@ const ogImage = new URL(image, Astro.site);
 <script is:inline>
   document.documentElement.classList.add('has-js');
 </script>
+<JsonLd schema={organizationSchema(site)} />
+<JsonLd schema={websiteSchema(site)} />
+<JsonLd schema={softwareApplicationSchema(site)} />
+{jsonLd && <JsonLd schema={jsonLd} />}
