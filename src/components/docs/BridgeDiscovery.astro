@@ -1,0 +1,188 @@
+---
+// Two-panel diagram for emergent fact discovery.
+// Panel 1 — the bridge: two similarity clusters linked only by a shared token
+//   (domain/entity) the author never declared; the keystone E sits beneath them.
+// Panel 2 — the two directions discovery runs the bridge in.
+// Built in the RequestFlow.astro vocabulary: inline SVG over theme vars,
+// surface-1 fills, colour-coded hairlines, mono labels.
+//   clusters/known = --k-ref (blue) · the bridge signal = --k-brand (green)
+//   the discovered keystone/hypothesis = --k-temporal (amber)
+interface Props {
+  compact?: boolean;
+}
+const { compact = false } = Astro.props;
+---
+
+<figure class="bd">
+  <svg
+    class="bd__svg"
+    viewBox="0 0 720 300"
+    fill="none"
+    xmlns="http://www.w3.org/2000/svg"
+    role="img"
+    aria-label="Two similarity clusters of facts, each densely connected within itself, are linked only by a single shared domain-or-entity token that spans the gap between them — the bridge. Beneath the bridge sits an unstated keystone fact E that both clusters depend on. Embedding similarity only ever draws the dense within-cluster edges, so it cannot see the cross-cluster bridge or the keystone."
+  >
+    <defs>
+      <marker id="bd-arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+        <path d="M0,0 L10,5 L0,10 z" fill="var(--k-brand, #77cc99)" />
+      </marker>
+      <filter id="bd-glow" x="-40%" y="-40%" width="180%" height="180%">
+        <feGaussianBlur stdDeviation="4" result="b" />
+        <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+      </filter>
+    </defs>
+
+    <!-- cluster regions -->
+    <rect class="bd__region" x="24" y="40" width="244" height="120" rx="12" />
+    <rect class="bd__region" x="452" y="40" width="244" height="120" rx="12" />
+    <text class="bd__region-label" x="146" y="32" text-anchor="middle">similarity cluster A</text>
+    <text class="bd__region-label" x="574" y="32" text-anchor="middle">similarity cluster B</text>
+
+    <!-- intra-cluster edges (what similarity sees) -->
+    <g class="bd__intra">
+      <line x1="70" y1="80" x2="120" y2="70" />
+      <line x1="120" y1="70" x2="110" y2="120" />
+      <line x1="70" y1="80" x2="110" y2="120" />
+      <line x1="120" y1="70" x2="210" y2="100" />
+      <line x1="650" y1="80" x2="600" y2="70" />
+      <line x1="600" y1="70" x2="610" y2="120" />
+      <line x1="650" y1="80" x2="610" y2="120" />
+      <line x1="600" y1="70" x2="510" y2="100" />
+    </g>
+
+    <!-- the bridge (cross-cluster shared token) -->
+    <line class="bd__bridge" x1="210" y1="100" x2="510" y2="100" marker-start="url(#bd-arrow)" marker-end="url(#bd-arrow)" />
+    <text class="bd__bridge-label" x="360" y="90" text-anchor="middle">shared token</text>
+    <text class="bd__bridge-sub" x="360" y="118" text-anchor="middle">domain / entity · different clusters</text>
+
+    <!-- cluster A dots -->
+    <circle class="bd__dot" cx="70" cy="80" r="6" />
+    <circle class="bd__dot" cx="120" cy="70" r="6" />
+    <circle class="bd__dot" cx="110" cy="120" r="6" />
+    <circle class="bd__dot bd__dot--face" cx="210" cy="100" r="8" />
+    <text class="bd__dot-label" x="210" y="138" text-anchor="middle">fact A</text>
+
+    <!-- cluster B dots -->
+    <circle class="bd__dot" cx="650" cy="80" r="6" />
+    <circle class="bd__dot" cx="600" cy="70" r="6" />
+    <circle class="bd__dot" cx="610" cy="120" r="6" />
+    <circle class="bd__dot bd__dot--face" cx="510" cy="100" r="8" />
+    <text class="bd__dot-label" x="510" y="138" text-anchor="middle">fact B</text>
+
+    <!-- implication lines to the keystone -->
+    <g class="bd__imply">
+      <path d="M210 108 C260 200 320 230 360 244" />
+      <path d="M510 108 C460 200 400 230 360 244" />
+    </g>
+
+    <!-- keystone E -->
+    <rect class="bd__keystone" x="276" y="244" width="168" height="44" rx="10" filter="url(#bd-glow)" />
+    <text class="bd__keystone-title" x="360" y="263" text-anchor="middle">E — keystone</text>
+    <text class="bd__keystone-sub" x="360" y="278" text-anchor="middle">unstated · origin: discovered</text>
+  </svg>
+
+  <figcaption class="bd__cap">
+    Embedding similarity only ever draws the dense <em>within</em>-cluster edges —
+    it is structurally blind to the cross-cluster token. The <strong>bridge</strong>
+    is that missed link; the <strong>keystone</strong> is the load-bearing fact it
+    implies — the one nobody wrote down precisely because it underwrites things
+    that look unrelated.
+  </figcaption>
+
+  {!compact && (
+    <div class="bd__panel2">
+      <div class="bd__dir">
+        <span class="bd__dir-tag k-mono bd__dir-tag--fwd">forward · knomit_review</span>
+        <span class="bd__dir-flow k-mono">&#123;A, B, C&#125; &rarr; E</span>
+        <span class="bd__dir-note">a <strong>consequence</strong> that follows from the bridged facts but none states alone &rarr; new <code>synthesis</code></span>
+      </div>
+      <div class="bd__dir">
+        <span class="bd__dir-tag k-mono bd__dir-tag--bwd">backward · knomit_hypothesize</span>
+        <span class="bd__dir-flow k-mono">E &rarr; &#123;A, B, C&#125;</span>
+        <span class="bd__dir-note">an unstated <strong>premise</strong> that, if false, breaks them &rarr; new <code>hypothesis</code>, ranked by blast radius</span>
+      </div>
+    </div>
+  )}
+</figure>
+
+<style>
+  .bd {
+    margin: 1.5rem 0;
+    background: var(--k-surface-1, #1a1a1a);
+    border: 1px solid var(--k-hairline-soft, #262626);
+    border-radius: var(--k-radius, 12px);
+    padding: 1.25rem 1.25rem 1rem;
+  }
+  .bd__svg { width: 100%; height: auto; display: block; overflow: visible; }
+
+  .bd__region {
+    fill: color-mix(in srgb, var(--k-ref, #88aaff) 5%, transparent);
+    stroke: var(--k-hairline, #333);
+    stroke-width: 1.25;
+    stroke-dasharray: 4 4;
+  }
+  .bd__region-label,
+  .bd__dot-label {
+    font-family: var(--k-font-mono, ui-monospace, monospace);
+    font-size: 8.5px;
+    fill: var(--k-text-muted, #666);
+  }
+  .bd__intra line { stroke: var(--k-ref, #88aaff); stroke-width: 1; opacity: 0.4; }
+  .bd__dot { fill: var(--k-surface-1, #1a1a1a); stroke: var(--k-ref, #88aaff); stroke-width: 1.5; }
+  .bd__dot--face { stroke-width: 2; }
+
+  .bd__bridge { stroke: var(--k-brand, #77cc99); stroke-width: 2; }
+  .bd__bridge-label {
+    font-family: var(--k-font-mono, ui-monospace, monospace);
+    font-size: 10px; font-weight: 600; fill: var(--k-brand, #77cc99);
+  }
+  .bd__bridge-sub {
+    font-family: var(--k-font-mono, ui-monospace, monospace);
+    font-size: 7.5px; fill: var(--k-text-muted, #666);
+  }
+
+  .bd__imply path { stroke: var(--k-temporal, #e5a23c); stroke-width: 1.25; stroke-dasharray: 3 3; opacity: 0.7; }
+  .bd__keystone { fill: var(--k-surface-1, #1a1a1a); stroke: var(--k-temporal, #e5a23c); stroke-width: 2; }
+  .bd__keystone-title {
+    font-family: var(--k-font-mono, ui-monospace, monospace);
+    font-size: 11px; font-weight: 600; fill: var(--k-temporal, #e5a23c);
+  }
+  .bd__keystone-sub {
+    font-family: var(--k-font-mono, ui-monospace, monospace);
+    font-size: 7.5px; fill: var(--k-text-muted, #666);
+  }
+
+  .bd__cap {
+    margin-top: 0.9rem;
+    font-size: 0.8rem; line-height: 1.55;
+    color: var(--k-text-muted, #666); text-align: center;
+  }
+  .bd__cap strong { color: var(--k-text-2, #aaa); }
+
+  .bd__panel2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-top: 1.1rem;
+    padding-top: 1.1rem;
+    border-top: 1px solid var(--k-hairline-soft, #262626);
+  }
+  .bd__dir {
+    display: flex; flex-direction: column; gap: 0.4rem;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--k-hairline, #333);
+    border-radius: var(--k-radius, 12px);
+    background: var(--k-bg, #111);
+  }
+  .bd__dir-tag { font-size: 0.72rem; font-weight: 600; }
+  .bd__dir-tag--fwd { color: var(--k-brand, #77cc99); }
+  .bd__dir-tag--bwd { color: var(--k-temporal, #e5a23c); }
+  .bd__dir-flow { font-size: 0.95rem; color: var(--k-text, #eee); }
+  .bd__dir-note { font-size: 0.78rem; line-height: 1.5; color: var(--k-text-muted, #666); }
+
+  @media (max-width: 640px) {
+    .bd { padding: 1rem 0.6rem 0.75rem; }
+    .bd__panel2 { grid-template-columns: 1fr; }
+    .bd__cap { font-size: 0.74rem; }
+  }
+</style>
