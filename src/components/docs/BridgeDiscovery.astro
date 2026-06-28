@@ -32,47 +32,47 @@ const { compact = false } = Astro.props;
       </filter>
     </defs>
 
-    <!-- cluster regions -->
-    <rect class="bd__region" x="24" y="40" width="244" height="120" rx="12" />
-    <rect class="bd__region" x="452" y="40" width="244" height="120" rx="12" />
+    <!-- cluster regions (x/width mirror the panel-2 tile columns below) -->
+    <rect class="bd__region" x="24" y="40" width="244" height="94" rx="12" />
+    <rect class="bd__region" x="452" y="40" width="244" height="94" rx="12" />
     <text class="bd__region-label" x="146" y="32" text-anchor="middle">similarity cluster A</text>
     <text class="bd__region-label" x="574" y="32" text-anchor="middle">similarity cluster B</text>
 
     <!-- intra-cluster edges (what similarity sees) -->
     <g class="bd__intra">
-      <line x1="70" y1="80" x2="120" y2="70" />
-      <line x1="120" y1="70" x2="110" y2="120" />
-      <line x1="70" y1="80" x2="110" y2="120" />
-      <line x1="120" y1="70" x2="210" y2="100" />
-      <line x1="650" y1="80" x2="600" y2="70" />
-      <line x1="600" y1="70" x2="610" y2="120" />
-      <line x1="650" y1="80" x2="610" y2="120" />
-      <line x1="600" y1="70" x2="510" y2="100" />
+      <line x1="74" y1="72" x2="120" y2="62" />
+      <line x1="120" y1="62" x2="104" y2="112" />
+      <line x1="74" y1="72" x2="104" y2="112" />
+      <line x1="120" y1="62" x2="236" y2="86" />
+      <line x1="646" y1="72" x2="600" y2="62" />
+      <line x1="600" y1="62" x2="616" y2="112" />
+      <line x1="646" y1="72" x2="616" y2="112" />
+      <line x1="600" y1="62" x2="484" y2="86" />
     </g>
 
     <!-- the bridge (cross-cluster shared token) -->
-    <line class="bd__bridge" x1="210" y1="100" x2="510" y2="100" marker-start="url(#bd-arrow)" marker-end="url(#bd-arrow)" />
-    <text class="bd__bridge-label" x="360" y="90" text-anchor="middle">shared token</text>
-    <text class="bd__bridge-sub" x="360" y="118" text-anchor="middle">domain / entity · different clusters</text>
+    <line class="bd__bridge" x1="236" y1="86" x2="484" y2="86" marker-start="url(#bd-arrow)" marker-end="url(#bd-arrow)" />
+    <text class="bd__bridge-label" x="360" y="76" text-anchor="middle">shared token</text>
+    <text class="bd__bridge-sub" x="360" y="106" text-anchor="middle">domain / entity · different clusters</text>
 
     <!-- cluster A dots -->
-    <circle class="bd__dot" cx="70" cy="80" r="6" />
-    <circle class="bd__dot" cx="120" cy="70" r="6" />
-    <circle class="bd__dot" cx="110" cy="120" r="6" />
-    <circle class="bd__dot bd__dot--face" cx="210" cy="100" r="8" />
-    <text class="bd__dot-label" x="210" y="138" text-anchor="middle">fact A</text>
+    <circle class="bd__dot" cx="74" cy="72" r="6" />
+    <circle class="bd__dot" cx="120" cy="62" r="6" />
+    <circle class="bd__dot" cx="104" cy="112" r="6" />
+    <circle class="bd__dot bd__dot--face" cx="236" cy="86" r="8" />
+    <text class="bd__dot-label" x="236" y="122" text-anchor="middle">fact A</text>
 
     <!-- cluster B dots -->
-    <circle class="bd__dot" cx="650" cy="80" r="6" />
-    <circle class="bd__dot" cx="600" cy="70" r="6" />
-    <circle class="bd__dot" cx="610" cy="120" r="6" />
-    <circle class="bd__dot bd__dot--face" cx="510" cy="100" r="8" />
-    <text class="bd__dot-label" x="510" y="138" text-anchor="middle">fact B</text>
+    <circle class="bd__dot" cx="646" cy="72" r="6" />
+    <circle class="bd__dot" cx="600" cy="62" r="6" />
+    <circle class="bd__dot" cx="616" cy="112" r="6" />
+    <circle class="bd__dot bd__dot--face" cx="484" cy="86" r="8" />
+    <text class="bd__dot-label" x="484" y="122" text-anchor="middle">fact B</text>
 
-    <!-- implication lines to the keystone -->
+    <!-- implication lines to the keystone (start below the fact labels) -->
     <g class="bd__imply">
-      <path d="M210 108 C260 200 320 230 360 244" />
-      <path d="M510 108 C460 200 400 230 360 244" />
+      <path d="M236 134 C252 192 322 224 360 244" />
+      <path d="M484 134 C468 192 398 224 360 244" />
     </g>
 
     <!-- keystone E -->
@@ -91,12 +91,12 @@ const { compact = false } = Astro.props;
 
   {!compact && (
     <div class="bd__panel2">
-      <div class="bd__dir">
+      <div class="bd__dir bd__dir--fwd">
         <span class="bd__dir-tag k-mono bd__dir-tag--fwd">forward · knomit_review</span>
         <span class="bd__dir-flow k-mono">&#123;A, B, C&#125; &rarr; E</span>
         <span class="bd__dir-note">a <strong>consequence</strong> that follows from the bridged facts but none states alone &rarr; new <code>synthesis</code></span>
       </div>
-      <div class="bd__dir">
+      <div class="bd__dir bd__dir--bwd">
         <span class="bd__dir-tag k-mono bd__dir-tag--bwd">backward · knomit_hypothesize</span>
         <span class="bd__dir-flow k-mono">E &rarr; &#123;A, B, C&#125;</span>
         <span class="bd__dir-note">an unstated <strong>premise</strong> that, if false, breaks them &rarr; new <code>hypothesis</code>, ranked by blast radius</span>
@@ -161,12 +161,15 @@ const { compact = false } = Astro.props;
 
   .bd__panel2 {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 1rem;
+    /* Columns mirror the SVG viewBox (total 720): outer margins 24, clusters
+       244, centre gap 184 — so each tile sits directly under its cluster. */
+    grid-template-columns: 24fr 244fr 184fr 244fr 24fr;
     margin-top: 1.1rem;
     padding-top: 1.1rem;
     border-top: 1px solid var(--k-hairline-soft, #262626);
   }
+  .bd__dir--fwd { grid-column: 2; }
+  .bd__dir--bwd { grid-column: 4; }
   .bd__dir {
     display: flex; flex-direction: column; gap: 0.4rem;
     padding: 0.85rem 1rem;
@@ -183,6 +186,7 @@ const { compact = false } = Astro.props;
   @media (max-width: 640px) {
     .bd { padding: 1rem 0.6rem 0.75rem; }
     .bd__panel2 { grid-template-columns: 1fr; }
+    .bd__dir--fwd, .bd__dir--bwd { grid-column: auto; }
     .bd__cap { font-size: 0.74rem; }
   }
 </style>
