@@ -10,15 +10,16 @@ interface Props {
   article?: boolean;
   /** Set false on full-bleed pages (e.g. /explore) to drop the chrome. */
   chrome?: boolean;
+  jsonLd?: Record<string, unknown> | Record<string, unknown>[];
 }
 
-const { title, description, image, article, chrome = true } = Astro.props;
+const { title, description, image, article, chrome = true, jsonLd } = Astro.props;
 ---
 
 <!doctype html>
 <html lang="en">
   <head>
-    <BaseHead title={title} description={description} image={image} article={article} />
+    <BaseHead title={title} description={description} image={image} article={article} jsonLd={jsonLd} />
   </head>
   <body>
     <a href="#main" class="k-skip">Skip to content</a>

@@ -1,0 +1,263 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SectionHeading from '../components/SectionHeading.astro';
+import Icon from '../components/Icon.astro';
+import { GITHUB_URL, DEMO_LIVE } from '../lib/site';
+
+const cols = ['knomit', 'RAG / vector DB', 'Flat memory files', 'Agent-memory SaaS'];
+
+// Each row: [dimension, knomit, rag, flat, saas]
+const rows: string[][] = [
+  ['Unit of knowledge', 'Atomic typed facts', 'Document chunks', 'Free-form notes', 'Key/value or summaries'],
+  ['Deduplication', 'Subsumes into one fact + refs', 'Stores duplicate chunks', 'Manual', 'Varies / opaque'],
+  ['Provenance', 'Ed25519-signed git commits', 'None', 'None', 'Usually none'],
+  ['Confidence', 'First-class, evolves over time', 'None', 'None', 'Rare'],
+  ['Time travel', 'Read the graph as-of any commit', 'No', 'No', 'No'],
+  ['Consensus across peers', 'git branches → review → main', 'N/A', 'Copy/paste', 'Vendor-controlled'],
+  ['Storage', 'Plain git repo, host anywhere', 'Vendor vector store', 'Local files', 'Vendor cloud'],
+  ['Offline', 'Yes (local embeddings)', 'Depends', 'Yes', 'No'],
+  ['Open source', 'Yes', 'Varies', 'Yes', 'Usually no'],
+  ['Agent interface', 'MCP-native (recall + learn)', 'Retrieval only', 'None', 'SDK / API'],
+];
+
+// The differentiators worth expanding past a table cell — each maps to a row
+// above but says why it matters.
+const reasons = [
+  {
+    icon: 'provenance',
+    title: 'Provenance you can verify',
+    body: 'Every fact is an Ed25519-signed git commit. You can trace where a claim came from, who asserted it, and how it changed — instead of retrieving a chunk of text and trusting it blind.',
+  },
+  {
+    icon: 'dedup',
+    title: 'One fact, not ten copies',
+    body: 'Similar inputs subsume into a single fact with many references. A vector store keeps every near-duplicate chunk and lets them drift; knomit converges them, so the corpus sharpens as it grows.',
+  },
+  {
+    icon: 'evolve',
+    title: 'Confidence that moves',
+    body: 'Facts carry a degree of belief that rises and falls as evidence accrues. You weigh knowledge by confidence rather than treating every retrieved passage as equally, statically true.',
+  },
+  {
+    icon: 'temporal',
+    title: 'Read the graph as-of any moment',
+    body: 'The whole graph is versioned by commit, so you can replay exactly what was known when a decision was made — impossible when your store only holds the current text.',
+  },
+];
+
+const fit = [
+  'Knowledge has to be shared across agents and humans, not siloed inside one tool.',
+  'You must explain a claim — provenance, confidence, and an audit trail matter.',
+  'You want it git-native: reviewable like code, hostable anywhere, no vendor lock-in.',
+  'Agents should both recall and learn in the loop, over MCP.',
+];
+
+const notFit = [
+  'You only need raw passage retrieval for a single app, and that’s the whole job.',
+  'There’s no need to dedup, explain, classify, or version what you store.',
+  'One-shot RAG over a static document set already answers your questions.',
+];
+---
+
+<BaseLayout
+  title="knomit vs RAG, vector DBs & agent memory — comparison"
+  description="How knomit compares to RAG, vector databases, flat memory files, and agent-memory SaaS across dedup, provenance, confidence, consensus, and offline use."
+>
+  <!-- Table -->
+  <section class="k-section">
+    <div class="k-container">
+      <SectionHeading
+        eyebrow="Comparison"
+        title="knomit vs the alternatives."
+        lead="Most tools store and retrieve text. knomit stores typed facts with confidence, provenance, and consensus. Here is the difference, dimension by dimension."
+      />
+      <div class="cmp-wrap">
+        <table class="cmp">
+          <thead>
+            <tr>
+              <th scope="col">Dimension</th>
+              {cols.map((c) => <th scope="col">{c}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr>
+                <th scope="row">{r[0]}</th>
+                {r.slice(1).map((cell, i) => (
+                  <td class={i === 0 ? 'cmp__knomit' : ''}>{cell}</td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="cmp__note k-text-2">
+        knomit is not a replacement for every store — semantic search still
+        runs under the hood. The difference is <em>what</em> it indexes: concise,
+        classified facts you can explain and trust, not raw chunks.
+      </p>
+    </div>
+  </section>
+
+  <!-- Why it matters -->
+  <section class="k-section cmp-why">
+    <div class="k-container">
+      <SectionHeading
+        eyebrow="Why the difference matters"
+        title="Four things a vector store can’t do."
+        lead="The table rows that change how you work, expanded."
+        align="center"
+      />
+      <div class="cmp-grid">
+        {reasons.map((r) => (
+          <div class="cmp-card k-reveal">
+            <span class="cmp-card__icon" aria-hidden="true">
+              <Icon name={r.icon as any} size={20} />
+            </span>
+            <h2 class="cmp-card__title">{r.title}</h2>
+            <p class="cmp-card__body k-text-2">{r.body}</p>
+          </div>
+        ))}
+      </div>
+    </div>
+  </section>
+
+  <!-- Honest fit -->
+  <section class="k-section">
+    <div class="k-container">
+      <SectionHeading
+        eyebrow="Is it the right tool?"
+        title="When to reach for knomit — and when not to."
+        lead="We’d rather you pick the right tool than the loudest one."
+        align="center"
+      />
+      <div class="cmp-fit">
+        <div class="cmp-fit__col cmp-fit__col--yes k-reveal">
+          <h3 class="cmp-fit__head"><Icon name="provenance" size={17} /> Reach for knomit when…</h3>
+          <ul class="cmp-fit__list">
+            {fit.map((f) => <li>{f}</li>)}
+          </ul>
+        </div>
+        <div class="cmp-fit__col cmp-fit__col--no k-reveal">
+          <h3 class="cmp-fit__head">A plain vector store is fine when…</h3>
+          <ul class="cmp-fit__list">
+            {notFit.map((f) => <li>{f}</li>)}
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="k-section">
+    <div class="k-container cmp-cta">
+      <h2>See the difference yourself.</h2>
+      <p class="k-lead cmp-cta__lead">
+        It’s open source and it’s just git. Clone it, point your agents at it,
+        and watch knowledge compound instead of drift.
+      </p>
+      <div class="cmp-cta__actions">
+        <a href={GITHUB_URL} class="k-btn" rel="noopener">View on GitHub</a>
+        <a href="/docs/quick-start" class="k-btn k-btn--ghost">Quick start <Icon name="arrow" size={16} /></a>
+        {DEMO_LIVE && <a href="/explore" class="k-btn k-btn--ghost">See it live</a>}
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  /* Table */
+  .cmp-wrap { overflow-x: auto; margin-top: 2rem; border: 1px solid var(--k-hairline); border-radius: var(--k-radius); }
+  .cmp { width: 100%; border-collapse: collapse; font-size: 0.92rem; min-width: 720px; }
+  .cmp th, .cmp td { text-align: left; padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--k-hairline-soft); vertical-align: top; }
+  .cmp thead th { font-weight: 600; background: var(--k-surface-1); position: sticky; top: 0; }
+  .cmp th[scope='row'] { font-weight: 600; color: var(--k-text); white-space: nowrap; }
+  .cmp__knomit { color: var(--k-brand); font-weight: 500; }
+  .cmp__note { max-width: 60ch; margin-top: 1.5rem; }
+
+  /* Why it matters */
+  .cmp-why { background: var(--k-surface-1); border-block: 1px solid var(--k-hairline-soft); }
+  .cmp-grid {
+    margin-top: 2rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1.25rem;
+  }
+  .cmp-card {
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius);
+    padding: 1.35rem 1.4rem;
+    background: var(--k-bg);
+  }
+  .cmp-card__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 11px;
+    color: var(--k-brand);
+    background: var(--k-brand-glow);
+    border: 1px solid rgba(119, 204, 153, 0.25);
+    margin-bottom: 0.9rem;
+  }
+  .cmp-card__title { font-size: 1.05rem; margin-bottom: 0.5rem; }
+  .cmp-card__body { line-height: 1.6; font-size: 0.94rem; }
+
+  /* Honest fit */
+  .cmp-fit {
+    margin-top: 2rem;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+  }
+  .cmp-fit__col {
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius);
+    padding: 1.5rem 1.6rem;
+    background: var(--k-surface-1);
+  }
+  .cmp-fit__col--yes {
+    border-color: rgba(119, 204, 153, 0.4);
+    background:
+      radial-gradient(120% 140% at 0% 0%, var(--k-brand-glow), transparent 55%),
+      var(--k-surface-1);
+  }
+  .cmp-fit__head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.05rem;
+    margin-bottom: 1rem;
+  }
+  .cmp-fit__col--yes .cmp-fit__head :global(.k-icon) { color: var(--k-brand); }
+  .cmp-fit__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; }
+  .cmp-fit__list li {
+    position: relative;
+    padding-left: 1.1rem;
+    line-height: 1.5;
+    font-size: 0.94rem;
+    color: var(--k-text-2);
+  }
+  .cmp-fit__list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0.6em;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: var(--k-text-muted);
+  }
+  .cmp-fit__col--yes .cmp-fit__list li::before { background: var(--k-brand); }
+
+  /* CTA */
+  .cmp-cta { text-align: center; }
+  .cmp-cta h2 { font-size: var(--k-step-h2); margin-bottom: 1rem; }
+  .cmp-cta__lead { margin: 0 auto 2rem; max-width: 40rem; }
+  .cmp-cta__actions { display: flex; flex-wrap: wrap; gap: 0.85rem; justify-content: center; }
+
+  @media (max-width: 720px) {
+    .cmp-fit { grid-template-columns: 1fr; }
+  }
+</style>

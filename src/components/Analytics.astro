@@ -1,0 +1,28 @@
+---
+/** Google Analytics 4 (gtag.js). Emits the tag ONLY in production builds and
+ *  ONLY when GA_MEASUREMENT_ID is set, so dev, preview tests, and un-configured
+ *  builds stay tracker-free. Shared by the marketing <BaseHead> and the Starlight
+ *  docs Head override so analytics covers every page from one source. */
+import { GA_MEASUREMENT_ID } from '../lib/site';
+
+const enabled = Boolean(GA_MEASUREMENT_ID) && import.meta.env.PROD;
+---
+{
+  enabled && (
+    <>
+      <script
+        is:inline
+        async
+        src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
+      />
+      <script is:inline define:vars={{ id: GA_MEASUREMENT_ID }}>
+        window.dataLayer = window.dataLayer || [];
+        function gtag() {
+          dataLayer.push(arguments);
+        }
+        gtag('js', new Date());
+        gtag('config', id);
+      </script>
+    </>
+  )
+}

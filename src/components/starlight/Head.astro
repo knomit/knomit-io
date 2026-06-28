@@ -1,0 +1,23 @@
+---
+import Default from '@astrojs/starlight/components/Head.astro';
+import JsonLd from '../JsonLd.astro';
+import Analytics from '../Analytics.astro';
+import { organizationSchema, websiteSchema, breadcrumbSchema } from '../../lib/schema';
+
+const site = Astro.site!;
+// starlightRoute is injected by Starlight on every docs page (confirmed in
+// node_modules/@astrojs/starlight/utils/routing/middleware.ts and types.ts).
+const route = (Astro.locals as any).starlightRoute;
+const title: string = route?.entry?.data?.title ?? 'Docs';
+
+const crumbs = [
+  { name: 'knomit', url: '/' },
+  { name: 'Docs', url: '/docs/' },
+  { name: title, url: Astro.url.pathname },
+];
+---
+<Default><slot /></Default>
+<JsonLd schema={organizationSchema(site)} />
+<JsonLd schema={websiteSchema(site)} />
+<JsonLd schema={breadcrumbSchema(site, crumbs)} />
+<Analytics />

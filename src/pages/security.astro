@@ -1,0 +1,73 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SectionHeading from '../components/SectionHeading.astro';
+
+const pillars = [
+  {
+    title: 'Local-first by default',
+    body: 'knomit runs against a plain git repository on your own machine and searches with a local embedding model (EmbeddingGemma over an ONNX runtime). Reading, writing, and searching facts require no external services and no data leaving your host.',
+  },
+  {
+    title: 'Signed, tamper-evident history',
+    body: 'Every write is one atomic, Ed25519-signed git commit. Because the whole knowledge graph is a git history, any change is attributable and verifiable, and the integrity of the store can be checked end to end.',
+  },
+  {
+    title: 'Encrypted remote credentials',
+    body: 'When you sync a repo to a git remote, auth tokens are never stored in plaintext. They are encrypted with AES-256-GCM using a key derived (HKDF-SHA256) from the agent\'s SSH private key, and stored base64-encoded in the repo DB.',
+  },
+  {
+    title: 'Guarded remotes',
+    body: 'Cloning from a local filesystem path is disabled by default. To allow it, you must explicitly set an allowed root directory; a local origin is accepted only if it resolves to a path inside that root. Network origins always pass. Every clone and fetch path is gated — there is no trusted exemption.',
+  },
+  {
+    title: 'It is just git — review like code',
+    body: 'Each machine is the sole writer of its own agent branch. No peer merges another peer\'s branch directly. Facts land on main through review and merge, exactly like a pull request. You can host the store on any git host and apply the same access controls you already use for code.',
+  },
+  {
+    title: 'Open source and auditable',
+    body: 'knomit is open source. The store format is plain markdown in a git repo — you can read every fact, diff every change, and audit the whole system yourself.',
+  },
+];
+---
+
+<BaseLayout
+  title="Security & privacy — knomit"
+  description="How knomit keeps knowledge secure: local-first, Ed25519-signed history, encrypted remote credentials, guarded remotes, git-native review, and open source."
+>
+  <section class="k-section">
+    <div class="k-container">
+      <SectionHeading
+        eyebrow="Security & privacy"
+        title="Local-first, signed, and yours."
+        lead="knomit is a plain git repo you control. No vendor lock-in, no data exfiltration, and a history you can verify."
+      />
+      <div class="sec-grid">
+        {pillars.map((p) => (
+          <div class="sec-card k-reveal">
+            <h2 class="sec-card__title">{p.title}</h2>
+            <p class="sec-card__body k-text-2">{p.body}</p>
+          </div>
+        ))}
+      </div>
+      <p class="sec-foot k-text-2">
+        For the operational detail — auth methods, the origin record, the
+        local-path gate, and integrity verification — see
+        <a href="/docs/remote-sync">Remote sync</a> and
+        <a href="/docs/configuration">Configuration</a>.
+      </p>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .sec-grid {
+    margin-top: 2rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.25rem;
+  }
+  .sec-card { border: 1px solid var(--k-hairline); border-radius: var(--k-radius); padding: 1.25rem 1.4rem; background: var(--k-surface-1); }
+  .sec-card__title { font-size: 1.08rem; margin-bottom: 0.5rem; }
+  .sec-card__body { line-height: 1.6; font-size: 0.95rem; }
+  .sec-foot { margin-top: 2rem; max-width: 60ch; }
+</style>

@@ -50,11 +50,16 @@ export default defineConfig({
   // Marketing pages own the root; Starlight is mounted under /docs.
   integrations: [
     react(),
-    sitemap(),
+    sitemap({
+      // The localhost demo iframe target must never appear; everything else is public.
+      filter: (page) => !page.includes('/explore'),
+      changefreq: 'weekly',
+      priority: 0.7,
+    }),
     starlight({
       title: 'knomit',
-      description: 'Git-backed memory for AI agents. Knowledge + commit.',
-      tagline: 'Git-backed memory for AI agents.',
+      description: 'Git-backed knowledge for AI agents. Knowledge + commit.',
+      tagline: 'Git-backed knowledge for AI agents.',
       logo: {
         src: './src/assets/logo.svg',
         alt: 'knomit',
@@ -131,6 +136,7 @@ export default defineConfig({
         ThemeSelect: './src/components/starlight/ThemeSelect.astro',
         SiteTitle: './src/components/starlight/SiteTitle.astro',
         SocialIcons: './src/components/starlight/SocialIcons.astro',
+        Head: './src/components/starlight/Head.astro',
       },
       head: [
         {

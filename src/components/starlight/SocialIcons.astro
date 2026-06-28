@@ -2,7 +2,7 @@
 // Carry the marketing site's primary navigation into the docs header so /docs
 // reads as one site, not a bolted-on doc tool. Replaces Starlight's social row
 // (we keep GitHub here as the single icon link).
-import { GITHUB_URL } from '../../lib/site';
+import { GITHUB_URL, DEMO_LIVE } from '../../lib/site';
 
 const nav = [
   { label: 'Concepts', href: '/concepts' },
@@ -25,7 +25,7 @@ const isActive = (href: string) => path === href || path.startsWith(href + '/');
       </a>
     ))
   }
-  <a href="/explore" class="docs-topnav__link docs-topnav__link--demo">See it live</a>
+  {DEMO_LIVE && <a href="/explore" class="docs-topnav__link docs-topnav__link--demo">See it live</a>}
   <a href={GITHUB_URL} class="docs-topnav__gh" rel="noopener" aria-label="knomit on GitHub">
     <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
       <path
