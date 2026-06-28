@@ -58,8 +58,8 @@ export default defineConfig({
     }),
     starlight({
       title: 'knomit',
-      description: 'Git-backed memory for AI agents. Knowledge + commit.',
-      tagline: 'Git-backed memory for AI agents.',
+      description: 'Git-backed knowledge for AI agents. Knowledge + commit.',
+      tagline: 'Git-backed knowledge for AI agents.',
       logo: {
         src: './src/assets/logo.svg',
         alt: 'knomit',

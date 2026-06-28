@@ -19,14 +19,14 @@ const jsonLd = faqPageSchema(FAQ_ITEMS.map((i) => ({ q: i.q, a: i.a })));
         title="Questions, answered."
         lead="What knomit is, how it differs from the tools you already use, and how the pieces fit."
       />
-      <dl class="faq">
+      <div class="faq">
         {FAQ_ITEMS.map((item) => (
           <div class="faq__item">
-            <dt><h2 class="faq__q">{item.q}</h2></dt>
-            <dd class="faq__a k-text-2">{item.a}</dd>
+            <h2 class="faq__q">{item.q}</h2>
+            <p class="faq__a k-text-2">{item.a}</p>
           </div>
         ))}
-      </dl>
+      </div>
     </div>
   </section>
 </BaseLayout>

@@ -1,8 +1,8 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Page } from '@playwright/test';
 
-async function jsonLdBlocks(page) {
+async function jsonLdBlocks(page: Page) {
   const raw = await page.locator('script[type="application/ld+json"]').allTextContents();
-  return raw.map((t) => JSON.parse(t));
+  return raw.map((t: string) => JSON.parse(t));
 }
 
 test.describe('meta descriptions', () => {
@@ -23,20 +23,20 @@ test.describe('structured data', () => {
   test('docs page emits BreadcrumbList and Organization', async ({ page }) => {
     await page.goto('/docs/quick-start');
     const blocks = await jsonLdBlocks(page);
-    const types = blocks.map((b) => b['@type']);
+    const types = blocks.map((b: any) => b['@type']);
     expect(types).toContain('Organization');
     expect(types).toContain('BreadcrumbList');
-    const crumbs = blocks.find((b) => b['@type'] === 'BreadcrumbList');
+    const crumbs = blocks.find((b: any) => b['@type'] === 'BreadcrumbList');
     expect(crumbs.itemListElement.length).toBeGreaterThanOrEqual(2);
   });
 
   test('homepage emits Organization and WebSite', async ({ page }) => {
     await page.goto('/');
     const blocks = await jsonLdBlocks(page);
-    const types = blocks.map((b) => b['@type']);
+    const types = blocks.map((b: any) => b['@type']);
     expect(types).toContain('Organization');
     expect(types).toContain('WebSite');
-    const org = blocks.find((b) => b['@type'] === 'Organization');
+    const org = blocks.find((b: any) => b['@type'] === 'Organization');
     expect(org.name).toBe('knomit');
     expect(org.url).toMatch(/knomit\.io/);
   });
@@ -45,7 +45,7 @@ test.describe('structured data', () => {
     await page.goto('/blog');
     await page.getByRole('link', { name: /Dogfooding/i }).first().click();
     const blocks = await jsonLdBlocks(page);
-    const post = blocks.find((b) => b['@type'] === 'BlogPosting');
+    const post = blocks.find((b: any) => b['@type'] === 'BlogPosting');
     expect(post, 'no BlogPosting block').toBeTruthy();
     expect(post.headline).toMatch(/Dogfooding/i);
     expect(post.datePublished).toBeTruthy();
@@ -90,7 +90,7 @@ test.describe('faq', () => {
     await page.goto('/faq');
     await expect(page.getByRole('heading', { name: /what is knomit/i })).toBeVisible();
     const blocks = await jsonLdBlocks(page);
-    const faq = blocks.find((b) => b['@type'] === 'FAQPage');
+    const faq = blocks.find((b: any) => b['@type'] === 'FAQPage');
     expect(faq, 'no FAQPage block').toBeTruthy();
     expect(faq.mainEntity.length).toBeGreaterThanOrEqual(8);
     expect(faq.mainEntity[0].acceptedAnswer.text.length).toBeGreaterThan(20);
