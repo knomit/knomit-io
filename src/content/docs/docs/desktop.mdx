@@ -1,0 +1,55 @@
+---
+title: Desktop app
+description: knomit-desktop — a Wails v3 tray app that runs the server in-process on a looknomitck port and publishes a lockfile the bridge discovers.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+`knomit-desktop` is a native [Wails v3](https://v3.wails.io) application: a
+system-tray icon plus a native webview window showing the same web UI. It is the
+easiest way to keep a knomit server running on your machine — no terminal, no
+manual `serve`.
+
+It works differently from a bare `knomit serve`, and those differences matter for
+wiring up MCP clients.
+
+## How it differs from `knomit serve`
+
+- **Runs the server in-process.** The app boots the full knomit server inside
+  itself on a **looknomitck port** (it prefers `19278`, but picks a free port if
+  that's taken) and serves the web UI from embedded assets. That port is a pure
+  REST/MCP endpoint — the same one Claude Code and other MCP clients call.
+- **Publishes a discovery lockfile.** On startup it writes `server.json`
+  (`{pid, port, version}`, mode `0600`, written atomically) so `knomit-bridge`
+  can find the running server's port without being told. The file lives outside
+  `KNOMIT_HOME`:
+  - macOS: `~/Library/Application Support/knomit/server.json`
+  - Linux: `$XDG_STATE_HOME/knomit/server.json`
+- **Lives in the system tray.** On macOS it runs as a tray app
+  (`Knomit.app`). On Linux it runs headless (no systray); `knomit-desktop window`
+  opens the webview, normally triggered from the installed `.desktop` launcher.
+- **Symlinks the bridge.** The macOS app symlinks the bundled `knomit-bridge` into
+  `~/bin` on launch, giving MCP clients a stable path to point at.
+
+<Aside type="tip" title="Why the lockfile matters">
+Because the app may land on a non-default port, the bridge discovers the server
+through `server.json` rather than assuming `19278`. So you can register
+`knomit-bridge` in an MCP client with no URL and it will find the running desktop
+server automatically — see [Claude Cowork](/docs/claude-cowork/) and
+[Claude Code](/docs/claude-code/).
+</Aside>
+
+## Build & install
+
+Build the app with `make desktop`:
+
+- **macOS** — produces `dist/darwin-arm64/Knomit.app`. Launch with
+  `open dist/darwin-arm64/Knomit.app`.
+- **Linux** — `make desktop-install` copies the binary to `$XDG_BIN` (default
+  `~/.local/bin`), an icon to the hicolor theme, and a `knomit-desktop.desktop`
+  launcher to `$XDG_DATA/applications`.
+
+Logs go to stderr and a rotating file under the platform logs dir
+(`~/Library/Logs/knomit` on macOS, `$XDG_STATE_HOME/logs/knomit` on Linux). See
+the [CLI reference](/docs/cli-reference/#knomit-desktop--traydesktop-app) for the
+full argument list.

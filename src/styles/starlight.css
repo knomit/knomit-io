@@ -1,0 +1,353 @@
+/*
+ * Maps knomit's design tokens (theme.css) onto Starlight's CSS variables so
+ * /docs reads as the same product as the marketing site and the app.
+ *
+ * Dark-only, on purpose — the product is dark-only and the theme switcher is
+ * removed (see src/components/starlight/). customCss is injected UNLAYERED, so
+ * these rules win over Starlight's `@layer starlight.core` defaults without
+ * needing high specificity or !important.
+ */
+:root,
+:root[data-theme='dark'],
+:root[data-theme='light'] {
+  color-scheme: dark;
+
+  /* Accent (UI: active states, focus rings, selection) = brand green. */
+  --sl-color-accent-low: #16321f;
+  --sl-color-accent: #77cc99;
+  --sl-color-accent-high: #c7eccf;
+
+  /* Neutral ramp, lifted from the app shell. */
+  --sl-color-white: #eeeeee;
+  --sl-color-gray-1: #dddddd;
+  --sl-color-gray-2: #aaaaaa;
+  --sl-color-gray-3: #888888;
+  --sl-color-gray-4: #666666;
+  --sl-color-gray-5: #333333;
+  --sl-color-gray-6: #1f1f1f;
+  --sl-color-gray-7: #1a1a1a;
+  --sl-color-black: #141414;
+
+  /* Surfaces. */
+  --sl-color-bg: #141414;
+  --sl-color-bg-nav: rgba(20, 20, 20, 0.72);
+  --sl-color-bg-sidebar: #141414;
+  --sl-color-bg-inline-code: #222222;
+  --sl-color-hairline: #262626;
+  --sl-color-hairline-light: #1f1f1f;
+  --sl-color-hairline-shade: #1a1a1a;
+
+  /* Text. Body is the calm ramp; links carry the ref-blue UI semantics. */
+  --sl-color-text: #cccccc;
+  --sl-color-text-accent: #88aaff; /* refs & links — same meaning as the app */
+  --sl-color-text-invert: #08110b; /* text on a brand-green fill */
+
+  /* Asides, themed to the app's color language but kept subdued — the hue
+     lives in a thin left border + the title, never a saturated fill (see the
+     .starlight-aside rules below). note = ref, tip = brand, caution =
+     temporal, danger = retracted. The `-low` washes sit a hair above the page
+     background so the panel reads as a quiet surface, not a colored block. */
+  --sl-color-blue: #88aaff;
+  --sl-color-blue-low: #16191f;
+  --sl-color-blue-high: #aebfe6;
+  --sl-color-green: #77cc99;
+  --sl-color-green-low: #15191a;
+  --sl-color-green-high: #a6cdb4;
+  --sl-color-orange: #e5a23c;
+  --sl-color-orange-low: #1b1813;
+  --sl-color-orange-high: #d3b483;
+  --sl-color-red: #ff8888;
+  --sl-color-red-low: #1d1617;
+  --sl-color-red-high: #e0a3a3;
+  /* tip uses purple by default in Starlight — remap it onto the brand. */
+  --sl-color-purple: #77cc99;
+  --sl-color-purple-low: #15191a;
+  --sl-color-purple-high: #a6cdb4;
+
+  --sl-font: var(--k-font-body);
+  --sl-font-mono: var(--k-font-mono);
+
+  /* A touch more vertical air for the top bar, matching the marketing header. */
+  --sl-nav-height: 3.75rem;
+}
+
+/* ---- Header ------------------------------------------------------------- */
+/* Sticky, translucent, blurred — the marketing header treatment. */
+.header {
+  border-bottom: 1px solid var(--k-hairline-soft);
+  backdrop-filter: saturate(150%) blur(12px);
+  -webkit-backdrop-filter: saturate(150%) blur(12px);
+}
+
+/* Drop Starlight's vertical divider before the (now nav) right group. */
+.social-icons::after {
+  display: none;
+}
+
+/* ---- Search pill -------------------------------------------------------- */
+site-search button {
+  background: var(--k-surface-1);
+  border: 1px solid var(--k-hairline);
+  border-radius: var(--k-radius-sm);
+  color: var(--k-text-2);
+}
+site-search button:hover {
+  border-color: #444;
+  color: var(--k-text);
+}
+site-search button kbd {
+  background: var(--k-surface-3);
+  color: var(--k-text-muted);
+  border-radius: 4px;
+  font-family: var(--k-font-mono);
+}
+
+/* ---- Sidebar ------------------------------------------------------------ */
+.sidebar-pane {
+  border-inline-end: 1px solid var(--k-hairline-soft);
+}
+/* Group headings ("Start here", "Interfaces", …) in the display face. */
+.sidebar-content .group-label .large {
+  font-family: var(--k-font-display);
+  letter-spacing: -0.01em;
+  color: var(--k-text);
+}
+/* Quiet the resting links. */
+.sidebar-content a {
+  color: var(--k-text-2);
+}
+.sidebar-content a:hover {
+  color: var(--k-text);
+  background-color: var(--k-hairline-soft);
+}
+/* The current page: brand-tinted, not the invisible blue-on-blue default. */
+.sidebar-content a[aria-current='page'],
+.sidebar-content a[aria-current='page']:hover,
+.sidebar-content a[aria-current='page']:focus {
+  color: var(--k-brand);
+  background-color: var(--k-brand-glow);
+  font-weight: 600;
+}
+
+/* ---- Right-hand table of contents -------------------------------------- */
+starlight-toc a {
+  color: var(--k-text-2);
+  border-inline-start: 2px solid transparent;
+}
+starlight-toc a:hover {
+  color: var(--k-text);
+}
+starlight-toc a[aria-current='true'] {
+  color: var(--k-brand);
+  border-inline-start-color: var(--k-brand);
+  font-weight: 600;
+}
+.right-sidebar {
+  border-inline-start: 1px solid var(--k-hairline-soft);
+}
+
+/* ---- Page content ------------------------------------------------------- */
+.content-panel h1,
+.sl-markdown-content h1,
+.sl-markdown-content h2,
+.sl-markdown-content h3,
+.sl-markdown-content h4 {
+  font-family: var(--k-font-display);
+  letter-spacing: -0.02em;
+  color: var(--k-text);
+}
+
+/* Vertical rhythm for the docs body.
+   The marketing reset zeroes Starlight's low-specificity :where() flow spacing,
+   which left paragraphs (and headings, wrapped in .sl-heading-wrapper) clobbering
+   each other. Restore it explicitly:
+     - flow elements get a 1rem gap from the previous sibling,
+     - headings get a larger gap ABOVE (section separation),
+     - and breathing room BELOW, before their content. */
+.sl-markdown-content > * + * {
+  margin-top: 1rem;
+}
+.sl-markdown-content > .sl-heading-wrapper {
+  margin-top: 3rem;
+}
+.sl-markdown-content > .sl-heading-wrapper + * {
+  margin-top: 0.85rem;
+}
+
+/* Inline code, matched to the marketing prose treatment. */
+.sl-markdown-content code:not(:where(.expressive-code *)) {
+  background: var(--k-surface-2);
+  border: 1px solid var(--k-hairline-soft);
+  padding: 0.08em 0.4em;
+  border-radius: 5px;
+  font-size: 0.86em;
+  color: var(--k-brand-2);
+}
+
+/* Body links: ref-blue with a soft underline, like the rest of the site. */
+.sl-markdown-content a:not(:where(.not-content *)) {
+  color: var(--k-ref);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(136, 170, 255, 0.4);
+}
+.sl-markdown-content a:not(:where(.not-content *)):hover {
+  text-decoration-color: var(--k-ref);
+}
+
+/* List markers pick up the brand, as on the marketing pages. */
+.sl-markdown-content :is(ul, ol) li::marker {
+  color: var(--k-brand);
+}
+
+/* ---- Asides / callouts -------------------------------------------------- */
+/* Subdued by design: a quiet surface panel with a thin colored left rule. The
+   semantic hue shows only in that rule, the icon, and the title — never as a
+   saturated background wash. */
+.starlight-aside {
+  background-color: var(--k-surface-1);
+  border-inline-start: 3px solid var(--sl-color-asides-border);
+  border-radius: var(--k-radius-sm);
+  padding: 1rem 1.25rem;
+}
+.starlight-aside__title {
+  color: var(--sl-color-asides-text-accent);
+  font-family: var(--k-font-display);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.starlight-aside__icon {
+  color: var(--sl-color-asides-text-accent);
+}
+.starlight-aside__content {
+  color: var(--k-text-2);
+}
+.starlight-aside__content a {
+  color: var(--k-ref);
+}
+
+/* The REST API reference is a standalone Scalar page (src/pages/docs/api.astro),
+   themed there via Scalar's own CSS variables — not styled here. */
+
+/* ---- Tables ------------------------------------------------------------- */
+/* Reference tables carry long identifiers (env vars, fact paths). Inline code
+   defaults to overflow-wrap:anywhere, which breaks them mid-token — ugly. Keep
+   identifiers intact and let the table scroll horizontally when a row genuinely
+   doesn't fit; prose cells still wrap normally. */
+.sl-markdown-content table {
+  display: block;
+  width: max-content;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.sl-markdown-content :is(td, th) code {
+  white-space: nowrap;
+  overflow-wrap: normal;
+}
+
+/* ---- Footer / pagination ------------------------------------------------ */
+.pagination-links a {
+  border: 1px solid var(--k-hairline);
+  background: var(--k-surface-1);
+}
+.pagination-links a:hover {
+  border-color: #444;
+  background: var(--k-surface-2);
+}
+
+/* ---- Collapsible side panels ------------------------------------------- */
+/* Toggle handles (injected by the head script) plus the collapsed-state rules.
+   State is persisted in localStorage and applied pre-paint on <html>, so it
+   survives navigation without a flash. */
+
+/* Left nav: drop the pane and reclaim its inline offset.
+   Note: don't touch --sl-content-inline-start — the header reuses it to size the
+   logo/title column, so zeroing it hides the logo. Clear the content padding
+   directly instead. */
+@media (min-width: 50rem) {
+  html.klps-left-collapsed .sidebar-pane {
+    display: none;
+  }
+  html.klps-left-collapsed .main-frame {
+    padding-inline-start: 0;
+  }
+}
+
+/* Right TOC: drop the rail and let the content re-center in the freed space. */
+@media (min-width: 72rem) {
+  html.klps-right-collapsed .right-sidebar-container {
+    display: none;
+  }
+  html.klps-right-collapsed .main-pane {
+    width: 100%;
+    --sl-content-margin-inline: auto;
+  }
+}
+
+/* Edge-tab toggles — fixed, vertically centered, always reachable (they live
+   outside the panels, so a collapsed panel can still be reopened). */
+.klps-toggle {
+  position: fixed;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: calc(var(--sl-z-index-navbar) - 1);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 52px;
+  padding: 0;
+  color: var(--k-text-muted);
+  background: var(--k-surface-1);
+  border: 1px solid var(--k-hairline);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+}
+.klps-toggle:hover {
+  color: var(--k-brand);
+  border-color: var(--k-brand);
+  background: var(--k-surface-2);
+}
+.klps-toggle svg {
+  width: 13px;
+  height: 13px;
+  transition: transform 0.2s ease;
+}
+
+/* Left tab rides the sidebar divider; rounded on its outer (content) side. */
+.klps-toggle--left {
+  inset-inline-start: calc(var(--sl-sidebar-width) - 11px);
+  border-radius: 0 var(--k-radius-sm) var(--k-radius-sm) 0;
+}
+html.klps-left-collapsed .klps-toggle--left {
+  inset-inline-start: 0;
+  border-inline-start: none;
+}
+html.klps-left-collapsed .klps-toggle--left svg {
+  transform: rotate(180deg);
+}
+
+/* Right tab rides the viewport's right edge; rounded on its inner side. */
+.klps-toggle--right {
+  inset-inline-end: 0;
+  border-radius: var(--k-radius-sm) 0 0 var(--k-radius-sm);
+  border-inline-end: none;
+}
+.klps-toggle--right svg {
+  transform: rotate(180deg);
+}
+html.klps-right-collapsed .klps-toggle--right svg {
+  transform: rotate(0deg);
+}
+
+/* Only show a handle where its panel actually exists at this breakpoint. */
+@media (min-width: 50rem) {
+  html[data-has-sidebar] .klps-toggle--left {
+    display: inline-flex;
+  }
+}
+@media (min-width: 72rem) {
+  html[data-has-toc] .klps-toggle--right {
+    display: inline-flex;
+  }
+}

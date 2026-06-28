@@ -1,0 +1,1331 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import FactCard from '../components/FactCard.astro';
+import BranchGraph from '../components/BranchGraph.astro';
+import Icon from '../components/Icon.astro';
+import { DEMO_LIVE } from '../lib/site';
+import '../styles/prose.css';
+
+const toc = [
+  { id: 'facts', label: 'Facts as markdown' },
+  { id: 'kinds', label: 'Epistemic vs pragmatic' },
+  { id: 'ontology', label: 'Ontology & inheritance' },
+  { id: 'clusters', label: 'How knowledge clusters' },
+  { id: 'dedup', label: 'Subsumption' },
+  { id: 'branches', label: 'Peers, branches & consensus' },
+  { id: 'provenance', label: 'Provenance & signing' },
+  { id: 'temporal', label: 'The temporal graph' },
+  { id: 'refs', label: 'The knomit: URI scheme' },
+  { id: 'synthesis', label: 'Synthesis & hypotheses' },
+  { id: 'mcp', label: 'The MCP loop' },
+];
+---
+
+<BaseLayout
+  title="Concepts — how knomit works"
+  description="How knomit works: typed facts with provenance, ontology and inheritance, agent branches and consensus, the temporal graph, and the knomit: URI scheme."
+>
+  <section class="k-section concepts-hero k-grid-bg">
+    <div class="k-container">
+      <p class="k-eyebrow">Concepts</p>
+      <h1 class="concepts-hero__title">How knomit works</h1>
+      <p class="k-lead concepts-hero__lead">
+        knomit is a distributed, decentralized knowledge base built from facts on
+        git. A handful of ideas explain the whole system — each one falls out of a
+        single decision: make git the only source of truth, and represent
+        knowledge as facts, not documents.
+      </p>
+      <nav class="concepts-toc" aria-label="On this page">
+        {toc.map((t) => <a href={`#${t.id}`} class="concepts-toc__link">{t.label}</a>)}
+      </nav>
+    </div>
+  </section>
+
+  <div class="k-container concepts">
+    <!-- Facts -->
+    <section id="facts" class="concept-block">
+      <div class="concept-block__text k-prose-content">
+        <h2>A fact is a markdown file — not a document</h2>
+        <p>
+          Knowledge in knomit is a <strong>fact</strong>: one concise, atomic
+          claim — not a chunk of an ingested document. Each is a plain markdown
+          file: YAML frontmatter for structured metadata, a markdown body for the
+          claim. The file <em>is</em> the fact — no database rows, no binary
+          blobs, no opaque embeddings.
+        </p>
+        <p>
+          Confidence, domains, entities, and provenance refs travel in the
+          frontmatter. A <code>confidence</code> is a degree of belief that can
+          rise and fall; <code>refs</code> relate the fact to others, forming a
+          graph. Because it's just a file, humans edit it with any text editor and
+          agents write it over MCP — both paths land at the same file, through the
+          same operations.
+        </p>
+      </div>
+      <div class="concept-block__art">
+        <FactCard
+          path="kb/technology/ai/agents/124c68ec.md"
+          frontmatter={{
+            type: 'synthesis',
+            confidence: 0.72,
+            domain: ['ai', 'agents', 'governance'],
+            entities: ['OpenAI', 'KPMG', 'Anthropic'],
+            refs: ['knomit:/kb/technology/ai/trends/73f515b5.md'],
+          }}
+          body={'By mid-2026 a consistent pattern emerges across independent sources: **agentic AI** is displacing chatbots as the primary mode of enterprise AI use, simultaneously driving workforce and safety governance responses.'}
+          commit="124c68e"
+          signer="mindev.local-8ef0cd32+distill@agents.knomit.io"
+          evolution="0.55 → 0.72"
+        />
+      </div>
+    </section>
+
+    <!-- Kinds: epistemic vs pragmatic -->
+    <section id="kinds" class="concept-block concept-block--reverse">
+      <div class="concept-block__text k-prose-content">
+        <h2>Epistemic vs pragmatic</h2>
+        <p>
+          Every fact is one of two kinds: <strong>epistemic</strong> facts describe
+          what <em>is</em> — observations, concepts, syntheses, hypotheses —
+          knowledge to weigh as evidence, with a confidence that can move;
+          <strong>pragmatic</strong> facts prescribe what to <em>do</em> — policies
+          and heuristics — rules to follow or lean on.
+        </p>
+        <p>
+          The leaf <code>type</code> refines this further
+          (<code>observation</code>, <code>principle</code>, <code>pattern</code>,
+          <code>synthesis</code>, <code>hypothesis</code>, <code>methodology</code>,
+          and more), but the epistemic/pragmatic split is the load-bearing one: it
+          is the difference between <em>knowing</em> and <em>acting</em>.
+        </p>
+      </div>
+      <div class="concept-block__art">
+        <div class="kinds-card" aria-hidden="true">
+          <div class="kinds-col">
+            <p class="kinds-col__h k-mono">epistemic — what is</p>
+            <span class="kinds-tag k-mono"><span class="kinds-glyph">◉</span> observation</span>
+            <span class="kinds-tag k-mono"><span class="kinds-glyph">◎</span> concept</span>
+            <span class="kinds-tag k-mono"><span class="kinds-glyph">◆</span> synthesis</span>
+            <span class="kinds-tag k-mono"><span class="kinds-glyph">?</span> hypothesis</span>
+            <span class="kinds-tag k-mono"><span class="kinds-glyph">⚙</span> methodology</span>
+          </div>
+          <div class="kinds-col">
+            <p class="kinds-col__h kinds-col__h--prag k-mono">pragmatic — what to do</p>
+            <span class="kinds-tag kinds-tag--prag k-mono"><span class="kinds-glyph">⚖</span> policy</span>
+            <span class="kinds-tag kinds-tag--prag k-mono"><span class="kinds-glyph">☼</span> heuristic</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Ontology -->
+    <section id="ontology" class="concept-block">
+      <div class="concept-block__text k-prose-content">
+        <h2>Ontology & inheritance</h2>
+        <p>
+          The ontology is a directory tree under <code>kb/</code> that is not just
+          organization — it carries meaning: a fact placed at a higher level applies
+          to everything beneath it, so a fact at <code>kb/invariants/</code> is
+          inherited by <code>kb/invariants/concurrency/branch-lock/</code>.
+        </p>
+        <p>
+          The ontology is configurable. knomit ships with two:
+          <strong>General Knowledge</strong> — a broad taxonomy derived from
+          Wikipedia's main topic classifications, covering
+          <code>technology</code>, <code>science</code>, <code>geography</code>,
+          <code>history</code>, and more — and <strong>Source Code Knowledge</strong>
+          — a codebase taxonomy for AI agents, with topics like
+          <code>invariants</code>, <code>conventions</code>,
+          <code>decisions</code>, and <code>gotchas</code>.
+        </p>
+      </div>
+      <div class="concept-block__art">
+        <div class="tree-diagram" aria-hidden="true">
+          <div class="tree-columns">
+            <div class="tree-col">
+              <p class="tree-ont k-mono">general knowledge</p>
+              <div class="tree-node tree-node--root">kb/technology/</div>
+              <div class="tree-branch">
+                <div class="tree-node">ai/</div>
+                <div class="tree-branch">
+                  <div class="tree-node tree-node--active">agents/</div>
+                </div>
+              </div>
+            </div>
+            <div class="tree-col">
+              <p class="tree-ont tree-ont--code k-mono">source code</p>
+              <div class="tree-node tree-node--root tree-node--root-b">kb/invariants/</div>
+              <div class="tree-branch">
+                <div class="tree-node tree-node--leaf">concurrency/</div>
+              </div>
+              <div class="tree-node tree-node--sib">kb/decisions/</div>
+            </div>
+          </div>
+          <p class="tree-caption k-mono">a fact at a higher path is inherited by everything below it</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Clusters -->
+    <section id="clusters" class="concept-block concept-block--reverse">
+      <div class="concept-block__text k-prose-content">
+        <h2>How knowledge clusters</h2>
+        <p>
+          Clustering is emergent structure the author never declared: facts group by
+          <strong>meaning</strong> — embedding similarity puts facts about the same
+          thing together, wherever they were filed — and by
+          <strong>classification</strong> — shared ontology paths, domains, and
+          entities group facts by how they were declared.
+        </p>
+        <p>
+          The distill pass synthesizes each cluster into a
+          <code>synthesis</code> fact, then re-clusters and distills again, up
+          to depth 3. The result is a hierarchy of increasingly abstract
+          knowledge: raw observations at the leaves, higher-order insight at
+          the top.
+        </p>
+      </div>
+      <div class="concept-block__art">
+        <div class="cluster-card" aria-hidden="true">
+          <svg class="cluster-svg" viewBox="0 0 420 280" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <filter id="cg1"><feGaussianBlur stdDeviation="5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+              <filter id="cg2"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+            </defs>
+            <!-- Cluster halos -->
+            <circle cx="110" cy="168" r="60" fill="var(--k-brand)" opacity="0.05"/>
+            <circle cx="290" cy="160" r="55" fill="var(--k-ref)" opacity="0.05"/>
+            <circle cx="200" cy="232" r="40" fill="var(--k-temporal)" opacity="0.05"/>
+            <!-- Intra-cluster edges -->
+            <line x1="88" y1="152" x2="122" y2="164" stroke="var(--k-brand)" stroke-width="1" opacity="0.22"/>
+            <line x1="122" y1="164" x2="98" y2="182" stroke="var(--k-brand)" stroke-width="1" opacity="0.22"/>
+            <line x1="98" y1="182" x2="130" y2="194" stroke="var(--k-brand)" stroke-width="1" opacity="0.22"/>
+            <line x1="88" y1="152" x2="64" y2="172" stroke="var(--k-brand)" stroke-width="1" opacity="0.18"/>
+            <line x1="122" y1="164" x2="148" y2="178" stroke="var(--k-brand)" stroke-width="1" opacity="0.18"/>
+            <line x1="268" y1="148" x2="300" y2="156" stroke="var(--k-ref)" stroke-width="1" opacity="0.22"/>
+            <line x1="300" y1="156" x2="284" y2="176" stroke="var(--k-ref)" stroke-width="1" opacity="0.22"/>
+            <line x1="284" y1="176" x2="318" y2="166" stroke="var(--k-ref)" stroke-width="1" opacity="0.22"/>
+            <line x1="268" y1="148" x2="246" y2="162" stroke="var(--k-ref)" stroke-width="1" opacity="0.18"/>
+            <line x1="182" y1="224" x2="212" y2="234" stroke="var(--k-temporal)" stroke-width="1" opacity="0.22"/>
+            <line x1="212" y1="234" x2="196" y2="248" stroke="var(--k-temporal)" stroke-width="1" opacity="0.22"/>
+            <!-- Lift lines to depth-1 synthesis -->
+            <line x1="108" y1="108" x2="130" y2="76" stroke="var(--k-brand)" stroke-width="1" stroke-dasharray="3 5" opacity="0.4"/>
+            <line x1="290" y1="106" x2="268" y2="74" stroke="var(--k-ref)" stroke-width="1" stroke-dasharray="3 5" opacity="0.4"/>
+            <line x1="200" y1="192" x2="210" y2="82" stroke="var(--k-temporal)" stroke-width="1" stroke-dasharray="2 6" opacity="0.3"/>
+            <!-- Lift lines to depth-2 -->
+            <line x1="130" y1="62" x2="190" y2="38" stroke="var(--k-text-muted)" stroke-width="1" stroke-dasharray="2 6" opacity="0.3"/>
+            <line x1="268" y1="62" x2="212" y2="38" stroke="var(--k-text-muted)" stroke-width="1" stroke-dasharray="2 6" opacity="0.3"/>
+            <!-- Cluster A: ai/agents (green) — varying sizes -->
+            <circle cx="88" cy="152" r="10" fill="var(--k-brand)" opacity="0.85" filter="url(#cg1)"/>
+            <circle cx="122" cy="164" r="14" fill="var(--k-brand)" opacity="0.85" filter="url(#cg1)"/>
+            <circle cx="98" cy="182" r="8" fill="var(--k-brand)" opacity="0.75"/>
+            <circle cx="130" cy="194" r="9" fill="var(--k-brand)" opacity="0.75"/>
+            <circle cx="64" cy="172" r="6" fill="var(--k-brand)" opacity="0.6"/>
+            <circle cx="148" cy="178" r="7" fill="var(--k-brand)" opacity="0.65"/>
+            <!-- Cluster B: security/ai (blue) -->
+            <circle cx="268" cy="148" r="9" fill="var(--k-ref)" opacity="0.85"/>
+            <circle cx="300" cy="156" r="14" fill="var(--k-ref)" opacity="0.85" filter="url(#cg1)"/>
+            <circle cx="284" cy="176" r="8" fill="var(--k-ref)" opacity="0.75"/>
+            <circle cx="318" cy="166" r="10" fill="var(--k-ref)" opacity="0.8"/>
+            <circle cx="246" cy="162" r="7" fill="var(--k-ref)" opacity="0.65"/>
+            <!-- Cluster C: business (amber) -->
+            <circle cx="182" cy="224" r="9" fill="var(--k-temporal)" opacity="0.8"/>
+            <circle cx="212" cy="234" r="12" fill="var(--k-temporal)" opacity="0.85" filter="url(#cg1)"/>
+            <circle cx="196" cy="248" r="7" fill="var(--k-temporal)" opacity="0.7"/>
+            <circle cx="222" cy="218" r="6" fill="var(--k-temporal)" opacity="0.6"/>
+            <!-- Depth-1 synthesis (ringed) -->
+            <circle cx="130" cy="68" r="11" stroke="var(--k-brand)" stroke-width="2" fill="var(--k-surface-1)" filter="url(#cg2)" opacity="0.9"/>
+            <circle cx="130" cy="68" r="5" fill="var(--k-brand)" opacity="1"/>
+            <circle cx="268" cy="68" r="11" stroke="var(--k-ref)" stroke-width="2" fill="var(--k-surface-1)" filter="url(#cg2)" opacity="0.9"/>
+            <circle cx="268" cy="68" r="5" fill="var(--k-ref)" opacity="1"/>
+            <circle cx="210" cy="76" r="8" stroke="var(--k-temporal)" stroke-width="2" fill="var(--k-surface-1)" opacity="0.85"/>
+            <circle cx="210" cy="76" r="4" fill="var(--k-temporal)" opacity="0.9"/>
+            <!-- Depth-2 synthesis -->
+            <circle cx="200" cy="30" r="13" stroke="var(--k-text-2)" stroke-width="2" fill="var(--k-surface-1)" filter="url(#cg2)" opacity="0.85"/>
+            <circle cx="200" cy="30" r="6" fill="var(--k-text-2)" opacity="0.7"/>
+            <!-- Labels -->
+            <text x="24" y="148" font-size="9" fill="var(--k-brand)" font-family="monospace" opacity="0.8">ai/agents</text>
+            <text x="326" y="148" font-size="9" fill="var(--k-ref)" font-family="monospace" opacity="0.8">security/ai</text>
+            <text x="158" y="264" font-size="9" fill="var(--k-temporal)" font-family="monospace" opacity="0.8">business</text>
+            <text x="144" y="65" font-size="8" fill="var(--k-brand)" font-family="monospace">◆ depth 1</text>
+            <text x="278" y="65" font-size="8" fill="var(--k-ref)" font-family="monospace">◆ depth 1</text>
+            <text x="214" y="34" font-size="8" fill="var(--k-text-muted)" font-family="monospace">◆ depth 2</text>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- Subsumption -->
+    <section id="dedup" class="concept-block">
+      <div class="concept-block__text k-prose-content">
+        <h2>Subsumption — never learned twice</h2>
+        <p>
+          When a fact is written via <code>knomit_learn</code>, knomit runs a
+          near-duplicate check in the same category using embedding similarity
+          before committing. If a match is found, the incoming fact
+          <strong>subsumes</strong> the existing one — or is absorbed by it —
+          producing a single fact that carries refs to both sources. Two chunks
+          that say the same thing never pile up.
+        </p>
+        <p>
+          There is a special case worth knowing: a <code>hypothesis</code> is
+          subsumed by a newer <code>observation</code> when the world catches up
+          to the prediction. The fact survives, its type transitions, and the
+          git history records the exact moment evidence closed the loop.
+        </p>
+      </div>
+      <div class="concept-block__art">
+        <div class="subsume-card" aria-hidden="true">
+          <div class="subsume-before">
+            <div class="subsume-fact k-mono">
+              <span class="subsume-fact__type">◉ observation</span>
+              <span class="subsume-fact__title">KPMG: 68% of employees are using AI agents daily</span>
+              <span class="subsume-fact__meta">conf 0.70 · ai, agents</span>
+            </div>
+            <div class="subsume-fact subsume-fact--dup k-mono">
+              <span class="subsume-fact__type">◉ observation</span>
+              <span class="subsume-fact__title">KPMG survey: employee AI-agent adoption at 68%</span>
+              <span class="subsume-tag">sim 0.94 · near-duplicate</span>
+            </div>
+          </div>
+          <div class="subsume-glyph k-mono">knomit_learn · subsume ↓</div>
+          <div class="subsume-merged k-mono">
+            <div class="subsume-merged__hd">
+              <span class="subsume-merged__type">◉ observation</span>
+              <span class="subsume-merged__conf">conf 0.78 ↑</span>
+            </div>
+            <span class="subsume-merged__title">KPMG: 68% of employees are using AI agents daily</span>
+            <div class="subsume-merged__tags">
+              <span class="subsume-tag-domain">ai</span>
+              <span class="subsume-tag-domain">agents</span>
+              <span class="subsume-tag-domain">workforce</span>
+            </div>
+            <div class="subsume-refs">
+              <span class="subsume-ref">⊃ kb/…/3fa17c8.md</span>
+              <span class="subsume-ref">⊃ kb/…/a9d4bf2.md</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Branches -->
+    <section id="branches" class="concept-block">
+      <div class="concept-block__text k-prose-content">
+        <h2>Peers, branches &amp; consensus</h2>
+        <p>
+          knomit is distributed and decentralized by construction. Every peer —
+          human or agent — operates on a long-lived personal branch
+          (<code>agent/&lt;id&gt;</code>, derived from machine hostname plus a
+          short hash of its key). All learn, update, and retract operations land
+          on that branch. <strong>No peer writes <code>main</code> directly.</strong>
+        </p>
+        <p>
+          Consensus is reached deliberately: a peer's facts are reviewed,
+          approved, and merged into <code>main</code> — by a Librarian agent, a CI
+          policy, or a human merge. <strong>No peer merges another's branch
+          directly</strong>; <code>main</code> is the single point of agreement.
+          Each peer then pulls <code>main</code> and merges it locally, inheriting
+          the agreed truth instead of re-deriving it. Learning effort is shared,
+          not re-paid.
+        </p>
+      </div>
+      <div class="concept-block__art">
+        <div class="branch-diagram" aria-hidden="true">
+          <svg class="branch-svg" viewBox="0 0 460 340" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <filter id="bg-glow" x="-60%" y="-60%" width="220%" height="220%">
+                <feGaussianBlur stdDeviation="5" result="b"/>
+                <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+            </defs>
+            <!-- Trunk: main -->
+            <line x1="230" y1="14" x2="230" y2="326" stroke="var(--k-brand)" stroke-width="2.5" stroke-linecap="round"/>
+            <!-- Branch A: agent/mindev.local-8ef0cd32 (left) -->
+            <path d="M230 72 C168 92 112 118 112 158 C112 198 168 222 230 240" stroke="var(--k-ref)" stroke-width="2" stroke-linecap="round"/>
+            <!-- Branch B: agent/research-7f3 (right) -->
+            <path d="M230 100 C288 120 346 144 346 172 C346 202 288 222 230 238" stroke="var(--k-brand-2)" stroke-width="2" stroke-linecap="round"/>
+            <!-- Trunk commits -->
+            <circle cx="230" cy="22" r="5" fill="var(--k-brand)"/>
+            <circle cx="230" cy="72" r="5" fill="var(--k-brand)"/>
+            <circle cx="230" cy="100" r="5" fill="var(--k-brand)"/>
+            <circle cx="230" cy="238" r="5" fill="var(--k-brand)"/>
+            <circle cx="230" cy="272" r="7" fill="var(--k-brand)" filter="url(#bg-glow)"/>
+            <circle cx="230" cy="318" r="5" fill="var(--k-brand)"/>
+            <!-- Branch A commits (left) -->
+            <circle cx="112" cy="128" r="5.5" fill="var(--k-ref)"/>
+            <circle cx="112" cy="162" r="5.5" fill="var(--k-ref)"/>
+            <!-- retracted node -->
+            <circle cx="112" cy="192" r="4.5" stroke="var(--k-temporal)" stroke-width="1.5" fill="none" opacity="0.7"/>
+            <!-- Branch B commits (right) -->
+            <circle cx="346" cy="148" r="5.5" fill="var(--k-brand-2)"/>
+            <circle cx="346" cy="178" r="5.5" fill="var(--k-brand-2)"/>
+            <!-- Merge arrows (dashed lines to trunk) -->
+            <line x1="230" y1="238" x2="230" y2="238" stroke="var(--k-brand)" stroke-width="1.5" stroke-dasharray="3 4" opacity="0.5"/>
+            <!-- Lane labels -->
+            <text x="236" y="19" font-size="9.5" fill="var(--k-brand)" font-family="monospace" opacity="0.9">main</text>
+            <text x="6" y="146" font-size="8" fill="var(--k-ref)" font-family="monospace" opacity="0.85">agent/</text>
+            <text x="6" y="157" font-size="8" fill="var(--k-ref)" font-family="monospace" opacity="0.85">mindev</text>
+            <text x="6" y="168" font-size="7.5" fill="var(--k-ref)" font-family="monospace" opacity="0.6">.local-8ef0cd32</text>
+            <text x="352" y="148" font-size="8" fill="var(--k-brand-2)" font-family="monospace" opacity="0.85">agent/</text>
+            <text x="352" y="159" font-size="8" fill="var(--k-brand-2)" font-family="monospace" opacity="0.85">research-7f3</text>
+            <!-- Commit op labels -->
+            <text x="120" y="132" font-size="7.5" fill="var(--k-text-muted)" font-family="monospace">learn</text>
+            <text x="120" y="166" font-size="7.5" fill="var(--k-text-muted)" font-family="monospace">update</text>
+            <text x="120" y="196" font-size="7.5" fill="var(--k-temporal)" font-family="monospace">retracted</text>
+            <text x="354" y="152" font-size="7.5" fill="var(--k-text-muted)" font-family="monospace">learn</text>
+            <text x="354" y="182" font-size="7.5" fill="var(--k-text-muted)" font-family="monospace">distill</text>
+            <text x="236" y="242" font-size="7.5" fill="var(--k-text-muted)" font-family="monospace">← merge research</text>
+            <text x="236" y="276" font-size="7.5" fill="var(--k-brand)" font-family="monospace">← merge + distill</text>
+            <text x="236" y="322" font-size="7.5" fill="var(--k-brand)" font-family="monospace">HEAD</text>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- Provenance -->
+    <section id="provenance" class="concept-block concept-block--reverse">
+      <div class="concept-block__text k-prose-content">
+        <h2>Provenance & signing</h2>
+        <p>
+          Every write — learn, update, retract, subsume, sync — is a commit
+          authored under an identity-carrying address. Agent commits use
+          <code>&lt;agent-id&gt;+&lt;operation&gt;@agents.knomit.io</code> as the
+          author; humans use their own email with <code>+operation</code>
+          subaddressing. Commits are signed with the agent's Ed25519 key.
+        </p>
+        <p>
+          That makes the <strong>(who, what, when, why)</strong> tuple
+          cryptographic rather than hand-waved. The same key that signs commits
+          also names the branch and authenticates remote sync — one identity,
+          end to end.
+        </p>
+      </div>
+      <div class="concept-block__art">
+        <div class="prov-card k-mono" aria-hidden="true">
+          <div class="prov-row"><span class="prov-k">commit</span> <span class="prov-v prov-v--green">9e4b2f1</span></div>
+          <div class="prov-row"><span class="prov-k">author</span> <span class="prov-v prov-v--blue">mindev.local-8ef0cd32+learn@agents.knomit.io</span></div>
+          <div class="prov-row"><span class="prov-k">date</span> <span class="prov-v">2026-06-26T07:14:02Z</span></div>
+          <div class="prov-row"><span class="prov-k">op</span> <span class="prov-v">learn</span></div>
+          <div class="prov-row"><span class="prov-k">signed</span> <span class="prov-v prov-v--green">Ed25519 ✓</span></div>
+          <div class="prov-row"><span class="prov-k">branch</span> <span class="prov-v prov-v--amber">agent/mindev.local-8ef0cd32</span></div>
+          <div class="prov-diff">
+            <div class="prov-diff__row prov-diff__row--add">
+              <span class="prov-diff__sign">+</span>
+              <span class="prov-diff__path">kb/technology/ai/agents/124c68ec.md</span>
+            </div>
+            <div class="prov-diff__row prov-diff__row--add">
+              <span class="prov-diff__sign">+</span>
+              <span class="prov-diff__path">kb/technology/security/ai/c7fbe083.md</span>
+            </div>
+            <div class="prov-diff__row prov-diff__row--mod">
+              <span class="prov-diff__sign">~</span>
+              <span class="prov-diff__path">kb/technology/ai/trends/73f515b5.md</span>
+              <span class="prov-diff__note">conf 0.55→0.72</span>
+            </div>
+            <div class="prov-diff__row prov-diff__row--rm">
+              <span class="prov-diff__sign">−</span>
+              <span class="prov-diff__path">kb/technology/ai/models/e4fecdf6.md</span>
+              <span class="prov-diff__note">subsumed</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Temporal -->
+    <section id="temporal" class="concept-block">
+      <div class="concept-block__text k-prose-content">
+        <h2>The temporal graph</h2>
+        <p>
+          knomit treats git history as a first-class temporal axis, not an
+          implementation detail. Each commit is a moment of belief: the state of
+          the fact graph as some agent understood it at that instant. The
+          <code>git log</code> of a fact <em>is</em> its epistemic history — how
+          the claim evolved, when confidence shifted, when sources were added.
+        </p>
+        <p>
+          So you can time-travel. Ask what was known <em>as-of</em> any commit,
+          and the entire graph rewinds: every ref resolves to whatever its target
+          was <strong>at that point in time</strong>, even if it has since been
+          updated or retracted. The graph is a record of what was believed and
+          when — never silently overwritten with "now".
+        </p>
+      </div>
+      <div class="concept-block__art">
+        <div class="timeline" aria-hidden="true">
+          <div class="timeline__entry">
+            <div class="timeline__dot"></div>
+            <div class="timeline__info">
+              <span class="timeline__hash k-mono">3fa17c8</span>
+              <span class="timeline__desc k-mono">learn: KPMG agent adoption report · conf 0.60</span>
+              <span class="timeline__date k-mono">2026-06-25</span>
+            </div>
+          </div>
+          <div class="timeline__entry">
+            <div class="timeline__dot"></div>
+            <div class="timeline__info">
+              <span class="timeline__hash k-mono">a9d4bf2</span>
+              <span class="timeline__desc k-mono">update: confidence reinforced · conf 0.72</span>
+              <span class="timeline__date k-mono">2026-06-25</span>
+            </div>
+          </div>
+          <div class="timeline__entry timeline__entry--now">
+            <div class="timeline__dot"></div>
+            <div class="timeline__info">
+              <span class="timeline__hash k-mono">124c68e</span>
+              <span class="timeline__desc k-mono">distill: synthesis written · conf 0.88</span>
+              <span class="timeline__date k-mono">2026-06-26</span>
+            </div>
+          </div>
+          <p class="timeline__cap k-mono">↑ each commit is a valid as-of query point</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Refs -->
+    <section id="refs" class="concept-block concept-block--reverse">
+      <div class="concept-block__text k-prose-content">
+        <h2>The <code>knomit:</code> URI scheme</h2>
+        <p>
+          Refs anchor a fact to its source material — the evidence behind the
+          claim. A ref points to another fact in the same knowledge base, or to
+          any web resource: an article, a paper, a specific commit.
+        </p>
+        <table>
+          <thead>
+            <tr><th>Form</th><th>Meaning</th></tr>
+          </thead>
+          <tbody>
+            <tr><td><code>knomit:/kb/…</code></td><td>Fact in the current knowledge base</td></tr>
+            <tr><td><code>https://…</code></td><td>Any web resource — article, paper, commit</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="concept-block__art">
+        <div class="uri-card k-mono" aria-hidden="true">
+          <div class="uri-row">
+            <span class="uri-type">fact</span>
+            <div class="uri-text"><span class="uri-scheme">knomit:</span><span class="uri-host">/kb/technology/ai/agents/</span><span class="uri-path">124c68ec.md</span></div>
+          </div>
+          <div class="uri-divider"></div>
+          <div class="uri-row">
+            <span class="uri-type">fact</span>
+            <div class="uri-text"><span class="uri-scheme">knomit:</span><span class="uri-host">/kb/technology/security/ai/</span><span class="uri-path">c7fbe083.md</span></div>
+          </div>
+          <div class="uri-divider"></div>
+          <div class="uri-row">
+            <span class="uri-type">web</span>
+            <div class="uri-text"><span class="uri-scheme">https://</span><span class="uri-host">kpmg.com/us/en/home/media/</span><span class="uri-path">press-releases/2026/06/ai-agents.html</span></div>
+          </div>
+          <div class="uri-divider"></div>
+          <div class="uri-row">
+            <span class="uri-type">commit</span>
+            <div class="uri-text"><span class="uri-scheme">knomit-kb@</span><span class="uri-host">trunk/</span><span class="uri-path">124c68ec · 2026-06-26</span></div>
+          </div>
+        </div>
+      </div>
+    </section>
+    <!-- Synthesis & hypotheses -->
+    <section id="synthesis" class="concept-block concept-block--reverse">
+      <div class="concept-block__text k-prose-content">
+        <h2>Synthesis &amp; hypotheses</h2>
+        <p>
+          <strong>Review</strong> (<code>knomit_review</code>) is a
+          session-based maintenance loop with three passes: <em>prune</em> —
+          remove redundant or stale facts; <em>distill</em> — cluster related
+          facts and derive a <code>synthesis</code> fact (a higher-order claim
+          that no individual source fact makes on its own); <em>reflect</em> —
+          record <code>methodology</code> facts from resolved hypothesis
+          transitions. Synthesis produces new knowledge from what the corpus
+          already holds.
+        </p>
+        <p>
+          <strong>Hypothesize</strong> (<code>knomit_hypothesize</code>) is a
+          separate, explicit pass over synthesis facts. For each one it decides
+          whether a <code>hypothesis</code> is warranted — a falsifiable,
+          forward-looking prediction with a concrete settlement criterion.
+          <strong>Skipping is the expected default</strong>; a hypothesis is
+          only written when it fills a genuinely load-bearing gap that new
+          evidence could close.
+        </p>
+      </div>
+      <div class="concept-block__art">
+        <div class="synth-card" aria-hidden="true">
+          <div class="synth-phase">
+            <span class="synth-tool k-mono">knomit_review · distill</span>
+            <div class="synth-items">
+              <span class="synth-item k-mono">◉ KPMG: 68% employees use AI agents</span>
+              <span class="synth-item k-mono">◉ OpenAI Codex: 85% of output tokens</span>
+              <span class="synth-item k-mono">◉ Anthropic: Claude writes ~80% of code</span>
+            </div>
+            <span class="synth-arrow">↓</span>
+            <span class="synth-output k-mono">◆ Mid-2026: AI agents move from experimental to primary</span>
+          </div>
+          <div class="synth-divider"></div>
+          <div class="synth-phase">
+            <span class="synth-tool k-mono">knomit_hypothesize · selectively</span>
+            <span class="synth-input k-mono">◆ Mid-2026: AI agents move from experimental…</span>
+            <span class="synth-arrow">↓</span>
+            <span class="synth-output synth-output--hyp k-mono">? Agent-led orgs outperform by 2× — Q4 2027</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- MCP loop -->
+    <section id="mcp" class="concept-block">
+      <div class="concept-block__text k-prose-content">
+        <h2>The MCP operational loop</h2>
+        <p>
+          MCP is not an optional add-on — it is the primary interface for
+          humans (via Claude Code and editors) and agents alike. Seven tools
+          cover the full fact lifecycle; their descriptions carry all the
+          behavioral guidance a model needs, with no prompt scaffolding required.
+        </p>
+        <p>
+          Each agent connects to a <strong>branch-scoped endpoint</strong>, so
+          reads and writes land on its own branch automatically — isolation is
+          structural, not enforced by convention. Three profiles
+          (<code>code</code>, <code>chat</code>, <code>generic</code>) tailor
+          the tool descriptions to the kind of client connecting.
+        </p>
+      </div>
+      <div class="concept-block__art">
+        <div class="mcp-card" aria-hidden="true">
+          <div class="mcp-row">
+            <span class="mcp-phase k-mono">recall</span>
+            <span class="mcp-tool k-mono">knomit_query</span>
+          </div>
+          <div class="mcp-row">
+            <span class="mcp-phase k-mono">write</span>
+            <span class="mcp-tool k-mono">knomit_learn</span>
+          </div>
+          <div class="mcp-row">
+            <span class="mcp-phase k-mono">trace</span>
+            <span class="mcp-tool k-mono">knomit_explain</span>
+          </div>
+          <div class="mcp-row">
+            <span class="mcp-phase k-mono">revise</span>
+            <span class="mcp-tool k-mono">knomit_update · knomit_retract</span>
+          </div>
+          <div class="mcp-row">
+            <span class="mcp-phase k-mono">synthesize</span>
+            <span class="mcp-tool k-mono">knomit_review</span>
+          </div>
+          <div class="mcp-row mcp-row--last">
+            <span class="mcp-phase k-mono">extend</span>
+            <span class="mcp-tool k-mono">knomit_hypothesize</span>
+          </div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <section class="k-section">
+    <div class="k-container concepts-cta">
+      <h2>Ready to go deeper?</h2>
+      <div class="concepts-cta__actions">
+        <a href="/docs/concepts" class="k-btn">Concept deep-dives in the docs <Icon name="arrow" size={16} /></a>
+        {DEMO_LIVE && <a href="/explore" class="k-btn k-btn--ghost">See it in the live UI</a>}
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .concepts-hero {
+    border-bottom: 1px solid var(--k-hairline-soft);
+    padding-block: clamp(3rem, 2rem + 4vw, 5rem);
+  }
+  .concepts-hero__title {
+    font-size: var(--k-step-h1);
+    margin: 0.4rem 0 0;
+  }
+  .concepts-hero__lead {
+    margin-top: 1.25rem;
+    max-width: 44rem;
+  }
+  .concepts-toc {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.6rem;
+    margin-top: 2rem;
+  }
+  .concepts-toc__link {
+    font-family: var(--k-font-mono);
+    font-size: 0.82rem;
+    color: var(--k-text-2);
+    border: 1px solid var(--k-hairline);
+    padding: 0.35rem 0.7rem;
+    border-radius: 999px;
+  }
+  .concepts-toc__link:hover {
+    color: var(--k-brand);
+    border-color: var(--k-brand);
+    text-decoration: none;
+  }
+
+  .concepts {
+    display: flex;
+    flex-direction: column;
+    gap: clamp(3.5rem, 2rem + 6vw, 6rem);
+    padding-block: clamp(3rem, 2rem + 4vw, 5rem);
+  }
+  .concept-block {
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: clamp(2rem, 1rem + 4vw, 4rem);
+    align-items: stretch;
+    scroll-margin-top: 80px;
+  }
+  .concept-block--reverse .concept-block__art {
+    order: -1;
+  }
+  .concept-block__text h2 {
+    font-size: var(--k-step-h2);
+    margin-bottom: 1rem;
+  }
+  .concept-block__art {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  /* All named diagram cards fill the art column height */
+  .concept-block__art > :global(.k-fact),
+  .kinds-card,
+  .tree-diagram,
+  .prov-card,
+  .uri-card,
+  .timeline,
+  .cluster-card,
+  .subsume-card,
+  .synth-card,
+  .mcp-card,
+  .art-center,
+  .branch-diagram {
+    flex: 1;
+  }
+  .art-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--k-surface-1);
+    border: 1px solid var(--k-hairline-soft);
+    border-radius: var(--k-radius);
+    padding: 2rem;
+  }
+
+  /* Mini diagrams */
+  .tree-diagram {
+    background: var(--k-surface-1);
+    border: 1px solid var(--k-hairline-soft);
+    border-radius: var(--k-radius);
+    padding: 1.75rem;
+  }
+  .tree-node {
+    font-family: var(--k-font-mono);
+    font-size: 0.85rem;
+    padding: 0.55rem 0.8rem;
+    border-radius: var(--k-radius-sm);
+    border: 1px solid var(--k-hairline);
+    background: var(--k-surface-2);
+    color: var(--k-text-2);
+    width: fit-content;
+  }
+  .tree-node--root {
+    color: var(--k-brand);
+    border-color: rgba(119, 204, 153, 0.4);
+  }
+  .tree-branch {
+    margin-left: 1.5rem;
+    margin-top: 0.6rem;
+    border-left: 2px solid var(--k-hairline);
+    padding-left: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+  }
+  .tree-node--leaf {
+    color: var(--k-ref);
+  }
+  .tree-caption {
+    margin-top: 1.1rem;
+    font-size: 0.76rem;
+    color: var(--k-text-muted);
+  }
+  .tree-badges {
+    display: flex;
+    gap: 0.5rem;
+    margin-top: 1rem;
+    flex-wrap: wrap;
+  }
+  .tree-badge {
+    font-size: 0.72rem;
+    padding: 0.2rem 0.55rem;
+    border-radius: 999px;
+    border: 1px solid var(--k-hairline);
+    color: var(--k-text-muted);
+    background: var(--k-surface-2);
+  }
+  .tree-columns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.25rem;
+  }
+  .tree-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+  }
+  .tree-ont {
+    font-size: 0.67rem;
+    color: var(--k-brand);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-bottom: 0.1rem;
+  }
+  .tree-ont--code {
+    color: var(--k-ref);
+  }
+  .tree-node--root-b {
+    color: var(--k-ref);
+    border-color: rgba(136, 170, 255, 0.4);
+  }
+  .tree-node--active {
+    color: var(--k-brand);
+    border-color: rgba(119, 204, 153, 0.5);
+    background: var(--k-brand-glow);
+  }
+  .tree-node--sib {
+    color: var(--k-text-muted);
+    font-size: 0.78rem;
+    padding: 0.3rem 0.6rem;
+  }
+  .cluster-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+
+  /* Branch diagram */
+  .branch-diagram {
+    background: var(--k-surface-1);
+    border: 1px solid var(--k-hairline-soft);
+    border-radius: var(--k-radius);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.75rem;
+  }
+  .branch-svg {
+    width: 100%;
+    height: auto;
+    filter: drop-shadow(0 0 20px var(--k-brand-glow));
+  }
+
+  /* Provenance diff */
+  .prov-diff {
+    margin-top: 0.75rem;
+    padding-top: 0.65rem;
+    border-top: 1px solid var(--k-hairline-soft);
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .prov-diff__row {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    font-size: 0.76rem;
+    padding: 0.12rem 0;
+  }
+  .prov-diff__sign {
+    font-size: 0.88rem;
+    font-weight: 700;
+    width: 0.8rem;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+  .prov-diff__row--add .prov-diff__sign { color: var(--k-brand); }
+  .prov-diff__row--rm .prov-diff__sign  { color: #f88; }
+  .prov-diff__row--mod .prov-diff__sign { color: var(--k-temporal); }
+  .prov-diff__path {
+    color: var(--k-text-2);
+    word-break: break-all;
+    flex: 1;
+    font-size: 0.74rem;
+  }
+  .prov-diff__note {
+    color: var(--k-temporal);
+    white-space: nowrap;
+    font-size: 0.68rem;
+  }
+
+  /* Richer subsumption */
+  .subsume-fact__type {
+    font-size: 0.72rem;
+    color: var(--k-brand);
+    opacity: 0.8;
+  }
+  .subsume-fact--dup .subsume-fact__type {
+    color: var(--k-text-muted);
+  }
+  .subsume-fact__title {
+    font-size: 0.78rem;
+    color: var(--k-text-2);
+    margin-top: 0.15rem;
+    display: block;
+  }
+  .subsume-fact__meta {
+    font-size: 0.68rem;
+    color: var(--k-text-muted);
+    margin-top: 0.1rem;
+  }
+  .subsume-merged__hd {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-bottom: 0.25rem;
+  }
+  .subsume-merged__type {
+    font-size: 0.72rem;
+    color: var(--k-brand);
+  }
+  .subsume-merged__conf {
+    font-size: 0.7rem;
+    color: var(--k-temporal);
+    background: var(--k-temporal-glow);
+    border: 1px solid rgba(229,162,60,0.2);
+    padding: 0.05rem 0.4rem;
+    border-radius: 999px;
+  }
+  .subsume-merged__title {
+    font-size: 0.8rem;
+    color: var(--k-brand-2);
+    display: block;
+    margin-bottom: 0.35rem;
+  }
+  .subsume-merged__tags {
+    display: flex;
+    gap: 0.3rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.35rem;
+  }
+  .subsume-tag-domain {
+    font-size: 0.68rem;
+    padding: 0.1rem 0.4rem;
+    border-radius: 999px;
+    border: 1px solid rgba(119,204,153,0.25);
+    color: var(--k-text-muted);
+    background: var(--k-surface-2);
+  }
+
+  .prov-card,
+  .uri-card {
+    background: var(--k-surface-1);
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius);
+    padding: 1.4rem;
+    font-size: 0.85rem;
+  }
+  .prov-row {
+    display: flex;
+    gap: 0.75rem;
+    padding: 0.3rem 0;
+  }
+  .prov-k {
+    color: var(--k-text-muted);
+    width: 4.5rem;
+    flex-shrink: 0;
+  }
+  .prov-v--green {
+    color: var(--k-brand);
+  }
+  .prov-v--blue {
+    color: var(--k-ref);
+  }
+  .prov-v--amber {
+    color: var(--k-temporal);
+  }
+
+  .uri-card {
+    font-size: 0.82rem;
+    word-break: break-all;
+  }
+  .uri-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    padding: 0.85rem 0;
+  }
+  .uri-type {
+    font-size: 0.68rem;
+    color: var(--k-text-muted);
+    width: 3.5rem;
+    flex-shrink: 0;
+    padding-top: 0.1rem;
+    letter-spacing: 0.04em;
+  }
+  .uri-text {
+    line-height: 1.5;
+  }
+  .uri-divider {
+    height: 1px;
+    background: var(--k-hairline-soft);
+  }
+  .uri-scheme {
+    color: var(--k-text-muted);
+  }
+  .uri-host {
+    color: var(--k-ref);
+  }
+  .uri-path {
+    color: var(--k-brand);
+  }
+
+  .timeline {
+    background: var(--k-surface-1);
+    border: 1px solid var(--k-hairline-soft);
+    border-radius: var(--k-radius);
+    padding: 1.5rem 1.5rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .timeline__entry {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.85rem;
+    position: relative;
+    padding-bottom: 1.4rem;
+  }
+  .timeline__entry:last-of-type {
+    padding-bottom: 0;
+  }
+  .timeline__dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    border: 2px solid var(--k-temporal);
+    background: var(--k-surface-1);
+    flex-shrink: 0;
+    margin-top: 0.25rem;
+    position: relative;
+    z-index: 1;
+  }
+  .timeline__entry::before {
+    content: '';
+    position: absolute;
+    left: 4px;
+    top: 14px;
+    bottom: 0;
+    width: 2px;
+    background: var(--k-hairline);
+  }
+  .timeline__entry:last-of-type::before {
+    display: none;
+  }
+  .timeline__entry--now .timeline__dot {
+    border-color: var(--k-brand);
+    box-shadow: 0 0 10px var(--k-brand-glow);
+  }
+  .timeline__info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+  }
+  .timeline__hash {
+    font-size: 0.78rem;
+    color: var(--k-brand);
+  }
+  .timeline__entry--now .timeline__hash {
+    color: var(--k-brand);
+  }
+  .timeline__entry:not(.timeline__entry--now) .timeline__hash {
+    color: var(--k-text-muted);
+  }
+  .timeline__desc {
+    font-size: 0.74rem;
+    color: var(--k-text-2);
+  }
+  .timeline__date {
+    font-size: 0.68rem;
+    color: var(--k-text-muted);
+  }
+  .timeline__cap {
+    margin-top: 1.25rem;
+    font-size: 0.72rem;
+    color: var(--k-text-muted);
+    border-top: 1px solid var(--k-hairline-soft);
+    padding-top: 0.75rem;
+  }
+
+  /* Kinds (epistemic vs pragmatic) */
+  .kinds-card {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    background: var(--k-surface-1);
+    border: 1px solid var(--k-hairline-soft);
+    border-radius: var(--k-radius);
+    padding: 1.5rem;
+  }
+  .kinds-col {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .kinds-col__h {
+    font-size: 0.72rem;
+    color: var(--k-brand);
+    margin-bottom: 0.3rem;
+  }
+  .kinds-col__h--prag {
+    color: var(--k-temporal);
+  }
+  .kinds-tag {
+    font-size: 0.78rem;
+    padding: 0.35rem 0.6rem;
+    border-radius: var(--k-radius-sm);
+    border: 1px solid rgba(119, 204, 153, 0.3);
+    background: var(--k-brand-glow);
+    color: var(--k-brand-2);
+    text-align: center;
+  }
+  .kinds-tag--prag {
+    border-color: rgba(229, 162, 60, 0.3);
+    background: var(--k-temporal-glow);
+    color: var(--k-temporal);
+  }
+  .kinds-glyph {
+    opacity: 0.75;
+    margin-right: 0.25rem;
+  }
+
+  /* Clusters scatter */
+  .cluster-card {
+    position: relative;
+    background: var(--k-surface-1);
+    border: 1px solid var(--k-hairline-soft);
+    border-radius: var(--k-radius);
+    overflow: hidden;
+  }
+  .cluster-dot {
+    position: absolute;
+    left: var(--x);
+    top: var(--y);
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--c);
+    box-shadow: 0 0 12px var(--c);
+    opacity: 0.85;
+  }
+  .cluster-label {
+    position: absolute;
+    font-size: 0.72rem;
+    color: var(--k-text-muted);
+  }
+  .cluster-label--synth {
+    color: var(--k-brand);
+    font-size: 0.7rem;
+  }
+  .cluster-dot--synth {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--c);
+    background: transparent;
+    box-shadow: 0 0 16px var(--c);
+    opacity: 1;
+  }
+  .cluster-line {
+    position: absolute;
+    left: 46%;
+    top: 10%;
+    width: 2px;
+    height: 10%;
+    background: linear-gradient(to bottom, var(--k-brand), transparent);
+    opacity: 0.4;
+  }
+
+  /* Subsumption */
+  .subsume-card {
+    background: var(--k-surface-1);
+    border: 1px solid var(--k-hairline-soft);
+    border-radius: var(--k-radius);
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  .subsume-before {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .subsume-fact {
+    font-size: 0.82rem;
+    padding: 0.45rem 0.7rem;
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius-sm);
+    background: var(--k-surface-2);
+    color: var(--k-text-2);
+  }
+  .subsume-fact--dup {
+    border-color: var(--k-retracted);
+    opacity: 0.6;
+  }
+  .subsume-tag {
+    color: var(--k-retracted);
+    font-size: 0.72rem;
+    margin-left: 0.4rem;
+  }
+  .subsume-glyph {
+    font-size: 0.78rem;
+    color: var(--k-text-muted);
+    text-align: center;
+    padding: 0.2rem 0;
+  }
+  .subsume-merged {
+    font-size: 0.82rem;
+    padding: 0.6rem 0.7rem;
+    border: 1px solid rgba(119, 204, 153, 0.4);
+    border-radius: var(--k-radius-sm);
+    background: var(--k-brand-glow);
+    color: var(--k-brand-2);
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .subsume-refs {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+  .subsume-ref {
+    font-size: 0.72rem;
+    padding: 0.2rem 0.5rem;
+    border: 1px solid rgba(119, 204, 153, 0.3);
+    border-radius: 999px;
+    color: var(--k-brand);
+  }
+
+  /* Synthesis pipeline */
+  .synth-card {
+    background: var(--k-surface-1);
+    border: 1px solid var(--k-hairline-soft);
+    border-radius: var(--k-radius);
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.1rem;
+  }
+  .synth-phase {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .synth-tool {
+    font-size: 0.72rem;
+    color: var(--k-text-muted);
+    letter-spacing: 0.02em;
+  }
+  .synth-items {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+  .synth-item {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.55rem;
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius-sm);
+    color: var(--k-text-2);
+    background: var(--k-surface-2);
+  }
+  .synth-arrow {
+    font-size: 0.82rem;
+    color: var(--k-text-muted);
+  }
+  .synth-input {
+    font-size: 0.78rem;
+    padding: 0.3rem 0.6rem;
+    border: 1px solid rgba(119, 204, 153, 0.4);
+    border-radius: var(--k-radius-sm);
+    background: var(--k-brand-glow);
+    color: var(--k-brand);
+    width: fit-content;
+  }
+  .synth-output {
+    font-size: 0.82rem;
+    padding: 0.35rem 0.65rem;
+    border-radius: var(--k-radius-sm);
+    border: 1px solid rgba(119, 204, 153, 0.4);
+    background: var(--k-brand-glow);
+    color: var(--k-brand);
+    width: fit-content;
+  }
+  .synth-output--hyp {
+    border-color: rgba(229, 162, 60, 0.4);
+    background: var(--k-temporal-glow);
+    color: var(--k-temporal);
+  }
+  .synth-divider {
+    height: 1px;
+    background: var(--k-hairline-soft);
+  }
+
+  /* MCP loop */
+  .mcp-card {
+    background: var(--k-surface-1);
+    border: 1px solid var(--k-hairline-soft);
+    border-radius: var(--k-radius);
+    overflow: hidden;
+  }
+  .mcp-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.6rem 1.1rem;
+    border-bottom: 1px solid var(--k-hairline-soft);
+  }
+  .mcp-row--last {
+    border-bottom: none;
+  }
+  .mcp-phase {
+    font-size: 0.72rem;
+    color: var(--k-text-muted);
+    width: 5rem;
+    flex-shrink: 0;
+    letter-spacing: 0.04em;
+  }
+  .mcp-tool {
+    font-size: 0.82rem;
+    color: var(--k-brand);
+  }
+
+  .concepts-cta {
+    text-align: center;
+  }
+  .concepts-cta h2 {
+    font-size: var(--k-step-h2);
+    margin-bottom: 1.5rem;
+  }
+  .concepts-cta__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.85rem;
+    justify-content: center;
+  }
+
+  @media (max-width: 860px) {
+    .concept-block,
+    .concept-block--reverse {
+      grid-template-columns: 1fr;
+    }
+    .concept-block--reverse .concept-block__art {
+      order: 0;
+    }
+  }
+</style>

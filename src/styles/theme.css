@@ -1,0 +1,275 @@
+/*
+ * knomit.io design tokens.
+ *
+ * Carried from the real product UI (web/) and elevated for marketing. The
+ * semantic meanings are kept identical to the app so the site teaches the
+ * UI's color language before a visitor ever opens it:
+ *   green  = brand / facts          blue  = refs & links
+ *   amber  = temporal / as-of       red   = retracted / error
+ *
+ * Dark-only, on purpose — the product is dark-only.
+ */
+@font-face {
+  /* fallbacks declared by @fontsource imports in BaseHead; kept here for SSR */
+}
+
+:root {
+  color-scheme: dark;
+
+  /* Surfaces — layered dark, lifted from the app shell. */
+  --k-bg: #141414;
+  --k-surface-1: #1a1a1a;
+  --k-surface-2: #222;
+  --k-surface-3: #2a2a2a;
+  --k-hairline: #333;
+  --k-hairline-soft: #262626;
+
+  /* Brand / semantic — same hexes, same meanings as the UI. */
+  --k-brand: #77cc99;
+  --k-brand-2: #99cc99;
+  --k-ref: #88aaff; /* refs, links, knomit: URIs */
+  --k-temporal: #e5a23c; /* time-travel, as-of, caution */
+  --k-retracted: #ff8888; /* retraction, errors, "before" states */
+
+  /* Text ramp. */
+  --k-text: #eeeeee;
+  --k-text-2: #aaaaaa;
+  --k-text-muted: #666666;
+
+  /* Brand tints for washes/glows (derived, low-contrast). */
+  --k-brand-glow: rgba(119, 204, 153, 0.14);
+  --k-ref-glow: rgba(136, 170, 255, 0.12);
+  --k-temporal-glow: rgba(229, 162, 60, 0.12);
+
+  /* Typography. */
+  --k-font-body: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial,
+    sans-serif;
+  --k-font-display: 'Space Grotesk Variable', var(--k-font-body);
+  --k-font-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', 'Cascadia Code',
+    Menlo, Consolas, monospace;
+
+  /* Type scale (fluid). */
+  --k-step-hero: clamp(2.75rem, 1.6rem + 5.6vw, 5rem);
+  --k-step-h1: clamp(2rem, 1.3rem + 3.4vw, 3.25rem);
+  --k-step-h2: clamp(1.55rem, 1.15rem + 1.9vw, 2.25rem);
+  --k-step-h3: clamp(1.2rem, 1.02rem + 0.85vw, 1.5rem);
+  --k-step-lead: clamp(1.1rem, 1rem + 0.5vw, 1.35rem);
+  --k-step-body: 1rem;
+  --k-step-small: 0.875rem;
+
+  /* Rhythm & shape. */
+  --k-radius: 12px;
+  --k-radius-sm: 8px;
+  --k-radius-lg: 20px;
+  --k-maxw: 1120px;
+  --k-maxw-prose: 46rem;
+  --k-gutter: clamp(1.25rem, 0.7rem + 2.5vw, 3rem);
+  --k-section-y: clamp(4rem, 2.5rem + 6vw, 8rem);
+
+  --k-shadow: 0 1px 0 rgba(255, 255, 255, 0.03),
+    0 18px 50px -28px rgba(0, 0, 0, 0.85);
+  --k-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+body {
+  margin: 0;
+  background: var(--k-bg);
+  color: var(--k-text);
+  font-family: var(--k-font-body);
+  font-size: var(--k-step-body);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--k-font-display);
+  font-weight: 600;
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  margin: 0;
+  text-wrap: balance;
+}
+
+p {
+  margin: 0;
+  text-wrap: pretty;
+}
+
+a {
+  color: var(--k-ref);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--k-font-mono);
+  font-size: 0.92em;
+}
+
+::selection {
+  background: var(--k-brand);
+  color: #08110b;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: #111;
+}
+::-webkit-scrollbar-thumb {
+  background: #333;
+  border-radius: 5px;
+  border: 2px solid #111;
+}
+
+:focus-visible {
+  outline: 2px solid var(--k-brand);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ---- Layout primitives -------------------------------------------------- */
+.k-container {
+  width: 100%;
+  max-width: var(--k-maxw);
+  margin-inline: auto;
+  padding-inline: var(--k-gutter);
+}
+
+.k-prose {
+  max-width: var(--k-maxw-prose);
+}
+
+.k-section {
+  padding-block: var(--k-section-y);
+}
+
+.k-eyebrow {
+  font-family: var(--k-font-mono);
+  font-size: var(--k-step-small);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--k-brand);
+  margin: 0 0 0.85rem;
+}
+
+.k-lead {
+  font-size: var(--k-step-lead);
+  color: var(--k-text-2);
+  line-height: 1.55;
+}
+
+/* ---- Buttons ------------------------------------------------------------ */
+.k-btn {
+  --_fg: #08110b;
+  --_bg: var(--k-brand);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.7rem 1.15rem;
+  border-radius: var(--k-radius-sm);
+  border: 1px solid transparent;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--_fg);
+  background: var(--_bg);
+  cursor: pointer;
+  transition:
+    transform 0.18s var(--k-ease),
+    background 0.18s var(--k-ease),
+    border-color 0.18s var(--k-ease);
+}
+.k-btn:hover {
+  text-decoration: none;
+  transform: translateY(-1px);
+  background: #8ad9a9;
+}
+.k-btn--ghost {
+  --_fg: var(--k-text);
+  --_bg: transparent;
+  border-color: var(--k-hairline);
+}
+.k-btn--ghost:hover {
+  background: var(--k-surface-2);
+  border-color: #444;
+}
+
+/* ---- Cards & motifs ----------------------------------------------------- */
+.k-card {
+  background: var(--k-surface-1);
+  border: 1px solid var(--k-hairline-soft);
+  border-radius: var(--k-radius);
+  padding: 1.4rem;
+  transition:
+    border-color 0.2s var(--k-ease),
+    transform 0.2s var(--k-ease);
+}
+.k-card:hover {
+  border-color: var(--k-hairline);
+}
+
+.k-mono {
+  font-family: var(--k-font-mono);
+}
+.k-text-2 {
+  color: var(--k-text-2);
+}
+.k-muted {
+  color: var(--k-text-muted);
+}
+
+/* Subtle node-and-edge texture, derived from the logo mark. */
+.k-grid-bg {
+  background-image: radial-gradient(
+    circle at 1px 1px,
+    rgba(255, 255, 255, 0.04) 1px,
+    transparent 0
+  );
+  background-size: 28px 28px;
+}
+
+/* Scroll-reveal: opt-in, motion-safe, JS-gated.
+   Only hide when JS is present (.has-js) so no-JS visitors always see content. */
+@media (prefers-reduced-motion: no-preference) {
+  .has-js .k-reveal {
+    opacity: 0;
+    transform: translateY(14px);
+    transition:
+      opacity 0.6s var(--k-ease),
+      transform 0.6s var(--k-ease);
+  }
+  .has-js .k-reveal.is-visible {
+    opacity: 1;
+    transform: none;
+  }
+}

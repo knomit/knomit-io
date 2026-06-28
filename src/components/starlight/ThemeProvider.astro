@@ -1,0 +1,11 @@
+---
+// knomit is a dark-only product. Pin the dark palette and ignore the OS
+// preference + any stored choice, so /docs never flashes or settles into light.
+// Inlined to run before paint (avoids FOUC). Replaces Starlight's provider.
+---
+
+<script is:inline>
+  document.documentElement.dataset.theme = 'dark';
+  // ThemeSelect is removed, but other Starlight scripts call into this global.
+  window.StarlightThemeProvider = { updatePickers() {} };
+</script>

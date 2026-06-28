@@ -1,0 +1,157 @@
+---
+import Logo from '../assets/logo.svg';
+import { GITHUB_URL, SITE_TAGLINE, DEMO_LIVE } from '../lib/site';
+const subline = 'Distributed, decentralized knowledge management.';
+
+const cols = [
+  {
+    title: 'Product',
+    links: [
+      { label: 'Concepts', href: '/concepts' },
+      { label: 'Use cases', href: '/use-cases' },
+      ...(DEMO_LIVE ? [{ label: 'Live demo', href: '/explore' }] : []),
+      { label: 'Blog', href: '/blog' },
+      { label: 'FAQ', href: '/faq' },
+      { label: 'Security', href: '/security' },
+    ],
+  },
+  {
+    title: 'Docs',
+    links: [
+      { label: 'Quick start', href: '/docs/quick-start' },
+      { label: 'MCP tools', href: '/docs/mcp-tools' },
+      { label: 'REST API', href: '/docs/api' },
+      { label: 'Configuration', href: '/docs/configuration' },
+    ],
+  },
+  {
+    title: 'Project',
+    links: [
+      { label: 'GitHub', href: GITHUB_URL },
+      { label: 'RSS', href: '/rss.xml' },
+    ],
+  },
+];
+const year = new Date().getFullYear();
+---
+
+<footer class="k-footer">
+  <div class="k-container k-footer__inner">
+    <div class="k-footer__brand">
+      <a href="/" class="k-footer__logo" aria-label="knomit home">
+        <Logo width={34} height={34} />
+        <span>knomit</span>
+      </a>
+      <p class="k-footer__tag k-mono">{SITE_TAGLINE}</p>
+      <p class="k-footer__fine k-muted">{subline}</p>
+    </div>
+
+    <nav class="k-footer__cols" aria-label="Footer">
+      {
+        cols.map((col) => (
+          <div class="k-footer__col">
+            <h2 class="k-footer__col-title">{col.title}</h2>
+            <ul>
+              {col.links.map((link) => (
+                <li>
+                  <a href={link.href} rel={link.href.startsWith('http') ? 'noopener' : undefined}>
+                    {link.label}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ))
+      }
+    </nav>
+  </div>
+
+  <div class="k-container k-footer__legal">
+    <span class="k-muted">© {year} knomit</span>
+    <span class="k-muted k-mono">markdown + git, all the way down</span>
+  </div>
+</footer>
+
+<style>
+  .k-footer {
+    border-top: 1px solid var(--k-hairline-soft);
+    background: var(--k-surface-1);
+    padding-block: 3.5rem 1.5rem;
+    margin-top: 4rem;
+  }
+  .k-footer__inner {
+    display: grid;
+    grid-template-columns: 1.2fr 2fr;
+    gap: 2.5rem;
+  }
+  .k-footer__logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    color: var(--k-text);
+    font-family: var(--k-font-display);
+    font-weight: 600;
+    font-size: 1.2rem;
+  }
+  .k-footer__logo:hover {
+    text-decoration: none;
+  }
+  .k-footer__tag {
+    margin-top: 0.9rem;
+    color: var(--k-brand);
+    font-size: 0.9rem;
+  }
+  .k-footer__fine {
+    margin-top: 0.25rem;
+    font-size: 0.85rem;
+  }
+  .k-footer__cols {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem;
+  }
+  .k-footer__col-title {
+    font-family: var(--k-font-mono);
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--k-text-muted);
+    margin-bottom: 0.85rem;
+  }
+  .k-footer__col ul {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+  }
+  .k-footer__col a {
+    color: var(--k-text-2);
+    font-size: 0.92rem;
+  }
+  .k-footer__col a:hover {
+    color: var(--k-text);
+  }
+  .k-footer__legal {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 2.5rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--k-hairline-soft);
+    font-size: 0.82rem;
+  }
+  @media (max-width: 720px) {
+    .k-footer__inner {
+      grid-template-columns: 1fr;
+      gap: 2rem;
+    }
+    .k-footer__cols {
+      grid-template-columns: repeat(2, 1fr);
+    }
+    .k-footer__legal {
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+  }
+</style>

@@ -1,0 +1,173 @@
+---
+import Logo from '../assets/logo.svg';
+import { GITHUB_URL, DEMO_LIVE } from '../lib/site';
+
+const nav = [
+  { label: 'Concepts', href: '/concepts' },
+  { label: 'Use cases', href: '/use-cases' },
+  { label: 'Compare', href: '/compare' },
+  { label: 'Docs', href: '/docs/quick-start' },
+  { label: 'Blog', href: '/blog' },
+];
+const path = Astro.url.pathname;
+const isActive = (href: string) =>
+  href === '/' ? path === '/' : path.startsWith(href.split('/').slice(0, 2).join('/'));
+---
+
+<header class="k-header">
+  <div class="k-container k-header__inner">
+    <a href="/" class="k-header__brand" aria-label="knomit home">
+      <Logo width={30} height={30} />
+      <span class="k-header__wordmark">knomit</span>
+    </a>
+
+    <nav class="k-header__nav" aria-label="Primary">
+      {
+        nav.map((item) => (
+          <a
+            href={item.href}
+            class="k-header__link"
+            aria-current={isActive(item.href) ? 'page' : undefined}
+          >
+            {item.label}
+          </a>
+        ))
+      }
+    </nav>
+
+    <div class="k-header__actions">
+      {DEMO_LIVE && <a href="/explore" class="k-header__link k-header__link--demo">See it live</a>}
+      <a href={GITHUB_URL} class="k-btn k-btn--ghost k-header__gh" rel="noopener">
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">
+          <path
+            d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"
+          ></path>
+        </svg>
+        GitHub
+      </a>
+    </div>
+
+    <button class="k-header__burger" aria-label="Toggle navigation" aria-expanded="false">
+      <span></span><span></span><span></span>
+    </button>
+  </div>
+
+  <nav class="k-header__mobile" aria-label="Mobile" hidden>
+    {nav.map((item) => <a href={item.href} class="k-header__link">{item.label}</a>)}
+    {DEMO_LIVE && <a href="/explore" class="k-header__link">See it live</a>}
+    <a href={GITHUB_URL} class="k-header__link" rel="noopener">GitHub</a>
+  </nav>
+</header>
+
+<style>
+  .k-header {
+    position: sticky;
+    top: 0;
+    z-index: 50;
+    background: rgba(20, 20, 20, 0.72);
+    backdrop-filter: saturate(150%) blur(12px);
+    border-bottom: 1px solid var(--k-hairline-soft);
+  }
+  .k-header__inner {
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    height: 60px;
+  }
+  .k-header__brand {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.55rem;
+    color: var(--k-text);
+  }
+  .k-header__brand:hover {
+    text-decoration: none;
+  }
+  .k-header__wordmark {
+    font-family: var(--k-font-display);
+    font-weight: 600;
+    font-size: 1.2rem;
+    letter-spacing: -0.02em;
+  }
+  .k-header__nav {
+    display: flex;
+    gap: 1.4rem;
+    margin-left: 0.5rem;
+  }
+  .k-header__link {
+    color: var(--k-text-2);
+    font-size: 0.94rem;
+    font-weight: 500;
+  }
+  .k-header__link:hover {
+    color: var(--k-text);
+    text-decoration: none;
+  }
+  .k-header__link[aria-current='page'] {
+    color: var(--k-brand);
+  }
+  .k-header__actions {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-left: auto;
+  }
+  .k-header__link--demo {
+    color: var(--k-brand);
+  }
+  .k-header__gh {
+    padding: 0.45rem 0.8rem;
+    font-size: 0.9rem;
+  }
+  .k-header__burger {
+    display: none;
+    flex-direction: column;
+    gap: 4px;
+    margin-left: auto;
+    background: none;
+    border: 0;
+    cursor: pointer;
+    padding: 6px;
+  }
+  .k-header__burger span {
+    width: 22px;
+    height: 2px;
+    background: var(--k-text);
+    border-radius: 2px;
+  }
+  .k-header__mobile {
+    display: none;
+    flex-direction: column;
+    padding: 0.75rem var(--k-gutter) 1.25rem;
+    gap: 0.9rem;
+    border-bottom: 1px solid var(--k-hairline-soft);
+    background: var(--k-surface-1);
+  }
+  .k-header__mobile[hidden] {
+    display: none;
+  }
+
+  @media (max-width: 820px) {
+    .k-header__nav,
+    .k-header__actions {
+      display: none;
+    }
+    .k-header__burger {
+      display: flex;
+    }
+    .k-header__mobile:not([hidden]) {
+      display: flex;
+    }
+  }
+</style>
+
+<script>
+  const burger = document.querySelector('.k-header__burger');
+  const mobile = document.querySelector('.k-header__mobile');
+  burger?.addEventListener('click', () => {
+    const open = mobile?.hasAttribute('hidden');
+    if (open) mobile?.removeAttribute('hidden');
+    else mobile?.setAttribute('hidden', '');
+    burger.setAttribute('aria-expanded', String(open));
+  });
+</script>

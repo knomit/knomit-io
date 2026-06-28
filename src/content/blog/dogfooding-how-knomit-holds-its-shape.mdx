@@ -1,0 +1,180 @@
+---
+title: 'Dogfooding: how knomit holds its own shape'
+description: "knomit's own repo runs on knomit. We started where everyone starts — a fat CLAUDE.md and a per-machine MEMORY.md — and watched them rot and crowd out context. Here is what replaced them: typed, scoped knowledge surfaced at the moment of the decision, and one real fact that climbed from hunch to proven."
+pubDate: 2026-06-27
+author: The knomit team
+tags: [dogfooding, knowledge, provenance, agents]
+draft: false
+---
+
+import FactCard from '../../components/FactCard.astro';
+
+The fastest way to find out whether a knowledge system is worth anything is to
+make your own work depend on it. So that is what we did: knomit's repository
+runs on knomit. Every non-obvious invariant, design decision, and sharp edge a
+human or an agent uncovers while building the thing gets written back as a
+**fact** — and the next peer reads it before touching the same code.
+
+People reach for the words "agent memory" here. We don't. This is not one
+agent's private recall that dies with the context window. It is a shared,
+typed, version-controlled body of **knowledge** that people and agents author
+through the same operations and converge on together. The distinction is the
+whole point of this post.
+
+## We started where everyone starts
+
+The first version of knomit's `CLAUDE.md` was a handful of house rules — where
+plans go, what not to put at the repo root. Reasonable. Then it did what every
+instructions file does: it grew. House rules became architecture notes became
+"don't forget the store lock spans the notify" became a sprawling document that
+every agent re-read, in full, at the top of every session. Alongside it sat a
+per-machine `MEMORY.md` — useful to whoever wrote it, invisible to everyone
+else, never reviewed, never merged.
+
+It worked until it didn't, and the way it stopped working is worth naming:
+
+- **It rotted.** The file described code that had moved. Nothing in it could be
+  *checked* against the source, so stale lines sat next to live ones with no way
+  to tell them apart.
+- **It crowded out context.** Every line cost tokens on every session, whether
+  or not the work touched that area. The more the project knew, the less room
+  the agent had to think.
+- **It had no scope.** A flat file applies everywhere or nowhere. A concurrency
+  rule for the store layer sat in the same undifferentiated blob as a note about
+  the web handlers, paid for in full even when you were nowhere near either.
+- **Agents re-derived anyway.** Because nothing was scoped or trustworthy, the
+  reliable move was to ignore the file and rediscover the rule from the code —
+  expensively, often wrongly, every single time.
+
+That last one is the cost knomit exists to remove. One of the project's
+load-bearing principles says it plainly:
+
+> Learning effort is shared across peers, not re-paid by each.
+
+A flat instructions file cannot deliver that. It can only push everything at
+everyone and hope.
+
+## The inversion: pull the right knowledge at the decision
+
+The fix was not a bigger file. It was to stop pushing and start pulling.
+
+When an agent opens a session on knomit, a `SessionStart` hook injects a
+deliberately small payload: the project's **global principles** (hard-capped at
+seven), a one-line digest of recent work, and a *map* of which areas have
+knowledge available. That's it. The standing context stays tiny and fixed no
+matter how much the corpus grows.
+
+The actual knowledge is fetched at the moment it's needed. Before editing
+anything under, say, the store layer, the agent calls `/knomit-recall store` —
+and only then does the scoped pile of invariants, decisions, and gotchas for
+that subsystem arrive, ranked principles-first. Right knowledge, right place,
+right time. The file pushed all of it at every session; discovery pulls the
+relevant slice at the point of the decision.
+
+And because each fact is typed and provenanced, the agent can do something it
+could never do with a flat file: verify the claim before trusting it. Here is a
+real invariant it would pull before touching domain matching —
+
+<FactCard
+  path="kb/invariants/store/domain-entity-matching/7a6af15e.md"
+  frontmatter={{
+    type: 'policy',
+    confidence: 0.92,
+    domain: ['store', 'synthesize', 'search'],
+    entities: ['canonicalizeDomain', 'domainTokens', 'stemDomainToken'],
+    refs: ['knomit:/internal/store/domain_match.go@db0455c'],
+  }}
+  body={'Any code deciding whether a fact\'s domain or entity matches a caller\'s query MUST route through the canonical tokenized matcher (`canonicalizeDomain` / `domainTokens` / `stemDomainToken`) — never raw `==` or `slices.Contains`. Raw matching makes the *same* query select *different* facts depending on which code path handles it.'}
+  commit="a2c5c7f"
+  signer="agent/dev-7c9"
+  evolution={null}
+/>
+
+That isn't a comment hoping to be read. It's a typed rule, scoped to three
+domains, anchored to the exact source file it governs, carrying a confidence and
+a signed commit. The agent can follow the ref, confirm the matcher still lives
+where the fact says, and *then* build on it.
+
+## Many agents, one shape
+
+Dogfooding knomit is not a single agent talking to itself. Several agents —
+plus the humans — work the codebase, each on its own branch, and knomit is what
+keeps them converging on the same project instead of quietly drifting into four
+different ones. Another global principle states the rule:
+
+> Each agent writes only its own branch; consensus is reached by merge into
+> `main`. No agent writes `main` directly — conflicts surface at merge time,
+> where they belong: the moment two beliefs meet.
+
+Invariants are load-bearing by design: you re-read them before touching the area
+they cover, the same way you'd re-read a colleague's warning before editing
+their subsystem. Principles set the taste — including the spiky ones, like the
+designer's standing rule that *while pre-release, the best end result wins over
+any "quick win" or minimum-change shortcut*. That principle has killed more than
+one of an agent's tidy, incremental suggestions. That's it working. The shape of
+the project is held not by one person remembering to enforce it, but by the
+knowledge enforcing it on everyone, every session.
+
+## A fact that earned its confidence
+
+Here is the part a flat file can never do — knowledge that gets *more*
+trustworthy as it's worked.
+
+An agent chasing a performance complaint wrote down a hunch: Louvain clustering
+seemed to stall under write contention. It went in as an observation at
+confidence **0.70** — a suspicion, honestly labelled, with its provenance
+attached. Not deleted, not promoted to gospel. Just recorded.
+
+About a week later a bug fix found the real culprit: the embeddings phase of an
+index rebuild was holding SQLite's single-writer lock for the entire duration of
+ONNX inference, starving every concurrent writer. The hunch was right in spirit
+and wrong in detail — and instead of being re-derived
+from scratch, the *existing* fact was updated in place. Its body was rewritten
+with the confirmed root cause and the fix; its confidence climbed from 0.70 to
+0.90; its title now begins with the two best words in the corpus:
+**CONFIRMED + FIXED.**
+
+<FactCard
+  path="kb/gotchas/store/clustering/louvain-slow-under-write-contention/a526c589.md"
+  frontmatter={{
+    type: 'observation',
+    confidence: 0.9,
+    domain: ['store', 'clustering', 'performance', 'concurrency'],
+    entities: ['rebuildEmbeddings', 'louvain', '_txlock=immediate'],
+    refs: ['knomit:/internal/store/search_graph.go@d58bbba'],
+  }}
+  body={'CONFIRMED + FIXED. The ~90s Louvain stalls and `database is locked` storms during rebuild were the embeddings phase holding the SQLite write lock through ONNX inference — not algorithm cost. **Fix:** compute all embeddings *outside* the transaction, then open a short tx solely to insert the finished vectors. The lock is now held for milliseconds, not the inference duration.'}
+  commit="6f86f9d"
+  signer="agent/mindev.local"
+  evolution="0.70 → 0.90"
+/>
+
+Without knomit, that hunch would have ended up somewhere outside the repo
+entirely — a scratch note in one engineer's personal file, on one machine,
+invisible to everyone else — and the next agent would have burned an afternoon
+rediscovering the same lock contention. As a fact, the hunch carried its
+provenance forward
+until evidence arrived, then upgraded itself. The history of the belief is
+intact: you can see when it was a guess, what proved it, and exactly how its
+confidence moved.
+
+## Why this is the pitch
+
+Strip away the mechanics and three properties remain, and they are the entire
+reason knomit beats a file:
+
+- **Shared** — what one peer learns, every other peer inherits by merge, not by
+  re-deriving it.
+- **Provable** — every fact is a signed commit; you can see who asserted it,
+  when, and why its confidence changed.
+- **Inspectable** — it's markdown in a git repo. Diff it, grep it, review it in
+  a pull request like any other change.
+
+A flat instructions file gives you none of those. It gives you a growing tax on
+every session and a document you eventually learn not to trust. knomit gives you
+a body of knowledge that is small at rest, precise on demand, and more
+trustworthy the more it's used — which is exactly what you want from the thing
+your agents lean on to keep the project in shape.
+
+See the facts for yourself in the [live demo](/explore), or read the code on
+[GitHub](https://github.com/knomit/knomit).

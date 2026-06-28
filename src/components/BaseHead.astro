@@ -1,0 +1,68 @@
+---
+import '@fontsource-variable/space-grotesk';
+import '@fontsource/jetbrains-mono/400.css';
+import '@fontsource/jetbrains-mono/500.css';
+import '../styles/theme.css';
+import JsonLd from './JsonLd.astro';
+import Analytics from './Analytics.astro';
+import { organizationSchema, websiteSchema, softwareApplicationSchema } from '../lib/schema';
+import { SITE_TWITTER, GSC_VERIFICATION } from '../lib/site';
+
+interface Props {
+  title: string;
+  description: string;
+  /** Page-specific OG image path (absolute or site-relative). */
+  image?: string;
+  article?: boolean;
+  /** Page-specific JSON-LD appended after the site-wide Organization/WebSite. */
+  jsonLd?: Record<string, unknown> | Record<string, unknown>[];
+}
+
+const { title, description, image = '/og.png', article = false, jsonLd } = Astro.props;
+const canonical = new URL(Astro.url.pathname, Astro.site);
+const ogImage = new URL(image, Astro.site);
+const site = Astro.site!;
+---
+
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="generator" content={Astro.generator} />
+<link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+<link rel="sitemap" href="/sitemap-index.xml" />
+<link
+  rel="alternate"
+  type="application/rss+xml"
+  title="knomit blog"
+  href={new URL('/rss.xml', Astro.site)}
+/>
+<link rel="canonical" href={canonical} />
+
+<title>{title}</title>
+<meta name="description" content={description} />
+<meta name="theme-color" content="#141414" />
+
+<meta property="og:type" content={article ? 'article' : 'website'} />
+<meta property="og:title" content={title} />
+<meta property="og:description" content={description} />
+<meta property="og:url" content={canonical} />
+<meta property="og:image" content={ogImage} />
+<meta property="og:site_name" content="knomit" />
+
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content={title} />
+<meta name="twitter:description" content={description} />
+<meta name="twitter:image" content={ogImage} />
+{SITE_TWITTER && <meta name="twitter:site" content={SITE_TWITTER} />}
+{SITE_TWITTER && <meta name="twitter:creator" content={SITE_TWITTER} />}
+{GSC_VERIFICATION && <meta name="google-site-verification" content={GSC_VERIFICATION} />}
+
+<!-- Mark JS-capable early so scroll-reveal can hide content without a flash;
+     no-JS visitors never get the hidden state. -->
+<script is:inline>
+  document.documentElement.classList.add('has-js');
+</script>
+<JsonLd schema={organizationSchema(site)} />
+<JsonLd schema={websiteSchema(site)} />
+<JsonLd schema={softwareApplicationSchema(site)} />
+{jsonLd && <JsonLd schema={jsonLd} />}
+<Analytics />

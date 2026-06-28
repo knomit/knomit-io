@@ -1,0 +1,99 @@
+/* Long-form prose styling for blog posts and concept pages (non-Starlight). */
+.k-prose-content {
+  color: var(--k-text);
+}
+.k-prose-content > * + * {
+  margin-top: 1.25rem;
+}
+.k-prose-content h2 {
+  font-size: var(--k-step-h2);
+  margin-top: 3rem;
+  padding-top: 0.5rem;
+}
+.k-prose-content h3 {
+  font-size: var(--k-step-h3);
+  margin-top: 2.25rem;
+}
+.k-prose-content h2 + *,
+.k-prose-content h3 + * {
+  margin-top: 1rem;
+}
+.k-prose-content a {
+  color: var(--k-ref);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(136, 170, 255, 0.4);
+}
+.k-prose-content strong {
+  color: var(--k-text);
+  font-weight: 650;
+}
+.k-prose-content ul,
+.k-prose-content ol {
+  padding-left: 1.4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.k-prose-content li::marker {
+  color: var(--k-brand);
+}
+.k-prose-content blockquote {
+  margin-inline: 0;
+  padding: 0.6rem 0 0.6rem 1.2rem;
+  border-left: 3px solid var(--k-brand);
+  color: var(--k-text-2);
+  font-style: italic;
+}
+.k-prose-content code {
+  font-family: var(--k-font-mono);
+  background: var(--k-surface-2);
+  border: 1px solid var(--k-hairline-soft);
+  padding: 0.08em 0.4em;
+  border-radius: 5px;
+  font-size: 0.86em;
+  color: var(--k-brand-2);
+}
+.k-prose-content pre {
+  background: var(--k-surface-1);
+  border: 1px solid var(--k-hairline-soft);
+  border-radius: var(--k-radius);
+  padding: 1.1rem 1.25rem;
+  overflow-x: auto;
+  font-size: 0.88rem;
+  line-height: 1.6;
+}
+.k-prose-content pre code {
+  background: none;
+  border: 0;
+  padding: 0;
+  color: inherit;
+}
+.k-prose-content img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--k-radius);
+  border: 1px solid var(--k-hairline-soft);
+}
+.k-prose-content hr {
+  border: 0;
+  border-top: 1px solid var(--k-hairline-soft);
+  margin-block: 2.5rem;
+}
+.k-prose-content table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+.k-prose-content th,
+.k-prose-content td {
+  border: 1px solid var(--k-hairline-soft);
+  padding: 0.55rem 0.8rem;
+  text-align: left;
+}
+.k-prose-content th {
+  background: var(--k-surface-2);
+  font-family: var(--k-font-mono);
+  font-size: 0.8rem;
+  letter-spacing: 0.03em;
+}

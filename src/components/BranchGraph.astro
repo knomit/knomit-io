@@ -1,0 +1,118 @@
+---
+/**
+ * The signature illustration: agent branches diverging from a trunk (`main`)
+ * and merging back. Nodes are facts/commits. Descended from the logo mark.
+ * Stroke-draw animation is motion-safe (disabled under prefers-reduced-motion).
+ */
+interface Props {
+  class?: string;
+}
+const { class: className = '' } = Astro.props;
+---
+
+<svg
+  class={`k-branchgraph ${className}`}
+  viewBox="0 0 420 320"
+  fill="none"
+  role="img"
+  aria-label="A git branch graph: agent branches diverge from the main trunk and merge back, each node a fact."
+  xmlns="http://www.w3.org/2000/svg"
+>
+  <!-- trunk: main -->
+  <path class="bg-trunk" d="M210 18 V302" stroke="var(--k-brand)" stroke-width="3" stroke-linecap="round" />
+
+  <!-- agent branch A (left) diverges then merges back -->
+  <path
+    class="bg-branch bg-branch--a"
+    d="M210 70 C150 92 130 120 130 150 C130 184 158 206 210 226"
+    stroke="var(--k-ref)"
+    stroke-width="2.5"
+    stroke-linecap="round"
+  />
+  <!-- agent branch B (right) -->
+  <path
+    class="bg-branch bg-branch--b"
+    d="M210 104 C278 124 296 150 296 178 C296 210 268 232 210 252"
+    stroke="var(--k-brand-2)"
+    stroke-width="2.5"
+    stroke-linecap="round"
+  />
+  <!-- a short retracted offshoot (amber→fades) -->
+  <path
+    class="bg-branch bg-branch--c"
+    d="M130 150 C104 160 92 176 96 196"
+    stroke="var(--k-temporal)"
+    stroke-width="2"
+    stroke-linecap="round"
+    stroke-dasharray="2 7"
+  />
+
+  <!-- commit nodes on the trunk -->
+  {[18, 70, 104, 150, 226, 252, 302].map((cy, i) => (
+    <circle class="bg-node" style={`--d:${0.5 + i * 0.12}s`} cx="210" cy={cy} r="5.5" fill="var(--k-brand)" />
+  ))}
+  <!-- nodes on branch A -->
+  <circle class="bg-node" style="--d:0.9s" cx="130" cy="150" r="5" fill="var(--k-ref)" />
+  <!-- nodes on branch B -->
+  <circle class="bg-node" style="--d:1.05s" cx="296" cy="178" r="5" fill="var(--k-brand-2)" />
+  <!-- retracted node (hollow) -->
+  <circle class="bg-node bg-node--retracted" style="--d:1.2s" cx="96" cy="196" r="4" fill="var(--k-bg)" stroke="var(--k-temporal)" stroke-width="2" />
+</svg>
+
+<style>
+  .k-branchgraph {
+    width: 100%;
+    height: auto;
+    overflow: visible;
+    filter: drop-shadow(0 0 28px var(--k-brand-glow));
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .bg-trunk,
+    .bg-branch {
+      stroke-dasharray: 360;
+      stroke-dashoffset: 360;
+      animation: bg-draw 1.6s var(--k-ease) forwards;
+    }
+    .bg-branch--a {
+      animation-delay: 0.35s;
+    }
+    .bg-branch--b {
+      animation-delay: 0.55s;
+    }
+    .bg-branch--c {
+      stroke-dasharray: 2 7;
+      animation: none;
+      opacity: 0;
+      animation: bg-fade-in 0.8s ease 1s forwards;
+    }
+    .bg-node {
+      opacity: 0;
+      transform-box: fill-box;
+      transform-origin: center;
+      animation: bg-pop 0.5s var(--k-ease) forwards;
+      animation-delay: var(--d, 0.6s);
+    }
+  }
+
+  @keyframes bg-draw {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+  @keyframes bg-pop {
+    from {
+      opacity: 0;
+      transform: scale(0.2);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  @keyframes bg-fade-in {
+    to {
+      opacity: 0.85;
+    }
+  }
+</style>

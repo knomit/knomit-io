@@ -1,0 +1,175 @@
+---
+/**
+ * The fact-card motif: a real knomit fact rendered as it lives on disk —
+ * YAML frontmatter in mono, a short body, and a signed-commit provenance line.
+ * Defaults to a representative, accurate example; override via props.
+ */
+interface Frontmatter {
+  type?: string;
+  confidence?: number;
+  domain?: string[];
+  entities?: string[];
+  refs?: string[];
+}
+interface Props {
+  path?: string;
+  frontmatter?: Frontmatter;
+  body?: string;
+  commit?: string;
+  signer?: string;
+  /** Optional confidence evolution, e.g. "0.62 → 0.88" — shows the fact has versions. */
+  evolution?: string;
+  class?: string;
+}
+
+const {
+  path = 'kb/technology/ai/research/theory/3161ebc1.md',
+  frontmatter = {
+    type: 'concept',
+    confidence: 0.88,
+    domain: ['ai', 'research', 'agi'],
+    entities: ['Yann LeCun', 'Meta', 'Anthropic'],
+    refs: ['knomit:/kb/technology/ai/research/theory/f64b961e.md'],
+  },
+  body = 'Yann LeCun proposes **Superhuman Adaptable Intelligence (SAI)** as an alternative to the AGI goalpost — intelligence measured by adaptation to new situations, not by frontier benchmark scores.',
+  commit = '7c1ef20',
+  signer = 'agent/researcher-3a7',
+  evolution = '0.74 → 0.88',
+  class: className = '',
+} = Astro.props;
+
+const fm = frontmatter;
+---
+
+<article class={`k-fact ${className}`} aria-label={`knomit fact: ${path}`}>
+  <header class="k-fact__path k-mono">{path}</header>
+  <pre class="k-fact__fm"><span class="k-fact__rule">---</span>
+<span class="k-fact__k">type:</span> <span class="k-fact__type">{fm.type}</span>
+<span class="k-fact__k">confidence:</span> <span class="k-fact__num">{fm.confidence}</span>
+<span class="k-fact__k">domain:</span> [{fm.domain?.join(', ')}]
+<span class="k-fact__k">entities:</span> [{fm.entities?.join(', ')}]
+<span class="k-fact__k">refs:</span>
+  - <span class="k-fact__ref">{fm.refs?.[0]}</span>
+<span class="k-fact__rule">---</span></pre>
+  <p
+    class="k-fact__body"
+    set:html={body
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')}
+  />
+  <footer class="k-fact__prov k-mono">
+    <span class="k-fact__dot" aria-hidden="true"></span>
+    <span class="k-fact__commit">{commit}</span>
+    <span class="k-fact__sep">·</span>
+    <span>signed</span>
+    <span class="k-fact__sep">·</span>
+    <span class="k-fact__signer">{signer}</span>
+    {
+      evolution && (
+        <span class="k-fact__evo" title="confidence evolved across versions">
+          conf {evolution}
+        </span>
+      )
+    }
+  </footer>
+</article>
+
+<style>
+  .k-fact {
+    background: var(--k-surface-1);
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius);
+    overflow: hidden;
+    box-shadow: var(--k-shadow);
+    font-size: 0.85rem;
+  }
+  .k-fact__path {
+    padding: 0.65rem 1rem;
+    background: var(--k-surface-2);
+    border-bottom: 1px solid var(--k-hairline);
+    color: var(--k-text-2);
+    font-size: 0.78rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .k-fact__fm {
+    margin: 0;
+    padding: 1rem 1rem 0.5rem;
+    font-family: var(--k-font-mono);
+    font-size: 0.8rem;
+    line-height: 1.55;
+    color: var(--k-text-2);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .k-fact__rule {
+    color: var(--k-text-muted);
+  }
+  .k-fact__k {
+    color: var(--k-text-muted);
+  }
+  .k-fact__type {
+    color: var(--k-brand);
+  }
+  .k-fact__num {
+    color: var(--k-temporal);
+  }
+  .k-fact__ref {
+    color: var(--k-ref);
+  }
+  .k-fact__body {
+    padding: 0.4rem 1rem 1rem;
+    color: var(--k-text);
+    line-height: 1.55;
+    font-size: 0.9rem;
+  }
+  .k-fact__body :global(code) {
+    font-family: var(--k-font-mono);
+    background: var(--k-surface-3);
+    padding: 0.05em 0.35em;
+    border-radius: 4px;
+    font-size: 0.86em;
+    color: var(--k-brand-2);
+  }
+  .k-fact__body :global(strong) {
+    color: var(--k-brand);
+    font-weight: 600;
+  }
+  .k-fact__evo {
+    margin-left: auto;
+    color: var(--k-temporal);
+    background: var(--k-temporal-glow);
+    border: 1px solid rgba(229, 162, 60, 0.25);
+    padding: 0.05rem 0.4rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    white-space: nowrap;
+  }
+  .k-fact__prov {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.6rem 1rem;
+    border-top: 1px solid var(--k-hairline-soft);
+    background: var(--k-surface-2);
+    font-size: 0.76rem;
+    color: var(--k-text-muted);
+  }
+  .k-fact__dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--k-brand);
+    box-shadow: 0 0 8px var(--k-brand);
+  }
+  .k-fact__commit {
+    color: var(--k-brand);
+  }
+  .k-fact__signer {
+    color: var(--k-ref);
+  }
+  .k-fact__sep {
+    opacity: 0.5;
+  }
+</style>

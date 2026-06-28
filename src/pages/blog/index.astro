@@ -1,0 +1,98 @@
+---
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import BlogCard from '../../components/BlogCard.astro';
+import SectionHeading from '../../components/SectionHeading.astro';
+import { getPublishedPosts, postHref } from '../../lib/blog';
+
+const posts = await getPublishedPosts();
+const [featured, ...rest] = posts;
+---
+
+<BaseLayout
+  title="Blog — knomit"
+  description="Real-world use cases for a git-native, fact-based knowledge base: durable facts, provenance, multi-agent consensus, and time-travel."
+>
+  <section class="k-section blog-index">
+    <div class="k-container">
+      <SectionHeading
+        eyebrow="Blog"
+        title="Real-world use cases."
+        lead="Concrete scenarios and workflows — what becomes possible when people and agents build on shared, proven knowledge instead of re-deriving it every time. Roughly weekly."
+      />
+
+      {
+        posts.length === 0 && (
+          <p class="k-text-2">No posts yet — the first one is on its way.</p>
+        )
+      }
+
+      {
+        featured && (
+          <a href={postHref(featured)} class="k-card feature-post k-reveal">
+            <div class="feature-post__body">
+              <p class="k-eyebrow">Latest</p>
+              <h2 class="feature-post__title">{featured.data.title}</h2>
+              <p class="k-text-2 feature-post__desc">{featured.data.description}</p>
+              <p class="k-mono feature-post__meta">
+                {featured.data.author} · {featured.data.pubDate.toISOString().slice(0, 10)}
+              </p>
+            </div>
+          </a>
+        )
+      }
+
+      {
+        rest.length > 0 && (
+          <div class="blog-grid">
+            {rest.map((post) => (
+              <BlogCard
+                href={postHref(post)}
+                title={post.data.title}
+                description={post.data.description}
+                pubDate={post.data.pubDate}
+                tags={post.data.tags}
+              />
+            ))}
+          </div>
+        )
+      }
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  .feature-post {
+    display: block;
+    padding: clamp(1.5rem, 1rem + 2vw, 2.5rem);
+    margin-bottom: 1.5rem;
+    background:
+      radial-gradient(120% 160% at 100% 0%, var(--k-brand-glow), transparent 55%),
+      var(--k-surface-1);
+  }
+  .feature-post:hover {
+    text-decoration: none;
+    border-color: var(--k-hairline);
+  }
+  .feature-post__title {
+    font-size: var(--k-step-h2);
+    margin: 0.4rem 0 0.75rem;
+    max-width: 24ch;
+  }
+  .feature-post:hover .feature-post__title {
+    color: var(--k-brand);
+  }
+  .feature-post__desc {
+    max-width: 48ch;
+    line-height: 1.6;
+  }
+  .feature-post__meta {
+    margin-top: 1.25rem;
+    font-size: 0.82rem;
+    color: var(--k-text-muted);
+  }
+  .blog-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 1.25rem;
+  }
+</style>

@@ -1,0 +1,66 @@
+---
+title: Claude Cowork integration
+description: Register the knomit stdio MCP bridge in Claude Cowork's config — the same wiring as Claude Desktop, no Cowork-specific code.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Claude Cowork talks to knomit through the **same stdio MCP bridge** that every
+other MCP client uses. There is no Cowork-specific code in knomit — you register
+`knomit-bridge` as an MCP server in Cowork's configuration, exactly as you would
+for Claude Desktop.
+
+## Prerequisites
+
+1. **A running knomit server.** The simplest path is the
+   [desktop app](/docs/desktop/) (`Knomit.app` / `knomit-desktop`), which boots
+   the server on a looknomitck port and writes the `server.json` lockfile the bridge
+   uses to discover it. A bare `knomit serve` on `localhost:19278` works too.
+2. **The `knomit-bridge` binary on disk.** The macOS app symlinks it into `~/bin`
+   on launch; otherwise point at the built binary.
+
+## Configure Cowork
+
+Add `knomit-bridge` as an MCP server in the Claude Cowork config file (see
+Cowork's own documentation for the exact config-file location and schema). The
+entry mirrors a Claude Desktop server:
+
+```jsonc
+{
+  "mcpServers": {
+    "knomit": {
+      "command": "/Users/<you>/bin/knomit-bridge"
+    }
+  }
+}
+```
+
+Optional arguments select a different repo or profile:
+
+```jsonc
+{
+  "mcpServers": {
+    "knomit": {
+      "command": "/Users/<you>/bin/knomit-bridge",
+      "args": ["--repo", "trunk", "--profile", "chat"]
+    }
+  }
+}
+```
+
+- `--repo` defaults to `trunk`; `--profile` defaults to `code`. For a
+  conversational Cowork surface, `chat` is usually the better profile.
+- If the server is not on the default port and the lockfile isn't found, pass the
+  base URL as a positional argument (or set `KNOMIT_BASE_URL`), e.g.
+  `"args": ["http://localhost:19278"]`.
+
+Once registered, Cowork sees the seven knomit MCP tools — see
+[MCP tools](/docs/mcp-tools/).
+
+<Aside type="note">
+Unlike the [Claude Code integration](/docs/claude-code/), Cowork does **not** use
+the `knomit-bridge claude init` scaffolding — there are no project skills or
+hooks, it is purely the MCP server wiring. The bridge does not auto-recover a
+session if the server dies; the client owns restart, though it does lazily
+re-resolve the server from `server.json` on transport failure.
+</Aside>

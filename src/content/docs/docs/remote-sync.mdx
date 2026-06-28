@@ -1,0 +1,121 @@
+---
+title: Remote sync
+description: Sync each repo with a git remote over SSH, token, or basic auth — the consensus model, credential encryption, the local-origin gate, and runtime connect sessions.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+knomit is a distributed, multi-machine knowledge base. Each machine writes only
+its own **agent branch** (`agent/<hostname>-<key-fingerprint8>`); **`main` is
+consensus**. Syncing with a git remote ("origin") is how agent branches reach and
+absorb that consensus. Configure it from the web UI (the gear icon in the top
+bar) or with [environment variables](/docs/configuration/#environment-variables).
+
+## The consensus model
+
+- This machine is the **sole writer** of its agent branch.
+- `main` (or whatever the upstream branch is named) is never written directly by
+  the MCP server.
+- Reconciliation is **merge-based**, not replay-based: in steady state the agent
+  branch merges `main` with a local-wins strategy (the local agent's edits win
+  overlapping paths), producing a fast-forward, a no-op, or a single merge commit
+  — O(1) regardless of how many commits `main` absorbed.
+- A zero-diff merge is reported as a **no-op** and never creates a merge commit,
+  which is what makes squash-merged upstreams fast-forward correctly.
+
+<Aside type="caution" title="Never squash-merge an agent branch into main">
+Squashing destroys per-fact authorship — each fact carries its author's signed
+commit. Merge agent branches into `main`; don't squash them.
+</Aside>
+
+## Auth methods
+
+| Method | URL format | Credentials |
+|--------|------------|-------------|
+| **SSH** | `git@github.com:user/repo.git` | knomit's SSH key (`~/.knomit/id_ed25519`); auto-detected for `git@…` / `ssh://` URLs |
+| **Token** (GitHub PAT, etc.) | `https://github.com/user/repo.git` | a PAT, sent as HTTP basic auth with username `x-token`; auto-detected for `https://` URLs with a token present |
+| **Basic** | `https://github.com/user/repo.git` | `user:password`, stored in one field and split on the **first** colon |
+| **None / anonymous** | any public URL | no credentials (public repos) |
+
+The `auth_method` is inferred from the URL and fields when left empty.
+
+<Aside type="note">
+The same Ed25519 key that authenticates SSH remotes also signs commits and names
+the agent branch — one identity, end to end.
+</Aside>
+
+### Credential encryption
+
+Auth tokens are **never stored in plaintext**. They are encrypted with
+AES-256-GCM using a key derived (HKDF-SHA256) from the agent's SSH private key
+(`id_ed25519`), and stored base64-encoded in the repo DB. If the SSH key is
+unreadable at boot, the encryptor is unavailable and setting a remote
+**refuses** to persist any auth token rather than writing it in the clear.
+(Legacy plaintext values are still read, with a warning.)
+
+## The origin record
+
+Set the origin via `knomit.toml` (`[git] origin` / `[remote]`), the
+`KNOMIT_GIT_ORIGIN` + `KNOMIT_REMOTE_*` env vars, or at runtime through the origin
+REST endpoints / the web UI's "Connect Remote" flow. The stored record carries:
+
+| Field | Meaning |
+|-------|---------|
+| `URL` | Git remote URL |
+| `Branch` | Upstream **consensus** branch — default `main`, configurable (e.g. `master`); changeable later via `PATCH /origin/upstream` |
+| `Interval` / `PushInterval` | Pull / push cadence (seconds), run independently |
+| `AuthMethod` | `token` · `basic` · `ssh` · `none` (inferred if empty) |
+| `AuthToken` | Encrypted at rest (see above) |
+| `LastSyncAt` / `LastStatus` / `LastError` (+ push variants) | Last-outcome bookkeeping, surfaced through the gear-icon indicator |
+
+On clone/init, knomit prefers `main` over a remote agent-branch HEAD as the
+consensus upstream, and syncs **both** the agent branch and the upstream.
+
+## Local-path origins (security gate)
+
+Cloning from a local filesystem path is **disabled by default**. To allow it, set
+`local_origin_root` / `KNOMIT_LOCAL_ORIGIN_ROOT` to an absolute directory; a local
+origin is then accepted only if it resolves (symlinks evaluated) to a path
+**inside** that root. Network origins (`https://`, `ssh://`, `git://`,
+`git@host:path`) always pass. Every clone/fetch path is gated — there is no
+trusted exemption.
+
+## Connecting a remote at runtime
+
+The "Connect Remote" flow is session-based and ephemeral (≈10-min idle expiry):
+
+1. `POST /repos/{repo}/origin-sessions` with the URL + credentials → a session.
+2. `GET …/test` checks connectivity; `GET …/preview` shows the merge (counts of
+   local-only / remote-only / shared / dead-ref facts) for "local wins" vs
+   "remote wins".
+3. `POST …/apply` then `…/commit` performs the merge.
+
+Disjoint histories (e.g. reconnecting after a token refresh against a repo with
+no shared history) are reconciled via a cursor replay with one-level dead-ref
+resolution.
+
+## Background reconcile
+
+A per-repo reconcile loop re-reads the remote config fresh every tick, runs an
+initial synchronous reconcile first (so credential errors surface immediately),
+and escalates its log level WARN→ERROR after five consecutive failures. Sync uses
+a compare-and-swap watermark on `last_commit`.
+
+## Serving git over HTTP
+
+Set `KNOMIT_GIT_SERVE` (default **on**, optionally with `KNOMIT_GIT_PORT`) to
+expose a git smart-HTTP endpoint at `/git`, so other knomit instances or git
+clients can clone and fetch directly from this server.
+
+## Seeding a repo from a remote
+
+`KNOMIT_GIT_ORIGIN` seeds the default repo's origin at startup. You can also
+create a repo directly from a remote through the REST API with `mode: "clone"`:
+
+```sh
+curl -N -X POST http://localhost:19278/api/v1/repos \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"work","mode":"clone","origin":"git@github.com:you/kb.git"}'
+```
+
+See the [REST API reference](/docs/api/) for the full repo-management surface.

@@ -1,0 +1,120 @@
+---
+title: CLI reference
+description: Every subcommand and flag for knomit (server & admin), knomit-bridge (MCP proxy & Claude integration), and knomit-desktop.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Three binaries expose a command line: `knomit` (server + admin), `knomit-bridge`
+(MCP proxy + Claude integration), and `knomit-desktop` (the app). All three answer
+`version` (and `--version`) with the same build string.
+
+## `knomit` — server & admin
+
+### `knomit serve` — start the HTTP server
+
+Boots the app, opens all repos, and listens on `{host}:{port}` (or a Unix
+socket). Serves REST `/api/v1`, the MCP endpoint, the web UI, and — if enabled —
+git smart-HTTP. Graceful shutdown on SIGTERM.
+
+| Flag | Type | Default | Meaning |
+|------|------|---------|---------|
+| `--port` | string | `19278` (config) | Listen port |
+| `--host` | string | `localhost` (config) | Listen host |
+| `--log-file` | string | — | File for JSON-structured logs (in addition to stderr) |
+| `--log-max-size` | int | `10` | Max log file size (MB) before rotation |
+| `--log-max-backups` | int | `3` | Rotated log files to keep |
+| `--log-max-age` | int | `7` | Max age (days) for rotated logs |
+
+Set `KNOMIT_PPROF_ADDR` (e.g. `localhost:6060`) to enable a pprof debug server.
+
+### `knomit reset` — wipe a repo and reinitialize
+
+Destroys the repo's database and recreates it fresh.
+
+| Flag | Type | Default | Meaning |
+|------|------|---------|---------|
+| `--name` | string | `trunk` | Repo to reset |
+
+### `knomit verify` — integrity check
+
+Walks the git object chain, SQLite tables, and search index, reporting structural
+issues. Read-only, but takes per-branch locks — stop any writing agent for a
+clean atomic snapshot. Exit codes: `0` clean, `1` issues found, `2` command error.
+
+| Flag | Type | Default | Meaning |
+|------|------|---------|---------|
+| `--repo` | string | `trunk` | Repo to verify |
+| `--all` | bool | `false` | Verify all configured repos |
+| `--deep` | bool | `false` | Parse every fact (slower, stricter) |
+
+### `knomit warm-models` — pre-download the embedding model
+
+Fetches model + tokenizer files into `KNOMIT_HOME/models/<id>/` without booting
+the server or initializing ONNX. Used at Docker build time.
+
+| Flag | Type | Default | Meaning |
+|------|------|---------|---------|
+| `--model` | string | configured embed model | Embedding model id to fetch |
+
+### `knomit version`
+
+Prints the full version string (`<semver>.<sha>`).
+
+## `knomit-bridge` — MCP proxy & Claude integration
+
+Three modes: the default (no subcommand) stdio MCP proxy, the `claude`
+subcommands, and `version`.
+
+### Default mode — stdio ↔ HTTP MCP proxy
+
+Reads JSON-RPC from stdin, POSTs to the server's MCP endpoint, writes responses
+to stdout. This is what an MCP client launches. It discovers the agent branch via
+`GET /api/v1/repos/{repo}`, then targets
+`{base-url}/api/v1/repos/{repo}/branches/{branch}/mcp?profile={profile}` (the
+branch `/` is URL-encoded as `:`). It maintains the `Mcp-Session-Id` header and
+handles SSE responses.
+
+| Flag / arg | Default | Meaning |
+|------------|---------|---------|
+| `--repo` | `trunk` | Repository name |
+| `--source` | (= `--repo`, with a warning) | Source-code slug used in generated `src://` refs |
+| `--profile` | `code` | MCP profile: `code`, `chat`, or `generic` |
+| `[base-url]` (positional) | `http://localhost:19278` | Server base URL |
+| `--log` | platform default (`~/.knomit/bridge.log`) | Bridge log file (4 MB rotation) |
+
+The base URL is auto-discovered from the `server.json` lockfile when present;
+`KNOMIT_BASE_URL` overrides it. `KNOMIT_MCP_DEBUG=1` raises the log level to debug.
+
+### `knomit-bridge claude init` — scaffold Claude Code integration
+
+Renders embedded templates into the current directory. See
+[Claude Code integration](/docs/claude-code/) for the full file list.
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `--repo` | cwd basename | knomit repo name |
+| `--source` | (required) | source slug for `src://` refs |
+| `--profile` | `code` | MCP profile |
+
+### `knomit-bridge claude hook <event>` — run an editor hook
+
+Invoked by Claude Code's hook config; reads stdin, writes guidance to stdout.
+Valid events: `session-start`, `post-edit`, `post-ask`, `pre-compact`.
+
+## `knomit-desktop` — tray/desktop app
+
+No arguments boots the app (picks a free looknomitck port, defaulting to `19278`,
+boots the server in-process, opens the webview, writes `server.json`). On Linux it
+runs headless (no systray); `knomit-desktop window` opens the webview, normally
+triggered from the `.desktop` launcher.
+
+| Arg | Meaning |
+|-----|---------|
+| (none) | Boot the app |
+| `window` (Linux) | Open the webview window |
+| `version` / `--version` | Print version |
+
+Logs go to stderr and a rotating file under the platform logs dir
+(`~/Library/Logs/knomit` on macOS, `$XDG_STATE_HOME/logs/knomit` on Linux). See
+[Desktop app](/docs/desktop/) for how it differs from a bare `knomit serve`.
