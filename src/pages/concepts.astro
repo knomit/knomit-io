@@ -721,6 +721,10 @@ const toc = [
     display: flex;
     flex-direction: column;
   }
+  /* Discovery block: bottom-align the bridge diagram with the text column.
+     :global needed — .bd belongs to the BridgeDiscovery component's scope. */
+  #discovery .concept-block__art { justify-content: flex-end; }
+  #discovery :global(.bd) { margin-block: 0; }
   /* All named diagram cards fill the art column height */
   .concept-block__art > :global(.k-fact),
   .kinds-card,
