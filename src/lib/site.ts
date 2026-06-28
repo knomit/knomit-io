@@ -28,3 +28,6 @@ export const PORT = 19278;
 
 /** Twitter/X handle incl. leading @, or '' if none yet. Tags render only when set. */
 export const SITE_TWITTER = '';
+
+/** Google Search Console verification token, or '' if unverified. */
+export const GSC_VERIFICATION = '';

@@ -128,3 +128,20 @@ test('/security renders and covers signing, encryption, and local-first', async 
     await expect(page.getByText(term).first()).toBeVisible();
   }
 });
+
+test.describe('sitemap', () => {
+  test('sitemap includes new pages and excludes /explore', async ({ page }) => {
+    const idx = await page.request.get('/sitemap-index.xml');
+    expect(idx.status()).toBe(200);
+    // Resolve the child sitemap from the index.
+    const idxBody = await idx.text();
+    const child = idxBody.match(/<loc>([^<]+sitemap[^<]*\.xml)<\/loc>/)?.[1];
+    expect(child, 'no child sitemap in index').toBeTruthy();
+    const childPath = new URL(child!).pathname;
+    const body = await (await page.request.get(childPath)).text();
+    for (const p of ['/faq', '/compare', '/security']) {
+      expect(body, `sitemap missing ${p}`).toContain(p);
+    }
+    expect(body, 'sitemap should exclude /explore').not.toContain('/explore');
+  });
+});
