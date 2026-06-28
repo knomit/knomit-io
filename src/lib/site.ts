@@ -35,4 +35,4 @@ export const GSC_VERIFICATION = '';
 
 /** GA4 Measurement ID (G-XXXXXXXXXX), or '' to disable analytics.
  *  The gtag snippet loads only in production builds AND only when this is set. */
-export const GA_MEASUREMENT_ID = '';
+export const GA_MEASUREMENT_ID = 'G-DBEJQ5N1PX';
