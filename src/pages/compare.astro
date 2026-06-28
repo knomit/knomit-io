@@ -262,7 +262,7 @@ const mapAria =
   .cmp-map {
     position: relative;
     margin-top: 2.5rem;
-    aspect-ratio: 3 / 2;
+    height: clamp(300px, 38vh, 400px);
     border: 1px solid var(--k-hairline);
     border-radius: var(--k-radius-lg);
     background:
@@ -502,7 +502,7 @@ const mapAria =
 
   @media (max-width: 640px) {
     .cmp-map {
-      aspect-ratio: 1 / 1;
+      height: 360px;
     }
     .cmp-node {
       font-size: 0.72rem;
