@@ -125,7 +125,8 @@ export default defineConfig({
         {
           label: 'How it works',
           items: [
-            { label: 'Synthesis & discovery', slug: 'docs/synthesis' },
+            { label: 'Synthesis & hypotheses', slug: 'docs/synthesis' },
+            { label: 'Emergent discovery', slug: 'docs/discovery' },
             { label: 'Embeddings', slug: 'docs/embeddings' },
           ],
         },

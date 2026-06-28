@@ -1,6 +1,6 @@
 ---
-title: Synthesis & discovery
-description: How knomit maintains and grows the corpus — prune/distill/reflect, RAPTOR, hypotheses, the discovery effort dial, and methodology in the loop.
+title: Synthesis & hypotheses
+description: How knomit maintains and grows the corpus — prune/distill/reflect, RAPTOR, hypotheses, and methodology in the loop. Emergent discovery has its own page.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -37,6 +37,11 @@ heuristics) never enter synthesis.
 
 `knomit_review` does **not** generate new hypotheses.
 
+<Aside type="tip">
+Run `review` at higher `effort` to surface emergent **consequences** — see
+[Emergent discovery](/docs/discovery/).
+</Aside>
+
 ### RAPTOR — multi-depth distillation
 
 Distillation is recursive: synthesis facts can themselves be clustered and
@@ -52,36 +57,9 @@ for most). It is a **distinct, user-initiated** operation — never an auto-foll
 to `review`. On a later dedup collision with a confirmed observation, the
 hypothesis is retracted and the observation links to it via `refs`.
 
-## The discovery effort dial
-
-`effort` (`normal` · `medium` · `high`) is a dial on the existing `review` /
-`hypothesize` operations rather than a separate tool — and it doubles as a budget.
-`normal` reproduces pre-discovery behaviour **byte-for-byte** (a hard invariant);
-`medium` / `high` engage the **structural-bridge** engine, which finds
-cross-cluster shared tokens (domain and/or entity, per `KNOMIT_DISCOVERY_BRIDGE`)
-the author never declared, and turns them into proposals:
-
-| Direction | Shape | Routed to | Produces |
-|-----------|-------|-----------|----------|
-| Forward | consequences | `knomit_review` | `synthesis` facts |
-| Backward | keystones | `knomit_hypothesize` | `hypothesis` facts |
-
-Discovery is **model-less to verify** — a strict default-skip prompt plus an
-ingest gate chain, no adversarial model:
-
-- `KNOMIT_DISCOVERY_CONFIDENCE_THRESHOLD` (default 0.5) — minimum confidence to
-  write a proposal.
-- `KNOMIT_DISCOVERY_BLAST_RADIUS_THRESHOLD` (default 1, 0 disables) — a backward
-  keystone proposal's anchor must transitively reach at least this many live
-  dependents (transitive reverse-`DERIVED_FROM` count live at HEAD).
-
-An optional **scope filter** (`domain` / `entities` args) bounds the seed pool;
-empty = whole corpus. Discovery never feeds on its own output.
-
-<Aside type="tip" title="The origin axis">
-Facts record how they were created — `authored`, `distilled`
-(synthesis-pipeline output), or `discovered` (emergent) — queryable via the
-`origin` filter on `knomit_query`.
+<Aside type="tip">
+Run `hypothesize` at higher `effort` to surface emergent **keystones** — unstated
+load-bearing premises ranked by blast radius. See [Emergent discovery](/docs/discovery/).
 </Aside>
 
 ## Methodology in the loop

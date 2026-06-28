@@ -1,0 +1,86 @@
+---
+title: Emergent discovery
+description: How knomit discovers facts nobody wrote down — the origin axis, the structural-bridge engine, the effort dial, blast radius, and the two directions discovery runs.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+import BridgeDiscovery from '../../../components/docs/BridgeDiscovery.astro';
+
+The [synthesis pipeline](/docs/synthesis/) maintains and grows the corpus from
+what is already written. **Discovery** goes one step further: it surfaces facts
+nobody wrote down, by inference — both forward (new consequences) and backward
+(unstated keystones).
+
+## Why retrieval can't find them
+
+The most load-bearing facts are the *least* likely to be written down — precisely
+because they are so foundational that everyone assumes them. Retrieval finds what
+is *similar* to your query, but a keystone underwrites facts that are **dissimilar
+to each other**, so similarity can never surface it. That is not a tuning problem;
+it is structural. knomit reads the **shape** of the graph instead: a tag shared
+across two otherwise-unrelated clusters is the seam where an unwritten premise
+hides.
+
+<BridgeDiscovery />
+
+A **bridge** is two facts that share a domain or entity yet live in *different*
+similarity clusters (distinct Louvain communities over the embedding graph). That
+cross-cluster shared token is the signal similarity missed. Discovery seeds from
+bridges and runs them in two directions.
+
+## The two directions
+
+| Direction | Shape | Operation | Produces |
+|-----------|-------|-----------|----------|
+| Forward | **consequence** — E follows from \{A,B,…\} but no single fact states it | [`knomit_review`](/docs/mcp-tools/#knomit_review--maintain-the-kb) | `synthesis` fact |
+| Backward | **keystone** — unstated premise E that, if false, invalidates \{A,B,…\} | [`knomit_hypothesize`](/docs/mcp-tools/#knomit_hypothesize--generate-predictions) | `hypothesis` fact, ranked by blast radius |
+
+Both write `origin: discovered`. The boundary is deliberate: synthesis emits
+`synthesis` facts, hypothesize emits `hypothesis` facts — discovery only adds a
+direction to each, never a new fact type.
+
+## The effort dial
+
+`effort` (`normal` · `medium` · `high`) is a dial on the existing `review` /
+`hypothesize` operations rather than a separate tool — and it doubles as a budget.
+`normal` is the default and reproduces pre-discovery behaviour **byte-for-byte** (a
+hard invariant); `medium` / `high` engage the structural-bridge engine (single-hop
+bridges at `medium`, multi-hop at `high`). On an **unfiltered** run, `effort` also
+bounds how many bridge candidates are considered, so a `high` run never attempts
+the whole corpus.
+
+An optional **scope filter** (`domain` / `entities` args) bounds the seed pool;
+empty = whole corpus. A scoped run is **exempt from the synthesis watermark**, so
+you can re-target discovery at one area without disturbing unscoped runs.
+Discovery never feeds on its own output — `origin: discovered` facts are excluded
+as bridge seeds.
+
+## Verification is model-less
+
+There is no second adversarial model — the connected MCP agent is the sole
+reasoner. Quality is enforced by a strict default-skip prompt plus an ingest gate
+chain:
+
+- `KNOMIT_DISCOVERY_CONFIDENCE_THRESHOLD` (default `0.5`) — minimum confidence to
+  write a proposal.
+- `KNOMIT_DISCOVERY_BLAST_RADIUS_THRESHOLD` (default `1`, `0` disables) — a backward
+  keystone's anchor must transitively reach at least this many live dependents
+  (transitive reverse-`DERIVED_FROM` count, live at HEAD).
+- Embedding **dedup** against the corpus rejects a proposal already stated
+  elsewhere.
+
+Bridge behaviour is per-repo configurable via `KNOMIT_DISCOVERY_BRIDGE`
+(`domain` · `entity` · `both`, default `both`).
+
+## The origin axis
+
+Discovery is one value of a fact's **`origin`** — the record of how it came to
+exist, orthogonal to `type` and `kind`:
+
+<Aside type="tip" title="origin: authored · distilled · discovered">
+`authored` = written or asserted via `knomit_learn`; `distilled` =
+synthesis-pipeline output; `discovered` = emergent, surfaced here. A discovered
+fact is still a normal `synthesis` or `hypothesis` — `origin` only records that
+knomit *inferred* it. Query the emergent set with `origin: discovered` on
+`knomit_query`. See also [Concepts → Origin](/docs/concepts/#origin).
+</Aside>
