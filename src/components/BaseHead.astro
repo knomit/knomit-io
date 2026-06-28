@@ -4,6 +4,7 @@ import '@fontsource/jetbrains-mono/400.css';
 import '@fontsource/jetbrains-mono/500.css';
 import '../styles/theme.css';
 import JsonLd from './JsonLd.astro';
+import Analytics from './Analytics.astro';
 import { organizationSchema, websiteSchema, softwareApplicationSchema } from '../lib/schema';
 import { SITE_TWITTER, GSC_VERIFICATION } from '../lib/site';
 
@@ -64,3 +65,4 @@ const site = Astro.site!;
 <JsonLd schema={websiteSchema(site)} />
 <JsonLd schema={softwareApplicationSchema(site)} />
 {jsonLd && <JsonLd schema={jsonLd} />}
+<Analytics />

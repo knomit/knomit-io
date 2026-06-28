@@ -27,7 +27,12 @@ export const DEMO_LIVE = false;
 export const PORT = 19278;
 
 /** Twitter/X handle incl. leading @, or '' if none yet. Tags render only when set. */
-export const SITE_TWITTER = '';
+export const SITE_TWITTER = '@knomit_io';
 
-/** Google Search Console verification token, or '' if unverified. */
+/** Google Search Console verification token, or '' if unverified.
+ *  Not needed if the property is verified via the Google Analytics tag below. */
 export const GSC_VERIFICATION = '';
+
+/** GA4 Measurement ID (G-XXXXXXXXXX), or '' to disable analytics.
+ *  The gtag snippet loads only in production builds AND only when this is set. */
+export const GA_MEASUREMENT_ID = '';
