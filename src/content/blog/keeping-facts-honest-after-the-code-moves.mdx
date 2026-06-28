@@ -1,0 +1,200 @@
+---
+title: "When the code moves: a knowledge base that introspects"
+description: "You shipped the feature and merged the PR — and somewhere in your knowledge base, a dozen facts just quietly went out of date. The fix isn't to write more carefully; it's to make the corpus introspect on itself. Here is a real, interactive pass where Claude Code swept knomit's own knowledge base fact-by-fact, checked every claim against the source instead of trusting the corpus, and corrected the drift — recording each correction instead of erasing it. This is the learning loop closing."
+pubDate: 2026-06-28
+author: The knomit team
+tags: [dogfooding, knowledge, provenance, maintenance, agents]
+draft: false
+---
+
+import FactCard from '../../components/FactCard.astro';
+
+Writing a fact down is the easy half. The hard half is the one nobody budgets
+for: keeping it true after the code underneath it moves.
+
+A knowledge base doesn't fail loudly. It drifts. You ship a feature, merge the
+PR, delete a subsystem, rename a function, recalibrate a default — and every
+fact that described the old shape is now quietly wrong. Nothing errors. The
+facts still read as confident, signed, provenanced assertions. They've just
+stopped being true, and there's no red squiggle to tell you which ones.
+
+We just finished a large piece of work in knomit — an emergent-fact-discovery
+feature that reshaped the synthesis pipeline. The kind of change that moves a
+lot of code. So once it merged, we did the thing most teams never get around
+to: we sat down with Claude Code and **swept the knowledge base**, fact by fact,
+to find out what had started lying.
+
+This post is about that pass — how an agent audits knowledge it can't take on
+faith, and why, when a fact turns out to be wrong, the right move is to record
+the correction rather than erase the mistake. It's the learning loop closing:
+the same tools an agent uses to *act* on a codebase, turned inward to let the
+corpus **introspect** on what it has claimed and check whether it's still so.
+
+> If you haven't read it yet, the companion piece —
+> [Dogfooding: how knomit holds its own shape](/blog/dogfooding-how-knomit-holds-its-shape) —
+> is about how facts get *created and trusted*. This one is about the other
+> half: how they're *kept honest* afterward.
+
+## A sweep, not a rewrite
+
+The instruction was deliberately narrow:
+
+> "We have quite a few facts in the knowledge base, some of them may not be
+> accurate anymore. Do a sweep and see what needs to be retracted or updated.
+> Process them in batches, reverse-chronological, and show me what you're about
+> to do — I want this interactive so I can guide you."
+
+Two choices in there matter. **Reverse-chronological**, because the freshest
+work produces the freshest drift — facts written days ago describing mechanisms
+that were already superseded by the time the ink dried. And **interactive**,
+because nothing touches the corpus unsupervised. The agent reads, reasons, and
+proposes; a human approves. The agent is a power tool for the legwork, not an
+autonomous editor rewriting your knowledge behind your back.
+
+What follows is what a real sweep turns up.
+
+## Recency is not correctness
+
+The first batch was the 25 newest facts — all the emergent-discovery work,
+committed within roughly the last day. And the very newest one contradicted
+three slightly older siblings.
+
+The new fact, `bridge-seeding`, claimed candidates were ranked by a formula:
+`strength = (1/token-freq) × distinct-communities × member-count`. Three facts
+written a day earlier said that exact formula was a *retired bug*.
+
+The naive resolution is to trust the newest fact — it's the most recent, surely
+it's the most correct. The agent refused to:
+
+> "`cf455b8f` was edited today, but the recent edits were about the clustering
+> source — the `strength` line looks carried over from the original. Meanwhile
+> the bridge-quality facts say that formula is the superseded bug. I need to
+> check what `bridgeSeeds` actually ranks by **at HEAD** to know which fact is
+> right."
+
+It went to the source — not to the other facts, not to its own sense of which
+note looked newer — and read the code:
+
+> "Confirmed — this is a real drift. At HEAD, `enumerateBridgeCandidates`
+> explicitly *does NOT compute strength*; ranking is done by `bridgeQ` (composite
+> Q) with `reshapeCohesiveSubset`, and separation is a **hard gate (sep ≥ 2),
+> not a reward**. The `strength = (1/freq)×communities×members` formula is the
+> retired, breadth-rewarding bug. The fact's core thesis — model-less
+> cross-cluster shared-token detector, clustering source, idempotency — is all
+> still correct. Only the ranking sentence is wrong. So this is an **update**,
+> not a retract."
+
+That is the whole methodology in one move. The corpus does not get to vouch for
+itself, and *new* does not mean *right*. The source code is the only arbiter,
+and the agent's job is to go check it. The stale sentence —
+
+> ~~"bridgeSeeds ranks candidates by strength = (1/token-freq) ×
+> distinct-communities × member-count"~~
+
+— was replaced with the mechanism that actually ships:
+
+<FactCard
+  path="kb/decisions/architecture/synthesize/bridge-seeding/cf455b8f.md"
+  frontmatter={{
+    type: 'observation',
+    confidence: 0.9,
+    domain: ['synthesize', 'discovery', 'clustering'],
+    entities: ['enumerateBridgeCandidates', 'buildScoredBridges', 'bridgeQ', 'reshapeCohesiveSubset'],
+    refs: ['knomit:/internal/synthesize/bridge.go@e934379'],
+  }}
+  body={'Candidates are enumerated by `enumerateBridgeCandidates` (group non-discovered seeds by shared token; keep tokens whose ≥2 members span ≥2 communities), then ranked by a composite quality score Q (`bridgeQ`), with Louvain **separation a HARD GATE (sep≥2), never a ranking reward**. The old `strength = (1/freq)×communities×members` formula was retired — it rewarded breadth, producing grab-bags. The engine is MODEL-LESS: it only ranks and bounds; the agent is the sole reasoner.'}
+  commit="50d469a"
+  signer="agent/dev-7c9"
+  evolution={null}
+/>
+
+Core thesis intact, one drifted sentence corrected. That distinction —
+*is the fact still fundamentally true?* — is the hinge the entire sweep turns on.
+
+## A field guide to decay
+
+Across the full pass, 20 facts got touched: seven updated, six retracted, the
+rest verified clean. They sort into a small, reusable taxonomy of how knowledge
+rots — and the rule for what to do about each.
+
+**Drift — the thesis holds, a detail moved.** → *Update.* The bridge-seeding
+ranking sentence above. The fact is still the right fact; one claim inside it
+fell out of sync with the code.
+
+**Recalibration — a number changed.** → *Update.* The quietest rot of all.
+Louvain's default resolution moved from γ=2.0 to γ=4.0 when the graph got
+denser. The skill count went 9 → 10. The migration set went 000006 → 000013.
+The epistemic type count went 7 → 8. Each one is a single stale integer that no
+human would ever notice — and that an agent, trusting the fact, would happily
+build on.
+
+**Reversal — the decision itself was undone.** → *Retract.* A decision fact
+documenting bridge lock-file lazy-recovery, retracted because the mechanism was
+reversed by a later PR and its `proxy.go` deleted. The decision outlived the
+thing it decided.
+
+**Deletion — the subject no longer exists.** → *Retract.* Two facts described
+`knomit-tray`, a process-supervisor binary under `tools/tray/`. That entire
+subsystem was deleted and replaced by knomit-desktop. The facts were perfectly
+accurate descriptions of code that is no longer in the tree:
+
+> `kb/architecture/tray/supervisor-and-lockfile-discovery/f9e56e6f.md` —
+> *"knomit-tray is pure supervisor + lockfile discovery; CGO confined to
+> tools/tray/"* — **retracted**: tools/tray deleted, replaced by knomit-desktop.
+
+**Duplication — a better fact already says it.** → *Retract.* An
+invariant-suite hard-rules fact, superseded by a cleaner one covering the same
+ground. Two facts asserting the same thing is one fact too many.
+
+The decision rule underneath all five is a single question: **does the subject
+still exist, and is the core claim still true?** Yes-but-a-detail-moved is an
+update. Subject gone, decision reversed, or already-said-better is a retract.
+
+## The corrections are still there
+
+Here is the part that makes this more than tidying.
+
+When a fact is retracted, it is not erased. It becomes a tombstone — the fact,
+plus the reason it died, stamped and committed. When a fact is updated, the old
+version doesn't vanish; the edit is a named moment in the fact's history. Every
+correction in this sweep carried one: *"Replace retired strength formula with
+cohesion-gated composite-Q ranking."* *"Update Louvain default resolution 2.0 →
+4.0 (recalibrated for new graph)."* *"Retract knomit-tray supervisor fact
+(tools/tray deleted, replaced by knomit-desktop)."*
+
+So the knowledge base doesn't just hold what's true now. It holds **the history
+of how it changed its mind.** knomit-tray is gone from the active corpus, but
+the record that it once existed, what it did, and why it was removed is still
+legible in git. You can watch a whole subsystem rise and fall through the facts
+that described it. You can see the exact commit where a ranking formula was
+recognized as a bug and replaced. The evolution is part of the knowledge.
+
+This is precisely the thing a flat instructions file or a private "agent
+memory" can never give you. A file that silently overwrites itself keeps no
+record of having been wrong — when it drifts, the old truth and the
+correction are indistinguishable, because one quietly replaced the other.
+knowledge that records its own corrections lets you ask not just *what do we
+believe* but *when did we start believing it, and what did we believe before*.
+A retraction here is an event with a reason, not a `git rm`.
+
+## A loop that closes inward
+
+The whole sweep was a single interactive pass — a half-hour of an agent reading
+facts, checking each against HEAD, and proposing updates and retractions for a
+human to wave through. That's only possible because the corpus is the right
+shape for it: every fact is markdown in git, anchored to the source it
+describes, so "is this still true?" is a question you can actually answer by
+following the ref and reading the code.
+
+This is the other half of the loop knomit is built around. The same MCP tools
+and skills that let an agent *act* — recall before it works, learn as it goes —
+let it turn around and **introspect** on what it has already written down. The
+forward pass adds knowledge; the introspective pass keeps it honest. Maintenance
+stops being the chore you never do and becomes something you can run the way
+you'd run a linter — except the result isn't a tidier file, it's a body of
+knowledge that has been re-checked against reality and that remembers every
+place it was corrected. Every pass leaves the knowledge base sharper than it
+found it.
+
+See the facts for yourself in the [live demo](/explore), or read the code on
+[GitHub](https://github.com/knomit/knomit).

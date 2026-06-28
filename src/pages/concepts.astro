@@ -5,6 +5,7 @@ import BranchGraph from '../components/BranchGraph.astro';
 import Icon from '../components/Icon.astro';
 import { DEMO_LIVE } from '../lib/site';
 import '../styles/prose.css';
+import BridgeDiscovery from '../components/docs/BridgeDiscovery.astro';
 
 const toc = [
   { id: 'facts', label: 'Facts as markdown' },
@@ -17,6 +18,7 @@ const toc = [
   { id: 'temporal', label: 'The temporal graph' },
   { id: 'refs', label: 'The knomit: URI scheme' },
   { id: 'synthesis', label: 'Synthesis & hypotheses' },
+  { id: 'discovery', label: 'Origin & discovery' },
   { id: 'mcp', label: 'The MCP loop' },
 ];
 ---
@@ -573,6 +575,34 @@ const toc = [
       </div>
     </section>
 
+    <!-- Origin & discovery -->
+    <section id="discovery" class="concept-block">
+      <div class="concept-block__text k-prose-content">
+        <h2>Origin &amp; discovery</h2>
+        <p>
+          Every fact records <strong>how it came to exist</strong> — its
+          <code>origin</code>: <code>authored</code> (written or asserted),
+          <code>distilled</code> (synthesized from sources), or
+          <code>discovered</code> (emergent). It is orthogonal to type and kind:
+          a discovered fact is still a normal <code>synthesis</code> or
+          <code>hypothesis</code> — <code>origin</code> only records that knomit
+          <em>inferred</em> it.
+        </p>
+        <p>
+          Most systems <strong>retrieve</strong> what is similar to a query.
+          knomit also <strong>discovers</strong>: an effort dial seeds from
+          <em>bridges</em> — facts sharing a domain or entity yet sitting in
+          different similarity clusters — and proposes the keystone those bridges
+          imply. Load-bearing facts hide in exactly the cross-cluster links that
+          similarity-only retrieval is structurally blind to.
+          <a href="/docs/discovery/">How discovery works &rarr;</a>
+        </p>
+      </div>
+      <div class="concept-block__art">
+        <BridgeDiscovery compact={true} />
+      </div>
+    </section>
+
     <!-- MCP loop -->
     <section id="mcp" class="concept-block">
       <div class="concept-block__text k-prose-content">
@@ -691,6 +721,10 @@ const toc = [
     display: flex;
     flex-direction: column;
   }
+  /* Discovery block: bottom-align the bridge diagram with the text column.
+     :global needed — .bd belongs to the BridgeDiscovery component's scope. */
+  #discovery .concept-block__art { justify-content: flex-end; }
+  #discovery :global(.bd) { margin-block: 0; }
   /* All named diagram cards fill the art column height */
   .concept-block__art > :global(.k-fact),
   .kinds-card,

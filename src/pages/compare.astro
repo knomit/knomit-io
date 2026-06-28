@@ -4,121 +4,207 @@ import SectionHeading from '../components/SectionHeading.astro';
 import Icon from '../components/Icon.astro';
 import { GITHUB_URL, DEMO_LIVE } from '../lib/site';
 
-const cols = ['knomit', 'RAG / vector DB', 'Flat memory files', 'Agent-memory SaaS'];
-
-// Each row: [dimension, knomit, rag, flat, saas]
-const rows: string[][] = [
-  ['Unit of knowledge', 'Atomic typed facts', 'Document chunks', 'Free-form notes', 'Key/value or summaries'],
-  ['Deduplication', 'Subsumes into one fact + refs', 'Stores duplicate chunks', 'Manual', 'Varies / opaque'],
-  ['Provenance', 'Ed25519-signed git commits', 'None', 'None', 'Usually none'],
-  ['Confidence', 'First-class, evolves over time', 'None', 'None', 'Rare'],
-  ['Time travel', 'Read the graph as-of any commit', 'No', 'No', 'No'],
-  ['Consensus across peers', 'git branches → review → main', 'N/A', 'Copy/paste', 'Vendor-controlled'],
-  ['Storage', 'Plain git repo, host anywhere', 'Vendor vector store', 'Local files', 'Vendor cloud'],
-  ['Offline', 'Yes (local embeddings)', 'Depends', 'Yes', 'No'],
-  ['Open source', 'Yes', 'Varies', 'Yes', 'Usually no'],
-  ['Agent interface', 'MCP-native (recall + learn)', 'Retrieval only', 'None', 'SDK / API'],
+// The field doesn't divide cleanly by product — it divides by *operational
+// profile*. Naming tools dates fast and reads as combative; clustering by how a
+// tool actually behaves is durable, honest, and — fittingly — exactly what
+// knomit does to knowledge. (Internal decoder: local/comp/README.md.)
+const clusters = [
+  {
+    icon: 'search',
+    name: 'Raw piles & DIY',
+    profile:
+      'You wire up a vector store or a folder of notes yourself. Text goes in; similar text comes back.',
+    strong:
+      'Dead simple, no new dependency — fine for one-shot retrieval over a static set of documents.',
+    exposed:
+      'Nothing dedups or structures itself. Duplicates pile up, knowledge drifts, and every chunk is trusted equally with no idea where it came from.',
+  },
+  {
+    icon: 'api',
+    name: 'Recall layers',
+    profile:
+      'Drop in a memory API. It captures the conversation automatically and replays the relevant bits next time.',
+    strong:
+      'Low-effort continuity for a single assistant, with broad framework integrations.',
+    exposed:
+      'Memories are flat free text with no link back to their source, siloed per agent, and impossible to review or version like code.',
+  },
+  {
+    icon: 'ontology',
+    name: 'Graph engines',
+    profile:
+      'Run a graph database, ingest data into entities and relationships, and reason across multiple hops.',
+    strong:
+      'Structured, multi-hop reasoning — and, at best, genuine temporal awareness of when a fact held.',
+    exposed:
+      'Heavy infrastructure bound to a database you can’t diff in a pull request, with unsigned facts and updates that sometimes overwrite history.',
+  },
+  {
+    icon: 'mcp',
+    name: 'Agent runtimes',
+    profile:
+      'Adopt a whole stateful-agent platform; the agent edits its own memory as it runs.',
+    strong:
+      'Self-editing memory and stateful agents out of the box, with strong tooling around the runtime.',
+    exposed:
+      'You inherit the entire runtime, each agent keeps its own private silo, and the change history — where it exists — is unsigned.',
+  },
 ];
 
-// The differentiators worth expanding past a table cell — each maps to a row
-// above but says why it matters.
-const reasons = [
+// Plotted on two axes: X = stores text → refines knowledge, Y = siloed/opaque →
+// shared/auditable. knomit sits alone in the top-right.
+const mapNodes = [
+  { label: 'Raw piles', x: 13, y: 13 },
+  { label: 'Recall layers', x: 33, y: 25 },
+  { label: 'Agent runtimes', x: 48, y: 43 },
+  { label: 'Graph engines', x: 60, y: 55 },
+  { label: 'knomit', x: 82, y: 85, knomit: true },
+];
+
+const refinery = [
+  {
+    icon: 'cluster',
+    title: 'It distills, not just stores',
+    body: 'Similar inputs subsume into one fact; synthesis derives higher-order structure. Every other profile retrieves what is similar — knomit also discovers, surfacing emergent keystones across the cross-cluster bridges similarity is blind to. The corpus sharpens as it grows instead of bloating.',
+  },
+  {
+    icon: 'discovery',
+    title: 'It forms hypotheses',
+    body: 'Synthesis extends into falsifiable predictions with settlement criteria. When evidence arrives, a hypothesis becomes an observation. That is a research capability — reasoning forward — not a recall one.',
+  },
   {
     icon: 'provenance',
-    title: 'Provenance you can verify',
-    body: 'Every fact is an Ed25519-signed git commit. You can trace where a claim came from, who asserted it, and how it changed — instead of retrieving a chunk of text and trusting it blind.',
+    title: 'Every change is signed — and reversible',
+    body: 'Each fact is an Ed25519-signed git commit. Because the substrate is git, knomit prunes and rewrites itself safely: nothing is ever lost, and every refinement is a commit you can review, diff, and revert.',
   },
   {
-    icon: 'dedup',
-    title: 'One fact, not ten copies',
-    body: 'Similar inputs subsume into a single fact with many references. A vector store keeps every near-duplicate chunk and lets them drift; knomit converges them, so the corpus sharpens as it grows.',
-  },
-  {
-    icon: 'evolve',
-    title: 'Confidence that moves',
-    body: 'Facts carry a degree of belief that rises and falls as evidence accrues. You weigh knowledge by confidence rather than treating every retrieved passage as equally, statically true.',
-  },
-  {
-    icon: 'temporal',
-    title: 'Read the graph as-of any moment',
-    body: 'The whole graph is versioned by commit, so you can replay exactly what was known when a decision was made — impossible when your store only holds the current text.',
+    icon: 'consensus',
+    title: 'Knowledge converges across peers',
+    body: 'Agents and humans propose facts on branches; review merges them to main. One reviewed source of truth, shared instead of siloed — the gap every other cluster leaves open.',
   },
 ];
 
-const fit = [
-  'Knowledge has to be shared across agents and humans, not siloed inside one tool.',
-  'You must explain a claim — provenance, confidence, and an audit trail matter.',
-  'You want it git-native: reviewable like code, hostable anywhere, no vendor lock-in.',
-  'Agents should both recall and learn in the loop, over MCP.',
+const reach = [
+  'Knowledge has to be shared and trusted across many agents and humans, not siloed inside one tool.',
+  'You need to explain a claim — where it came from, how confident it is, how it changed.',
+  'You want it reviewable like code and hostable anywhere: it’s just a git repo.',
+  'You want the store to improve itself — dedup, synthesis, hypotheses — not merely hold text.',
 ];
 
-const notFit = [
-  'You only need raw passage retrieval for a single app, and that’s the whole job.',
-  'There’s no need to dedup, explain, classify, or version what you store.',
-  'One-shot RAG over a static document set already answers your questions.',
+const outgrow = [
+  'You only need conversational recall for a single assistant, and that’s the whole job.',
+  'A one-shot retrieval over a static document set already answers your questions.',
+  'There’s nothing to dedup, explain, version, or share — raw similarity search is enough.',
 ];
+
+const mapAria =
+  'Positioning map. Horizontal axis runs from storing text to refining knowledge; vertical axis from siloed and opaque to shared and auditable. Raw piles and DIY sit in the lower-left, recall layers lower-center, agent runtimes in the middle, graph engines mid-right, and knomit alone in the upper-right — the only profile that both refines and audits.';
 ---
 
 <BaseLayout
-  title="knomit vs RAG, vector DBs & agent memory — comparison"
-  description="How knomit compares to RAG, vector databases, flat memory files, and agent-memory SaaS across dedup, provenance, confidence, consensus, and offline use."
+  title="knomit vs the AI-memory landscape — comparison"
+  description="How knomit compares to the four operational profiles of AI memory — raw stores, recall layers, graph engines, and agent runtimes — across provenance, synthesis, confidence, consensus, and time-travel."
 >
-  <!-- Table -->
+  <!-- Reframe + map -->
   <section class="k-section">
     <div class="k-container">
       <SectionHeading
         eyebrow="Comparison"
-        title="knomit vs the alternatives."
-        lead="Most tools store and retrieve text. knomit stores typed facts with confidence, provenance, and consensus. Here is the difference, dimension by dimension."
+        title="The landscape, by operational profile."
+        lead="The tools agents use for memory cluster into four profiles. Each is good at something. None of them refine what they store — or let you audit how it changed. That gap is where knomit lives."
       />
-      <div class="cmp-wrap">
-        <table class="cmp">
-          <thead>
-            <tr>
-              <th scope="col">Dimension</th>
-              {cols.map((c) => <th scope="col">{c}</th>)}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr>
-                <th scope="row">{r[0]}</th>
-                {r.slice(1).map((cell, i) => (
-                  <td class={i === 0 ? 'cmp__knomit' : ''}>{cell}</td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
+
+      <div
+        class="cmp-map k-reveal"
+        role="img"
+        aria-label={mapAria}
+      >
+        <span class="cmp-map__frontier" aria-hidden="true"></span>
+        <span class="cmp-map__axis cmp-map__axis--x" aria-hidden="true">
+          stores text&nbsp; →&nbsp; refines knowledge
+        </span>
+        <span class="cmp-map__axis cmp-map__axis--y" aria-hidden="true">
+          siloed / opaque&nbsp; →&nbsp; shared / auditable
+        </span>
+        {mapNodes.map((n) => (
+          <span
+            class={`cmp-node${n.knomit ? ' cmp-node--knomit' : ''}`}
+            style={`left:${n.x}%; bottom:${n.y}%`}
+          >
+            {n.label}
+          </span>
+        ))}
       </div>
-      <p class="cmp__note k-text-2">
-        knomit is not a replacement for every store — semantic search still
-        runs under the hood. The difference is <em>what</em> it indexes: concise,
-        classified facts you can explain and trust, not raw chunks.
+      <p class="cmp-note k-text-2">
+        Everyone else accumulates. knomit refines — and signs its work.
       </p>
     </div>
   </section>
 
-  <!-- Why it matters -->
-  <section class="k-section cmp-why">
+  <!-- The four clusters -->
+  <section class="k-section cmp-clusters">
     <div class="k-container">
       <SectionHeading
-        eyebrow="Why the difference matters"
-        title="Four things a vector store can’t do."
-        lead="The table rows that change how you work, expanded."
+        eyebrow="The four profiles"
+        title="What each cluster is good at — and where it leaves you exposed."
+        lead="Operational profiles describe what a system can do and how it behaves at runtime — capabilities, not brand names — so they stay stable even as tools churn. You’ll recognise where your stack sits."
         align="center"
       />
       <div class="cmp-grid">
-        {reasons.map((r) => (
+        {clusters.map((c) => (
           <div class="cmp-card k-reveal">
             <span class="cmp-card__icon" aria-hidden="true">
-              <Icon name={r.icon as any} size={20} />
+              <Icon name={c.icon as any} size={20} />
             </span>
-            <h2 class="cmp-card__title">{r.title}</h2>
-            <p class="cmp-card__body k-text-2">{r.body}</p>
+            <h3 class="cmp-card__title">{c.name}</h3>
+            <p class="cmp-card__profile k-text-2">{c.profile}</p>
+            <div class="cmp-card__row">
+              <span class="cmp-card__k cmp-card__k--yes">Strong</span>
+              <p>{c.strong}</p>
+            </div>
+            <div class="cmp-card__row">
+              <span class="cmp-card__k cmp-card__k--no">Exposed</span>
+              <p>{c.exposed}</p>
+            </div>
           </div>
         ))}
       </div>
+    </div>
+  </section>
+
+  <!-- knomit: the refinery -->
+  <section class="k-section cmp-refinery">
+    <div class="k-container">
+      <SectionHeading
+        eyebrow="Where knomit sits"
+        title="A fifth profile: the knowledge refinery."
+        lead="knomit isn’t a better point on the memory axis — it’s on a different one. It refines the knowledge it holds, and signs every change so you can trust what it kept and what it dropped."
+        align="center"
+      />
+      <div class="cmp-grid">
+        {refinery.map((r) => (
+          <div class="cmp-card cmp-card--brand k-reveal">
+            <span class="cmp-card__icon" aria-hidden="true">
+              <Icon name={r.icon as any} size={20} />
+            </span>
+            <h3 class="cmp-card__title">{r.title}</h3>
+            <p class="cmp-card__profile k-text-2">{r.body}</p>
+          </div>
+        ))}
+      </div>
+
+      <p class="cmp-callout k-reveal">
+        Provenance, time-travel, and synthesis aren’t three features. They’re
+        one: <strong>a knowledge base that improves itself — and lets you audit
+        every improvement.</strong>
+      </p>
+
+      <p class="cmp-underneath k-text-2">
+        Underneath it all: typed atomic facts, not chunks; a customisable
+        epistemic ontology you author in plain markdown; confidence that rises
+        and falls with the evidence; and external references that keep
+        provenance intact beyond the corpus.
+      </p>
     </div>
   </section>
 
@@ -128,20 +214,22 @@ const notFit = [
       <SectionHeading
         eyebrow="Is it the right tool?"
         title="When to reach for knomit — and when not to."
-        lead="We’d rather you pick the right tool than the loudest one."
+        lead="We’d rather you pick the right cluster than the loudest one."
         align="center"
       />
       <div class="cmp-fit">
         <div class="cmp-fit__col cmp-fit__col--yes k-reveal">
-          <h3 class="cmp-fit__head"><Icon name="provenance" size={17} /> Reach for knomit when…</h3>
+          <h3 class="cmp-fit__head">
+            <Icon name="provenance" size={17} /> Reach for knomit when…
+          </h3>
           <ul class="cmp-fit__list">
-            {fit.map((f) => <li>{f}</li>)}
+            {reach.map((f) => <li>{f}</li>)}
           </ul>
         </div>
         <div class="cmp-fit__col cmp-fit__col--no k-reveal">
-          <h3 class="cmp-fit__head">A plain vector store is fine when…</h3>
+          <h3 class="cmp-fit__head">A simpler cluster is fine when…</h3>
           <ul class="cmp-fit__list">
-            {notFit.map((f) => <li>{f}</li>)}
+            {outgrow.map((f) => <li>{f}</li>)}
           </ul>
         </div>
       </div>
@@ -151,34 +239,109 @@ const notFit = [
   <!-- CTA -->
   <section class="k-section">
     <div class="k-container cmp-cta">
-      <h2>See the difference yourself.</h2>
+      <h2>See knowledge compound, not drift.</h2>
       <p class="k-lead cmp-cta__lead">
         It’s open source and it’s just git. Clone it, point your agents at it,
-        and watch knowledge compound instead of drift.
+        and watch the corpus sharpen itself.
       </p>
       <div class="cmp-cta__actions">
         <a href={GITHUB_URL} class="k-btn" rel="noopener">View on GitHub</a>
-        <a href="/docs/quick-start" class="k-btn k-btn--ghost">Quick start <Icon name="arrow" size={16} /></a>
-        {DEMO_LIVE && <a href="/explore" class="k-btn k-btn--ghost">See it live</a>}
+        <a href="/docs/quick-start" class="k-btn k-btn--ghost">
+          Quick start <Icon name="arrow" size={16} />
+        </a>
+        {DEMO_LIVE && (
+          <a href="/explore" class="k-btn k-btn--ghost">See it live</a>
+        )}
       </div>
     </div>
   </section>
 </BaseLayout>
 
 <style>
-  /* Table */
-  .cmp-wrap { overflow-x: auto; margin-top: 2rem; border: 1px solid var(--k-hairline); border-radius: var(--k-radius); }
-  .cmp { width: 100%; border-collapse: collapse; font-size: 0.92rem; min-width: 720px; }
-  .cmp th, .cmp td { text-align: left; padding: 0.7rem 0.9rem; border-bottom: 1px solid var(--k-hairline-soft); vertical-align: top; }
-  .cmp thead th { font-weight: 600; background: var(--k-surface-1); position: sticky; top: 0; }
-  .cmp th[scope='row'] { font-weight: 600; color: var(--k-text); white-space: nowrap; }
-  .cmp__knomit { color: var(--k-brand); font-weight: 500; }
-  .cmp__note { max-width: 60ch; margin-top: 1.5rem; }
+  /* ── Positioning map ─────────────────────────────────────────────── */
+  .cmp-map {
+    position: relative;
+    margin-top: 2.5rem;
+    height: clamp(300px, 38vh, 400px);
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius-lg);
+    background:
+      radial-gradient(115% 115% at 100% 0%, var(--k-brand-glow), transparent 46%),
+      linear-gradient(0deg, var(--k-surface-1), var(--k-surface-1));
+    overflow: hidden;
+  }
+  /* faint frontier the others never reach */
+  .cmp-map__frontier {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(to right, var(--k-hairline-soft) 1px, transparent 1px),
+      linear-gradient(to top, var(--k-hairline-soft) 1px, transparent 1px);
+    background-size: 25% 25%;
+    opacity: 0.5;
+    pointer-events: none;
+  }
+  .cmp-map__axis {
+    position: absolute;
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--k-text-muted);
+    white-space: nowrap;
+  }
+  .cmp-map__axis--x {
+    left: 50%;
+    bottom: 0.7rem;
+    transform: translateX(-50%);
+  }
+  .cmp-map__axis--y {
+    left: 0.7rem;
+    top: 50%;
+    transform: translateY(-50%) rotate(180deg);
+    writing-mode: vertical-rl;
+  }
+  .cmp-node {
+    position: absolute;
+    transform: translate(-50%, 50%);
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.82rem;
+    color: var(--k-text-2);
+    white-space: nowrap;
+  }
+  .cmp-node::before {
+    content: '';
+    flex: none;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: var(--k-text-muted);
+  }
+  .cmp-node--knomit {
+    color: var(--k-brand);
+    font-weight: 600;
+    font-size: 0.98rem;
+  }
+  .cmp-node--knomit::before {
+    width: 13px;
+    height: 13px;
+    background: var(--k-brand);
+    box-shadow: 0 0 0 5px var(--k-brand-glow);
+  }
+  .cmp-note {
+    margin-top: 1.25rem;
+    text-align: center;
+    font-size: 0.95rem;
+  }
 
-  /* Why it matters */
-  .cmp-why { background: var(--k-surface-1); border-block: 1px solid var(--k-hairline-soft); }
+  /* ── Cluster cards ───────────────────────────────────────────────── */
+  .cmp-clusters {
+    background: var(--k-surface-1);
+    border-block: 1px solid var(--k-hairline-soft);
+  }
   .cmp-grid {
-    margin-top: 2rem;
+    margin-top: 2.5rem;
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
     gap: 1.25rem;
@@ -186,8 +349,14 @@ const notFit = [
   .cmp-card {
     border: 1px solid var(--k-hairline);
     border-radius: var(--k-radius);
-    padding: 1.35rem 1.4rem;
+    padding: 1.4rem;
     background: var(--k-bg);
+  }
+  .cmp-card--brand {
+    border-color: rgba(119, 204, 153, 0.3);
+    background:
+      radial-gradient(130% 120% at 0% 0%, var(--k-brand-glow), transparent 60%),
+      var(--k-bg);
   }
   .cmp-card__icon {
     display: inline-flex;
@@ -201,12 +370,63 @@ const notFit = [
     border: 1px solid rgba(119, 204, 153, 0.25);
     margin-bottom: 0.9rem;
   }
-  .cmp-card__title { font-size: 1.05rem; margin-bottom: 0.5rem; }
-  .cmp-card__body { line-height: 1.6; font-size: 0.94rem; }
+  .cmp-card__title {
+    font-size: 1.05rem;
+    margin-bottom: 0.5rem;
+  }
+  .cmp-card__profile {
+    line-height: 1.6;
+    font-size: 0.94rem;
+  }
+  .cmp-card__row {
+    display: flex;
+    gap: 0.7rem;
+    margin-top: 1rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+  .cmp-card__row p {
+    color: var(--k-text-2);
+  }
+  .cmp-card__k {
+    flex: none;
+    width: 4.4rem;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    padding-top: 0.1rem;
+  }
+  .cmp-card__k--yes {
+    color: var(--k-brand);
+  }
+  .cmp-card__k--no {
+    color: var(--k-text-muted);
+  }
 
-  /* Honest fit */
+  /* ── Refinery ────────────────────────────────────────────────────── */
+  .cmp-callout {
+    margin: 2.5rem auto 0;
+    max-width: 44rem;
+    text-align: center;
+    font-size: var(--k-step-lead);
+    line-height: 1.5;
+    color: var(--k-text-2);
+  }
+  .cmp-callout strong {
+    color: var(--k-text);
+  }
+  .cmp-underneath {
+    margin: 1.5rem auto 0;
+    max-width: 44rem;
+    text-align: center;
+    font-size: 0.94rem;
+    line-height: 1.65;
+  }
+
+  /* ── Honest fit ──────────────────────────────────────────────────── */
   .cmp-fit {
-    margin-top: 2rem;
+    margin-top: 2.5rem;
     display: grid;
     grid-template-columns: 1fr 1fr;
     gap: 1.25rem;
@@ -230,8 +450,16 @@ const notFit = [
     font-size: 1.05rem;
     margin-bottom: 1rem;
   }
-  .cmp-fit__col--yes .cmp-fit__head :global(.k-icon) { color: var(--k-brand); }
-  .cmp-fit__list { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; }
+  .cmp-fit__col--yes .cmp-fit__head :global(.k-icon) {
+    color: var(--k-brand);
+  }
+  .cmp-fit__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 0.75rem;
+  }
   .cmp-fit__list li {
     position: relative;
     padding-left: 1.1rem;
@@ -249,15 +477,38 @@ const notFit = [
     border-radius: 50%;
     background: var(--k-text-muted);
   }
-  .cmp-fit__col--yes .cmp-fit__list li::before { background: var(--k-brand); }
+  .cmp-fit__col--yes .cmp-fit__list li::before {
+    background: var(--k-brand);
+  }
 
-  /* CTA */
-  .cmp-cta { text-align: center; }
-  .cmp-cta h2 { font-size: var(--k-step-h2); margin-bottom: 1rem; }
-  .cmp-cta__lead { margin: 0 auto 2rem; max-width: 40rem; }
-  .cmp-cta__actions { display: flex; flex-wrap: wrap; gap: 0.85rem; justify-content: center; }
+  /* ── CTA ─────────────────────────────────────────────────────────── */
+  .cmp-cta {
+    text-align: center;
+  }
+  .cmp-cta h2 {
+    font-size: var(--k-step-h2);
+    margin-bottom: 1rem;
+  }
+  .cmp-cta__lead {
+    margin: 0 auto 2rem;
+    max-width: 40rem;
+  }
+  .cmp-cta__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.85rem;
+    justify-content: center;
+  }
 
-  @media (max-width: 720px) {
-    .cmp-fit { grid-template-columns: 1fr; }
+  @media (max-width: 640px) {
+    .cmp-map {
+      height: 360px;
+    }
+    .cmp-node {
+      font-size: 0.72rem;
+    }
+    .cmp-fit {
+      grid-template-columns: 1fr;
+    }
   }
 </style>

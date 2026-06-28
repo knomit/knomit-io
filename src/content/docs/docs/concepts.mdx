@@ -21,6 +21,7 @@ rows, no binary blobs, no opaque embeddings.
 ```markdown
 ---
 type: observation
+origin: authored
 confidence: 0.8
 domain: [music]
 entities: [alice]
@@ -52,6 +53,22 @@ follow or lean on. The leaf `type` refines this further:
 The epistemic/pragmatic split is the load-bearing one: it is the difference
 between *knowing* and *acting*. Only epistemic facts seed
 [synthesis](/docs/synthesis/).
+
+## Origin
+
+Independent of *what* a fact is (`type`) and *how to apply* it (`kind`), every
+fact records **how it came to exist** — its `origin`:
+
+| Origin | Meaning |
+|--------|---------|
+| `authored` | Written by a human or asserted by an agent via `knomit_learn`. |
+| `distilled` | Emitted by the synthesis pipeline — a `synthesis` fact clustered up from sources. |
+| `discovered` | **Emergent** — surfaced by the discovery engine from structural bridges nobody declared (see [Emergent discovery](/docs/discovery/)). |
+
+`origin` is **orthogonal** to `type` and `kind`: a `discovered` fact is still a
+normal `synthesis` (a forward *consequence*) or `hypothesis` (a backward
+*keystone*) — `origin` only records that knomit *inferred* it rather than being
+told. Query the emergent set with `origin: discovered` on `knomit_query`.
 
 ## Ontology & inheritance
 
@@ -146,8 +163,9 @@ facts into a `synthesis` fact no individual source makes on its own), and
 *reflect* (record `methodology` facts from resolved hypothesis transitions).
 **Hypothesize** (`knomit_hypothesize`) is a separate, explicit pass that writes
 falsifiable `hypothesis` facts — and skipping is the expected default. Synthesis
-is the only LLM-backed feature. See [Synthesis & discovery](/docs/synthesis/) for
-the full pipeline, RAPTOR, and the discovery effort dial.
+is the only LLM-backed feature. See [Synthesis & hypotheses](/docs/synthesis/) for
+the full pipeline and RAPTOR, and [Emergent discovery](/docs/discovery/) for the
+effort dial and the bridge engine.
 
 ## The MCP operational loop
 

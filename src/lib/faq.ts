@@ -41,6 +41,10 @@ export const FAQ_ITEMS: FaqItem[] = [
     a: 'Synthesis is knomit\'s pipeline that maintains and grows the corpus: it prunes duplicates, distills higher-order facts from what you already know (RAPTOR-style multi-depth distillation), and reflects on methodology. Hypotheses extend distilled facts forward into falsifiable predictions — knowledge that generates new knowledge.',
   },
   {
+    q: 'What is a discovered (emergent) fact?',
+    a: 'Beyond storing and synthesizing, knomit can discover facts nobody wrote down. An effort dial on review and hypothesize seeds from "bridges" — facts that share a domain or entity yet sit in different similarity clusters — and proposes the keystone those bridges imply. Forward discovery writes a synthesis fact (a consequence); backward discovery writes a hypothesis (an unstated premise), ranked by blast radius. Each carries origin: discovered, so the emergent set is queryable and auditable. Similarity-only retrieval is structurally blind to these cross-cluster links — that is exactly why the facts went unwritten.',
+  },
+  {
     q: 'Where can I run knomit?',
     a: 'knomit ships three binaries: a server (knomit), a desktop tray app (knomit-desktop), and a bridge (knomit-bridge) that proxies MCP over stdio into clients like Claude Code and Claude Desktop. It runs on macOS, Linux, and Windows.',
   },

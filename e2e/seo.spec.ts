@@ -109,13 +109,20 @@ test('homepage links to the FAQ', async ({ page }) => {
 });
 
 test.describe('compare', () => {
-  test('/compare renders a comparison table with the key dimensions', async ({ page }) => {
+  test('/compare renders the operational-profile clusters with the key dimensions', async ({ page }) => {
     const res = await page.request.get('/compare');
     expect(res.status()).toBe(200);
     await page.goto('/compare');
-    await expect(page.getByRole('table')).toBeVisible();
-    for (const term of [/RAG/i, /vector/i, /provenance/i, /dedup|subsum/i]) {
-      await expect(page.getByText(term).first()).toBeVisible();
+    // /compare was rewritten from a table into operational-profile clusters that
+    // name capabilities, not products — assert the cluster layout plus the
+    // comparison dimensions the page actually contrasts. (Some dimension words
+    // also appear in the decorative aria-hidden positioning map, so assert on
+    // rendered body text rather than a possibly-decorative first match.)
+    await expect(page.getByText(/operational profile/i).first()).toBeVisible();
+    expect(await page.locator('.cmp-card').count()).toBeGreaterThanOrEqual(4);
+    const body = (await page.locator('body').innerText()).toLowerCase();
+    for (const term of ['provenance', 'synthesis', 'confidence', 'time-travel']) {
+      expect(body, `/compare should mention ${term}`).toContain(term);
     }
   });
 });
