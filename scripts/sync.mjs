@@ -26,8 +26,9 @@ const ROOT = path.resolve(__dirname, '..');
 const OUT_DIR = path.join(ROOT, 'src', 'generated');
 
 // Pinned reference for reproducible builds. Bump deliberately when adopting a
-// new knomit release. `main` is the fallback until the first public tag exists.
-const REF = process.env.KNOMIT_REF || 'main';
+// new knomit release. `master` (the repo's default branch) is the fallback
+// until the first public tag exists.
+const REF = process.env.KNOMIT_REF || 'master';
 const REPO = process.env.KNOMIT_REPO_SLUG || 'knomit/knomit';
 const TOKEN = process.env.GITHUB_TOKEN || process.env.KNOMIT_TOKEN || '';
 
