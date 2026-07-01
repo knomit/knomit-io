@@ -85,6 +85,7 @@ socket          = ""            # Unix socket path (alternative to host:port)
 ontology_root   = "kb"          # path within git where facts live
 onnx_lib_path   = ""            # override the ONNX Runtime shared library
 local_origin_root = ""          # root for permitted local-path git origins ("" = disabled)
+read_only       = false         # read-only demo: reject mutations, hide git + write tools, pull-only sync
 methodology_min_score = 0.15    # composite-score floor for methodology candidates
 
 [llm]
@@ -98,9 +99,10 @@ batch    = false
 model = "embeddinggemma"
 
 [git]
-origin = ""                     # remote URL for the default repo
-serve  = true                   # expose the built-in git smart-HTTP server
-port   = ""                     # git-serve port
+origin          = ""            # remote URL for the default repo
+serve           = true          # expose the built-in git smart-HTTP server
+port            = ""            # git-serve port
+network_timeout = "120s"        # bounds every remote git network op (clone/fetch/push)
 
 [remote]
 token       = ""                # GitHub/PAT token
@@ -110,11 +112,8 @@ ssh_key     = ""                # path to an SSH private key
 auth_method = ""                # "token" | "basic" | "ssh" | "none" (inferred if empty)
 
 [cluster_cache]
-quiet_threshold    = "10s"      # wait for activity to settle before recompute
-check_interval     = "5s"       # background checker cadence ("0" disables)
-max_concurrent     = 1
-resolution         = 2.0        # Louvain γ (higher = more, smaller communities)
-min_community_size = 2
+resolution         = 4.0        # Louvain γ (higher = more, smaller communities)
+min_community_size = 2          # communities smaller than this are relabelled as noise
 
 [session]
 tool_idle_ttl     = "15m"       # query/explain cursor TTL
@@ -126,6 +125,19 @@ effort_default         = "normal"  # "normal" | "medium" | "high"
 confidence_threshold   = 0.5       # min confidence to write a discovered proposal
 blast_radius_threshold = 1         # min reach for a backward keystone proposal (0 = off)
 bridge                 = "both"    # "domain" | "entity" | "both"
+
+[log]
+format          = "console"     # "console" (human, stderr) | "json" (structured, stdout)
+level           = "info"        # zerolog level: trace|debug|info|warn|error|fatal|panic
+file            = ""            # non-empty adds a rotating JSON file sink (lumberjack)
+max_size_mb     = 10            # rotate the file sink at this size
+max_backups     = 3            # rotated files to keep
+max_age_days    = 7            # max age for rotated files
+slow_request_ms = 1000          # log HTTP/MCP requests slower than this at WARN (0 = off)
+crash_file      = ""            # non-empty redirects fd 2 (stderr) to persist fatal/CGO tracebacks
+
+[runtime]
+addr = ""                       # diagnostics port (pprof + /metrics + /runtime/*); "" = off. Bind local only.
 ```
 
 ## Environment variables
@@ -138,6 +150,7 @@ bridge                 = "both"    # "domain" | "entity" | "both"
 | `KNOMIT_HOST` | `host` | `localhost` |
 | `KNOMIT_PORT` | `port` | `19278` |
 | `KNOMIT_SOCKET` | `socket` | — |
+| `KNOMIT_READ_ONLY` | `read_only` | `false` |
 | `KNOMIT_LOCAL_ORIGIN_ROOT` | `local_origin_root` | — (disabled) |
 | `ONNXRUNTIME_SHARED_LIBRARY` | `onnx_lib_path` | — |
 | `KNOMIT_EMBED_MODEL` | `embeddings.model` | `embeddinggemma` |
@@ -149,16 +162,14 @@ bridge                 = "both"    # "domain" | "entity" | "both"
 | `KNOMIT_GIT_ORIGIN` | `git.origin` | — |
 | `KNOMIT_GIT_SERVE` | `git.serve` | `true` |
 | `KNOMIT_GIT_PORT` | `git.port` | — |
+| `KNOMIT_GIT_NETWORK_TIMEOUT` | `git.network_timeout` | `120s` |
 | `KNOMIT_REMOTE_TOKEN` | `remote.token` | — |
 | `KNOMIT_REMOTE_USER` | `remote.user` | — |
 | `KNOMIT_REMOTE_PASSWORD` | `remote.password` | — |
 | `KNOMIT_REMOTE_SSH_KEY` | `remote.ssh_key` | `~/.knomit/id_ed25519` |
 | `KNOMIT_REMOTE_AUTH` | `remote.auth_method` | auto-detected |
 | `KNOMIT_METHODOLOGY_MIN_SCORE` | `methodology_min_score` | `0.15` |
-| `KNOMIT_CLUSTER_CACHE_QUIET_THRESHOLD` | `cluster_cache.quiet_threshold` | `10s` |
-| `KNOMIT_CLUSTER_CACHE_CHECK_INTERVAL` | `cluster_cache.check_interval` | `5s` |
-| `KNOMIT_CLUSTER_CACHE_MAX_CONCURRENT` | `cluster_cache.max_concurrent` | `1` |
-| `KNOMIT_CLUSTER_CACHE_RESOLUTION` | `cluster_cache.resolution` | `2.0` |
+| `KNOMIT_CLUSTER_CACHE_RESOLUTION` | `cluster_cache.resolution` | `4.0` |
 | `KNOMIT_CLUSTER_CACHE_MIN_COMMUNITY_SIZE` | `cluster_cache.min_community_size` | `2` |
 | `KNOMIT_SESSION_TOOL_IDLE_TTL` | `session.tool_idle_ttl` | `15m` |
 | `KNOMIT_SESSION_PIPELINE_IDLE_TTL` | `session.pipeline_idle_ttl` | `60m` |
@@ -167,6 +178,15 @@ bridge                 = "both"    # "domain" | "entity" | "both"
 | `KNOMIT_DISCOVERY_CONFIDENCE_THRESHOLD` | `discovery.confidence_threshold` | `0.5` |
 | `KNOMIT_DISCOVERY_BLAST_RADIUS_THRESHOLD` | `discovery.blast_radius_threshold` | `1` |
 | `KNOMIT_DISCOVERY_BRIDGE` | `discovery.bridge` | `both` |
+| `KNOMIT_LOG_FORMAT` | `log.format` | `console` |
+| `KNOMIT_LOG_LEVEL` | `log.level` | `info` |
+| `KNOMIT_LOG_FILE` | `log.file` | — (stderr/stdout only) |
+| `KNOMIT_LOG_MAX_SIZE` | `log.max_size_mb` | `10` |
+| `KNOMIT_LOG_MAX_BACKUPS` | `log.max_backups` | `3` |
+| `KNOMIT_LOG_MAX_AGE` | `log.max_age_days` | `7` |
+| `KNOMIT_LOG_SLOW_MS` | `log.slow_request_ms` | `1000` |
+| `KNOMIT_CRASH_LOG` | `log.crash_file` | — (off) |
+| `KNOMIT_RUNTIME_ADDR` | `runtime.addr` | — (off) |
 
 ### Provider credentials (read directly)
 
@@ -185,9 +205,14 @@ These are read by the LLM adapters, not through `knomit.toml`:
 |----------|---------|---------|---------|
 | `KNOMIT_REFLECT_PROPOSE_CAP` | synthesize/reflect | Max new methodologies a reflect step may propose (`0` = none) | `1` |
 | `KNOMIT_REFLECT_NOVELTY_THRESHOLD` | synthesize/reflect | Cosine floor to reject near-duplicate methodologies | `0.85` (model-dependent) |
-| `KNOMIT_PPROF_ADDR` | `knomit serve` | Enable a pprof debug server at this address | — (off) |
 | `KNOMIT_BASE_URL` | `knomit-bridge` | Override the discovered server URL | `http://localhost:19278` |
 | `KNOMIT_MCP_DEBUG` | `knomit-bridge` | Non-empty → debug logging | — (info) |
+
+<Aside type="note">
+`KNOMIT_PPROF_ADDR` was replaced by the gated **runtime diagnostics port**
+(`KNOMIT_RUNTIME_ADDR`), which serves pprof, Prometheus `/metrics`, expvar, and
+live process controls together. See [Observability](/docs/observability/).
+</Aside>
 
 ## LLM configuration
 
