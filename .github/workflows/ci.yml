@@ -34,6 +34,16 @@ jobs:
       - name: Type & content check
         run: npm run check
 
+      # Hand the built site to the deploy job (main pushes only) so it ships the
+      # exact artifact CI validated — no rebuild, no drift.
+      - name: Upload built site
+        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+          retention-days: 1
+
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
@@ -47,3 +57,26 @@ jobs:
           name: playwright-report
           path: playwright-report/
           retention-days: 7
+
+  # Ship to Cloudflare Pages only after build/check/tests pass, and only for
+  # pushes to main (never PRs). `needs` is the gate; the `if` scopes it to prod.
+  deploy:
+    needs: build-and-test
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      deployments: write
+    steps:
+      - name: Download built site
+        uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@9acf94ace14e7dc412b076f2c5c20b8ce93c79cd # v3.15.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy dist --project-name=knomit-io --branch=main
