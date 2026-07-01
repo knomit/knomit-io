@@ -1,0 +1,146 @@
+---
+title: Observability
+description: Structured logging, crash bundles, and the gated runtime diagnostics port — pprof, Prometheus /metrics, expvar, and live process controls for a running knomit server.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+knomit ships its own operability, all in the Go standard library — no sidecars,
+no agents. There are two layers:
+
+- **Always on, zero-config** — structured logging and native crash bundles. They
+  cost nothing to leave running and need no port.
+- **Opt-in, off by default** — a **runtime diagnostics port** that exposes pprof,
+  Prometheus metrics, expvar, and live process controls. Enable it only when you
+  need to look inside a running process.
+
+## Logging
+
+Logging is config-driven (`[log]` in `knomit.toml`, or `KNOMIT_LOG_*` — see
+[Configuration](/docs/configuration/#environment-variables)). Two shapes:
+
+| `format` | Destination | Use |
+|----------|-------------|-----|
+| `console` (default) | stderr, human-readable | local / desktop |
+| `json` | stdout, structured | containers & log collectors |
+
+- **Level** — `KNOMIT_LOG_LEVEL` (`trace`…`panic`, default `info`). It can also be
+  changed **live**, without a restart, through the diagnostics port (below).
+- **Rotating file sink** — set `log.file` (or `--log-file`) to add a rotating
+  JSON file *in addition to* the console/stdout sink. Rotation is bounded by
+  `max_size_mb` (10), `max_backups` (3), and `max_age_days` (7). Leave it off in
+  containers — the log driver owns rotation.
+- **Slow-request log** — any HTTP or MCP request slower than `slow_request_ms`
+  (default `1000`) is logged at `WARN`. Set `0` to disable.
+
+## Crash safety
+
+These are always on and write under `KNOMIT_HOME` — no port required.
+
+- **Crash bundles** — a recovered HTTP/task panic, or a fatal panic on the serve
+  path, writes a JSON bundle to `KNOMIT_HOME/crashes/`. Each bundle carries the
+  timestamp, component, panic cause, the faulting stack, a full all-goroutine
+  dump, `runtime.MemStats`, build info (Go version + VCS settings), and the tail
+  of the log ring.
+- **Crash-loop marker** — `KNOMIT_HOME/running.marker` is written at startup and
+  removed on **clean** shutdown. If it is still present at the next boot, the
+  prior run exited uncleanly (possible crash) and knomit logs a `WARN` pointing
+  at `crashes/`. A panic unwind deliberately leaves the marker in place so a
+  crash loop stays detectable.
+- **`KNOMIT_CRASH_LOG`** — redirects fd 2 (stderr) to an append-only file so Go
+  runtime fatal tracebacks **and CGO crashes** (ONNX Runtime), which bypass the
+  logger and write straight to fd 2, are persisted. Daemon-only; leave it unset
+  in containers, where the log driver already captures fd 2.
+- **Live goroutine dump (unix)** — `kill -USR1 <pid>` dumps every goroutine to
+  `KNOMIT_HOME/dumps/` **without exiting**, so a stuck-but-alive server can be
+  inspected in place.
+
+## The runtime diagnostics port
+
+Set `KNOMIT_RUNTIME_ADDR` (or `[runtime] addr`) to a local address — e.g.
+`localhost:6060` — to start a second, separate HTTP listener for diagnostics.
+It is **off unless configured**, mounted on its own port (never on the public
+API), and carries zero steady-state cost when disabled.
+
+<Aside type="danger" title="Bind to localhost only">
+This port exposes pprof (which can dump process memory) and live process
+controls (force GC, toggle profilers, change log level). It has **no
+authentication**. Bind it to a loopback address and never expose it to a
+network — reach it through an SSH tunnel or `kubectl port-forward` instead.
+</Aside>
+
+### Endpoints
+
+| Path | Method | Purpose |
+|------|--------|---------|
+| `/runtime/status` | GET | Uptime, goroutines, heap/sys memory, GC count, `GOMAXPROCS`, CPUs — plus repos, `read_only`, and the agent branch |
+| `/runtime/loglevel` | GET · POST | Read the global log level, or set it live: `POST ?level=debug` |
+| `/runtime/gc` | POST | Force a garbage collection |
+| `/runtime/heapdump` | POST | Write a heap profile to `KNOMIT_HOME/dumps/heap-<ts>.pprof` |
+| `/runtime/profile/mutex` | POST | Set the mutex-profile fraction: `?rate=N` (`0` disables) |
+| `/runtime/profile/block` | POST | Set the block-profile rate: `?rate=N` (`0` disables) |
+| `/debug/pprof/` | GET | Standard `net/http/pprof` index (`+ /cmdline`, `/profile`, `/symbol`, `/trace`) |
+| `/debug/vars` | GET | expvar JSON — includes the `knomit` metrics snapshot |
+| `/metrics` | GET | Prometheus text exposition (`v0.0.4`) |
+
+pprof and expvar are mounted **explicitly** on this mux, not via the usual
+`http.DefaultServeMux` side-effect import — so they exist only here, never on the
+public API port.
+
+### pprof
+
+Point the Go toolchain straight at the port:
+
+```sh
+# 30-second CPU profile
+go tool pprof http://localhost:6060/debug/pprof/profile?seconds=30
+
+# live heap
+go tool pprof http://localhost:6060/debug/pprof/heap
+```
+
+Mutex and block profiles are collected only after you turn them on (they are off
+by default for zero cost):
+
+```sh
+curl -sX POST 'localhost:6060/runtime/profile/mutex?rate=5'
+go tool pprof http://localhost:6060/debug/pprof/mutex
+```
+
+### Change the log level live
+
+```sh
+curl -s localhost:6060/runtime/loglevel                 # {"level":"info"}
+curl -sX POST 'localhost:6060/runtime/loglevel?level=debug'
+```
+
+## Metrics
+
+`/metrics` renders a process-global registry in Prometheus text format. The
+registry is recorded into **unconditionally** — the numbers accumulate whether or
+not the port is ever enabled; the port only *exposes* them. The same registry is
+also published as the `knomit` expvar variable, so `/debug/vars` carries a JSON
+view of the identical data.
+
+**Always-present runtime gauges:**
+
+| Metric | Meaning |
+|--------|---------|
+| `knomit_goroutines` | Live goroutines |
+| `knomit_mem_alloc_bytes` | Heap bytes in use |
+| `knomit_mem_sys_bytes` | Bytes obtained from the OS |
+| `knomit_gc_total` | Completed GC cycles |
+
+**Application metrics:**
+
+| Metric | Type | Meaning |
+|--------|------|---------|
+| `knomit_embed_inference_seconds` | histogram | ONNX embedding inference latency per batch |
+| `knomit_cypher_retry_total` | counter | GraphQLite `cypher()` transient-collision retries (read contention) |
+
+<Aside type="tip">
+For a containerized deployment, the usual shape is `KNOMIT_LOG_FORMAT=json` for
+collector-friendly logs and, if you scrape metrics, `KNOMIT_RUNTIME_ADDR` bound
+to the pod loopback with Prometheus reaching it via a port-forward or sidecar.
+See [Deployment](/docs/deployment/).
+</Aside>

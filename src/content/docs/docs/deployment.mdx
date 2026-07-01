@@ -1,0 +1,114 @@
+---
+title: Deployment
+description: Run knomit as a self-contained Docker server — building the image, the multi-arch targets, persistent volumes, container environment, and running a read-only demo instance.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+knomit's first goal is to be *a plain HTTP server deployable anywhere*. The
+Docker image is **fully self-contained**: every dependency — the native
+libraries (ONNX Runtime, graphqlite, tokenizers) **and** the embedding model —
+is fetched at **build** time and baked in. The running container performs **no
+network downloads at startup**.
+
+## Building the image
+
+The `Dockerfile` is a three-stage build: `node` builds the web UI, a CGO Go
+stage builds the binary + fetches native libs + bakes the model with
+`knomit warm-models`, and a slim Debian runtime stage assembles the final image.
+
+<Steps>
+
+1. Build for your host architecture:
+
+   ```sh
+   make docker
+   # → knomit:<semver>.<sha>  and  knomit:latest
+   ```
+
+2. Or cross-build for `linux/amd64` from a non-amd64 host (Apple Silicon, etc.).
+   Requires a buildx-capable Docker (Docker Desktop / OrbStack provide it):
+
+   ```sh
+   make docker-amd64
+   # → knomit:<semver>.<sha>-amd64  and  knomit:latest-amd64
+   ```
+
+</Steps>
+
+Both targets tag the image with the full **`<semver>.<sha>`** version string (the
+same string the binary reports as its version) **and** a moving `latest`. The
+Dockerfile itself is architecture-agnostic — `fetchlibs` pulls the per-platform
+native libraries and the runtime stage globs `dist/linux-*/lib`.
+
+## Running the container
+
+```sh
+docker run -d --name knomit \
+  -p 19278:19278 \
+  -v knomit-data:/data \
+  knomit:latest
+```
+
+Open **http://localhost:19278/**. The default `trunk` repo is created on first
+run.
+
+<Aside type="caution" title="Use a named volume, not a bind mount">
+The embedding model is baked into the image at **`/data/models`**. A **named
+volume** mounted at `/data` is auto-populated from the image on first run, so the
+baked model is preserved. A **host bind-mount** over `/data` hides the baked
+model — the container would then try to download it at startup (defeating the
+self-contained design). If you must bind-mount, pre-seed the model directory.
+</Aside>
+
+### Container environment
+
+The image ships these defaults (set in the `Dockerfile`):
+
+| Variable | Value | Why |
+|----------|-------|-----|
+| `KNOMIT_HOST` | `0.0.0.0` | Listen on all interfaces (vs. `localhost` locally) |
+| `KNOMIT_PORT` | `19278` | Exposed port |
+| `KNOMIT_HOME` | `/data` | Data root — mount a volume here |
+| `ORT_LIB_PATH` | `/opt/knomit/lib/libonnxruntime.so` | Baked ONNX Runtime |
+| `GRAPHQLITE_LIB_PATH` | `/opt/knomit/lib/graphqlite` | Baked SQLite graph extension |
+
+Common additions for a container deployment:
+
+- **`KNOMIT_LOG_FORMAT=json`** — structured logs on stdout for your log driver.
+  Leave `KNOMIT_CRASH_LOG` unset; the driver already captures fd 2.
+- **Synthesis credentials** — synthesis is the only LLM-backed feature. If you
+  run it, pass a provider key (e.g. `GOOGLE_AI_API_KEY`); a read-only or
+  browse-only instance needs none. See
+  [LLM configuration](/docs/configuration/#llm-configuration).
+- **Metrics/pprof** — set `KNOMIT_RUNTIME_ADDR` to a **loopback** address and
+  reach it via a port-forward; never expose it. See
+  [Observability](/docs/observability/).
+
+## Running a read-only / demo instance
+
+Set **`KNOMIT_READ_ONLY=true`** to serve a public, browse-only instance — this is
+exactly how the [live demo](/explore) runs. Read-only is **startup-only** (it
+cannot be toggled at runtime) and, across every surface:
+
+- **HTTP** — all mutating methods (`POST`/`PUT`/`PATCH`/`DELETE`) return `403`,
+  and the built-in git smart-HTTP endpoint is not mounted.
+- **MCP** — only the read tools are exposed (`knomit_query`, `knomit_explain`);
+  the write tools (`knomit_learn`, `knomit_update`, `knomit_retract`,
+  `knomit_hypothesize`, `knomit_review`) are omitted from the tool list.
+- **Origin sync** — pull-only: it fetches and fast-forwards from origin but never
+  pushes back.
+
+```sh
+docker run -d --name knomit-demo \
+  -e KNOMIT_READ_ONLY=true \
+  -e KNOMIT_GIT_ORIGIN=https://github.com/your-org/your-kb.git \
+  -p 19278:19278 -v knomit-demo:/data \
+  knomit:latest
+```
+
+<Aside type="note">
+A read-only instance needs no LLM credentials at all — synthesis is a write path.
+Point it at an origin (`KNOMIT_GIT_ORIGIN`) and it will keep pulling consensus
+from `main` without ever writing back.
+</Aside>
