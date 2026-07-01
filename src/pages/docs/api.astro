@@ -77,10 +77,9 @@ const scalarTheme = `
         forceDarkModeState: 'dark',
         hideDarkModeToggle: true,
         // No Scalar product chrome (Configure / Share / Deploy) in our docs.
-        // showToolbar is the switch that actually hides it across environments;
-        // its 'showDeveloperTools' replacement does not, despite the deprecation
-        // notice. The deprecation is a console-only warning.
-        showToolbar: 'never',
+        // Scalar renamed showToolbar -> showDeveloperTools and dropped the old
+        // key from the config type; 'never' hides the chrome in every environment.
+        showDeveloperTools: 'never',
         hideClientButton: true,
         hideTestRequestButton: true,
         // Keep the one search bar in the docs header (Starlight's), not a
