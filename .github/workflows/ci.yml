@@ -12,11 +12,10 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     env:
-      # The build-time sync pulls knomit's OpenAPI spec. Until the knomit repo is
-      # public, provide a read-scoped token as a repo secret; afterwards the
-      # default ref fetch works without one.
-      KNOMIT_REF: ${{ vars.KNOMIT_REF || 'main' }}
-      GITHUB_TOKEN: ${{ secrets.KNOMIT_SYNC_TOKEN }}
+      # The build-time sync pulls knomit's OpenAPI spec from the public knomit
+      # repo — no token needed. Pin KNOMIT_REF to a tag/SHA once one exists;
+      # `master` (the default branch) is the fallback until then.
+      KNOMIT_REF: ${{ vars.KNOMIT_REF || 'master' }}
       SITE_URL: https://knomit.io
     steps:
       - uses: actions/checkout@v4
