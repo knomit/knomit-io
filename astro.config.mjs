@@ -120,6 +120,8 @@ export default defineConfig({
           items: [
             { label: 'Configuration', slug: 'docs/configuration' },
             { label: 'Remote sync', slug: 'docs/remote-sync' },
+            { label: 'Observability', slug: 'docs/observability' },
+            { label: 'Deployment', slug: 'docs/deployment' },
           ],
         },
         {

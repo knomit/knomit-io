@@ -26,7 +26,13 @@ git smart-HTTP. Graceful shutdown on SIGTERM.
 | `--log-max-backups` | int | `3` | Rotated log files to keep |
 | `--log-max-age` | int | `7` | Max age (days) for rotated logs |
 
-Set `KNOMIT_PPROF_ADDR` (e.g. `localhost:6060`) to enable a pprof debug server.
+Log **level** and **format** (`console`/`json`) are set through config, not flags —
+`KNOMIT_LOG_LEVEL` / `KNOMIT_LOG_FORMAT` (or the `[log]` TOML section). The
+`--log-*` flags above override only the rotating file sink.
+
+Set `KNOMIT_RUNTIME_ADDR` (e.g. `localhost:6060`) to enable the gated **runtime
+diagnostics port** — pprof, Prometheus `/metrics`, expvar, and live process
+controls. See [Observability](/docs/observability/).
 
 ### `knomit reset` — wipe a repo and reinitialize
 
