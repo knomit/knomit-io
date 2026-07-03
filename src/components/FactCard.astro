@@ -6,6 +6,8 @@
  */
 interface Frontmatter {
   type?: string;
+  /** Optional provenance axis (authored | distilled | discovered) — rendered only when set. */
+  origin?: string;
   confidence?: number;
   domain?: string[];
   entities?: string[];
@@ -44,7 +46,7 @@ const fm = frontmatter;
 <article class={`k-fact ${className}`} aria-label={`knomit fact: ${path}`}>
   <header class="k-fact__path k-mono">{path}</header>
   <pre class="k-fact__fm"><span class="k-fact__rule">---</span>
-<span class="k-fact__k">type:</span> <span class="k-fact__type">{fm.type}</span>
+<span class="k-fact__k">type:</span> <span class="k-fact__type">{fm.type}</span>{fm.origin && <span class="k-fact__originline"><span class="k-fact__k">origin:</span> <span class="k-fact__origin">{fm.origin}</span></span>}
 <span class="k-fact__k">confidence:</span> <span class="k-fact__num">{fm.confidence}</span>
 <span class="k-fact__k">domain:</span> [{fm.domain?.join(', ')}]
 <span class="k-fact__k">entities:</span> [{fm.entities?.join(', ')}]
@@ -111,6 +113,12 @@ const fm = frontmatter;
   }
   .k-fact__type {
     color: var(--k-brand);
+  }
+  .k-fact__originline {
+    display: block;
+  }
+  .k-fact__origin {
+    color: var(--k-ref);
   }
   .k-fact__num {
     color: var(--k-temporal);
