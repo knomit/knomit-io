@@ -43,7 +43,7 @@ test.describe('structured data', () => {
 
   test('blog post emits BlogPosting with dates', async ({ page }) => {
     await page.goto('/blog');
-    await page.getByRole('link', { name: /Dogfooding/i }).first().click();
+    await page.getByRole('link', { name: /how knomit holds its own shape/i }).first().click();
     const blocks = await jsonLdBlocks(page);
     const post = blocks.find((b: any) => b['@type'] === 'BlogPosting');
     expect(post, 'no BlogPosting block').toBeTruthy();
