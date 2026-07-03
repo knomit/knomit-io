@@ -1,0 +1,3 @@
+# Cloudflare Pages redirects.
+# @astrojs/sitemap can only emit sitemap-index.xml; alias the conventional path.
+/sitemap.xml /sitemap-index.xml 301

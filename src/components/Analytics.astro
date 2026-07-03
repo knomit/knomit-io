@@ -22,6 +22,41 @@ const enabled = Boolean(GA_MEASUREMENT_ID) && import.meta.env.PROD;
         }
         gtag('js', new Date());
         gtag('config', id);
+
+        // Engagement events, one delegated listener for the whole page.
+        // Capture phase so handlers that stop propagation (e.g. the Expressive
+        // Code copy button) can't swallow the click before we see it.
+        document.addEventListener(
+          'click',
+          function (e) {
+            var t = e.target instanceof Element ? e.target : null;
+            if (!t) return;
+            if (t.closest('.expressive-code .copy button')) {
+              gtag('event', 'copy_code', { page_path: location.pathname });
+              return;
+            }
+            var a = t.closest('a[href]');
+            if (!a) return;
+            if (/github\.com\/knomit/.test(a.href)) {
+              gtag('event', 'github_click', {
+                link_url: a.href,
+                placement: a.closest('header')
+                  ? 'header'
+                  : a.closest('footer')
+                    ? 'footer'
+                    : 'body',
+              });
+            } else if (a.pathname === '/rss.xml') {
+              gtag('event', 'rss_click', { placement: 'footer' });
+            } else if (a.classList.contains('k-btn')) {
+              gtag('event', 'cta_click', {
+                link_url: a.href,
+                link_text: (a.textContent || '').trim().slice(0, 60),
+              });
+            }
+          },
+          true
+        );
       </script>
     </>
   )
