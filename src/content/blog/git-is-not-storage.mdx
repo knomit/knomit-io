@@ -1,0 +1,251 @@
+---
+title: 'Git is not storage: the REST moment for agent knowledge'
+description: "Twenty-five years ago the industry tunneled RPC through HTTP POST until REST pointed out that the protocol already had the semantics. Agent memory is making the same mistake today — rebuilding provenance, history, identity, and sync inside vector stores, or auto-committing files into git while ignoring what its operations mean. knomit's bet: a commit is an assertion, a branch is an identity, a merge is consensus. Use git the way REST uses HTTP."
+pubDate: 2026-07-02
+author: The knomit team
+tags: [knowledge, git, provenance, architecture, agents]
+draft: false
+---
+
+import FactCard from '../../components/FactCard.astro';
+
+Around the turn of the millennium, the software industry did something strange
+with HTTP. It had the most widely deployed application protocol in history —
+verbs with defined meanings, status codes, a caching model, content negotiation
+— and it decided to use none of it. SOAP tunneled everything through POST. Every
+call was a 200, even the failures. HTTP was treated as a pipe: bytes in, bytes
+out, semantics ignored.
+
+REST was the observation that this was backwards. HTTP was never a transport;
+it was already the application protocol. GET *means* a safe, cacheable read.
+PUT *means* replace. 404 *means* something specific enough that machines can
+act on it. And the payoff for respecting the semantics was enormous: an
+ecosystem nobody had to build — caches, proxies, CDNs, crawlers, browsers —
+understood your application without being told about it.
+
+We think agent knowledge is sitting at the same moment right now, and the
+industry is making the same mistake in two different ways.
+
+## The first mistake: rebuild the protocol from scratch
+
+The default architecture for "agent memory" is a vector database with metadata
+bolted on. Embed a chunk, store the vector, retrieve by similarity. For pure
+semantic recall this is fine. The trouble starts the moment knowledge has to be
+*trusted* rather than merely *retrieved* — and for an agent that acts on what
+it remembers, that moment is immediate.
+
+Trusted knowledge needs to answer questions a bare vector can't. **Provenance**
+— who asserted this, on what evidence? **History** — what did we believe last
+month, and what changed it? **Identity** — which agent thinks this, and does
+anyone disagree? **Sync** — how do two peers share what they've learned without
+one silently clobbering the other?
+
+Watch any serious memory product mature and you will see it grow these one at a
+time: an audit log here, soft-deletes with tombstones there, "versions" that
+are really rows with a `superseded_at` column, an eventually-consistent
+replication layer. Each is a reasonable feature. Together they are a
+reconstruction — partial, proprietary, and years behind — of a protocol that
+already exists.
+
+## The second mistake: tunnel through the protocol
+
+The subtler version has started appearing: store the memory as markdown files
+in a git repository, auto-commit on every change. Right medium, right tool —
+and still a tunnel.
+
+Because in these systems the operations carry no meaning. History accumulates,
+but a branch isn't *anything*. A merge conflict is a nuisance, avoided by
+keeping writers isolated from each other. Nobody signs a commit, because the
+commit doesn't *assert* — it just records that bytes changed, with an
+auto-generated message. Git is the journal underneath a filesystem, the way
+HTTP was the pipe underneath SOAP: present, load-bearing, and semantically
+inert.
+
+Files in git is not using git, any more than XML over POST was using HTTP.
+The interesting question is the one REST asked: what do the verbs already
+*mean* — and what happens if your application refuses to break them?
+
+## What the verbs already mean
+
+knomit is a knowledge base for AI agents built on the answer. Every git
+operation is used for what it means, and each one maps onto an operation of
+knowledge — mechanically, not just as metaphor. This is the design, one verb
+at a time.
+
+**A commit is an assertion of belief.** Every fact write is an atomic learning
+moment with an author, a time, a message, and a signature. Here is an entry
+from knomit's own corpus, viewed the way you'd view any file that mattered:
+
+```console
+$ git log --follow --oneline kb/invariants/store/resolver/first-parent-not-wall-clock/00a49427.md
+61c314a update: resolveActiveCommitForPath walks first-parent, NEVER wall-clock
+411d403 learn: first-parent vtab plan facts
+```
+
+That is an AI agent's knowledge, and you already know how to read it. One agent
+asserted the fact in May; weeks later — after a bug and a pull request changed
+the answer — another rewrote its body to match what was now true. Two
+assertions, two commits, neither overwritten. "What was known, when, by whom"
+is not a feature request; it is `git log --follow` on the file. knomit states
+this as a first-class principle: git history *is* the timeline of belief.
+
+**A branch is an agent's identity.** Several agents and the humans all work
+knomit's corpus at once. Each agent writes only its own branch, named from its
+SSH key fingerprint. An agent's divergence from shared belief is therefore
+*visible and diffable* — identity and isolation, usually two subsystems, are
+one primitive that git already ships.
+
+**A merge is consensus; a conflict is a disagreement.** No agent writes `main`
+directly — `main` is what the peers have agreed on, and belief lands there by
+merge. Which gives the merge conflict its real meaning: two agents asserting
+incompatible things about the same fact, surfaced at exactly the moment the
+beliefs meet, held for adjudication. The alternative — what every
+last-write-wins store does, and what worktree isolation avoids rather than
+answers — is silent belief overwrite. A conflict between two agents' beliefs
+is not an infrastructure failure; it is information worth surfacing.
+
+**A checkout is time-travel.** A commit is not a change record; it is a
+complete, immutable snapshot of everything believed at that instant. Check one
+out
+and the *entire* knowledge state reconstitutes. Three things follow:
+
+- *Honest citation.* A fact cites its evidence with the source commit baked
+  into the reference — `src://…@commit` — pinned inside the frozen world where
+  it was true. It resolves to what the code said *then*, not whatever HEAD
+  says now. knomit makes this a rule: refs resolve at commit-time, never at
+  HEAD.
+
+  <FactCard
+    path="kb/invariants/store/resolver/first-parent-not-wall-clock/00a49427.md"
+    frontmatter={{
+      type: 'principle',
+      confidence: 0.9,
+      domain: ['store', 'resolver', 'git'],
+      entities: ['resolveActiveCommitForPath', 'ReadFactOpts.BeforeCommit'],
+      refs: ['src://knomit/internal/store/fact_read.go@a1ef27c'],
+    }}
+    body={'When resolving "what was the active commit for path X at commit Y", the walk MUST follow first-parent ancestry, not wall-clock timestamp ordering. Reading a fact at commit C follows its refs to whatever those targets were **at commit C** — the world is rewound around the reader, not patched at HEAD.'}
+    commit="61c314a"
+    signer="agent/dev-7c9"
+    evolution={null}
+  />
+
+- *Reproducible cognition.* You can re-run a recall against the exact
+  knowledge state an agent saw when it made a decision. "What did it know when
+  it chose that?" is a checkout, and the answer is exact — auditable in a way
+  no mutable store allows.
+
+- *Temporal queries for free.* "What did we believe about X on June 1?" is
+  not a data-warehouse project. Vector stores mutate in place; most cannot
+  tell you what a record said last month, let alone freeze the whole world
+  around it.
+
+**A diff is incremental cognition.** Because history is real, "what changed
+since I last thought about this?" is a commit-range diff — and knomit's
+synthesis pipelines run on exactly that. Detecting which predictions got
+promoted, refuted, or re-weighted during a session is implemented by reading
+each fact's *old* version at a watermark commit and diffing against HEAD. Time
+travel isn't a demo feature; it's a routine step in the plumbing. In a vector
+database the same capability is a bespoke event-sourcing system you must
+design, staff, and keep correct. In git it is the data model.
+
+**Fetch and push are how peers share what they know.** Knowledge sync needs no
+new protocol; fetch, push, and fast-forward already do it, offline and
+air-gapped included. And **blame is provenance**, line by line, on any belief
+in the corpus.
+
+## Why the mapping holds: text all the way down
+
+The reason knowledge operations map so cleanly onto git's verbs is not luck.
+It is a three-way alignment almost too obvious to notice.
+
+**Git was made for text** — line-oriented diffs, three-way merges, `blame`,
+`log --follow`, all designed for small human-readable files that change one
+thought at a time. A knowledge base of markdown facts is closer to git's
+design center than most *code* is. **LLMs operate on text** — a fact stored as
+markdown with YAML frontmatter is native model input, no serialization
+boundary, no ORM; the unit of storage *is* the unit of prompting. And
+**humans are already fluent** — every engineer can `git log` a fact, `blame` a
+belief, and PR a correction; facts are plain markdown precisely so that humans
+and machines author them through the same operations.
+
+When the readers and writers are both humans and models, the lowest-impedance
+medium is text — and the most mature system ever built for versioned,
+distributed, multi-author text is git. The semantics were already there.
+knomit's job was to not break them.
+
+## The ecosystem you don't have to build
+
+Here is the REST payoff, transposed. Because the corpus doesn't break git's
+semantics, everything built for git works on it *unmodified*:
+
+- A **pull request** against `kb/` is belief review — a human reads an agent's
+  proposed facts the same way they read proposed code.
+- **CI** on the repo is fact validation.
+- **SSH keys** are identity and auth; **hosting, mirroring, backup** come from
+  any git remote you already run.
+- The corpus is a directory of markdown: every future system can read it, no
+  export problem, no vendor format — just text and history.
+
+Caches and proxies didn't need to be told about your REST API. GitHub doesn't
+need to be told about your knowledge base.
+
+## "But where do the embeddings go?"
+
+The honest objections all have the same shape, and one answer resolves most of
+them: **git is the source of truth; everything else is derived.**
+
+Embeddings do not go in git. The SQLite index, the vector tables, the graph —
+all of it is ephemeral, rebuildable state, regenerated from the repo whenever
+the shape changes. Indexes can be wrong, thrown away, and rebuilt; history
+cannot. The trust boundary sits on the immutable layer, the performance work
+on the disposable one.
+
+<FactCard
+  path="kb/architecture/store-git/storer-implements-go-git-storage/efb7183c.md"
+  frontmatter={{
+    type: 'observation',
+    confidence: 0.95,
+    domain: ['store-git', 'go-git', 'storer'],
+    entities: ['Storer', 'storage.Storer', 'EncodedObjectStorer'],
+    refs: ['src://knomit/internal/store/git/storer.go@307b67d'],
+  }}
+  body={'`*storegit.Storer` implements go-git\'s full `storage.Storer` interface over a shared `*sql.DB`. Objects are content-addressed at the SQL level — `INSERT OR IGNORE` means identical content dedups naturally. The repo is git; SQLite is just where its objects happen to sit.'}
+  commit="c866808"
+  signer="agent/store-init"
+  evolution={null}
+/>
+
+With that split in hand, the rest answer themselves. **Scale?** Agent
+knowledge is not clickstream data — a corpus of distilled facts grows like a
+wiki, not a log; thousands to hundreds of thousands of small text files, well
+inside git's comfort zone, while the things that grow without bound (vectors,
+indexes) live in the derived layer. **Merge conflicts?** Covered above — in a
+knowledge base a conflict is something you want surfaced, not a defect.
+**Latency?** Reads
+never walk the repo; they are served from the derived index. Git is the
+write-and-history path. You pay git's cost only where git is winning you
+something.
+
+## The narrower, stronger claim
+
+None of this amounts to "git is a database." The claim is narrower — the REST
+claim, transposed: for this workload — versioned, multi-author, text-native,
+trust-sensitive above all — the protocol with the right semantics already
+exists, and the design work is a *mapping*, not an invention. A commit is an
+assertion. A branch is an identity. A merge is consensus. Preserve those
+semantics and the existing ecosystem carries the rest.
+
+The substrate is not the whole system, and we don't pretend otherwise:
+retrieval quality still comes from the derived index, and a companion piece
+takes up *what* gets stored — the epistemic types and the rules that make a
+fact trustworthy. You can watch the rest of it living in our other two posts —
+[how knomit holds its own shape](/blog/dogfooding-how-knomit-holds-its-shape/)
+and [keeping facts honest after the code moves](/blog/keeping-facts-honest-after-the-code-moves/).
+
+The industry is rebuilding git one feature at a time inside products you can't
+`git log`, or storing files in a repo while leaving its operations unused —
+two versions of the same mistake SOAP made. The alternative is the move REST
+made: notice the protocol was there all along, and use it as designed.
+
+Read the code on [GitHub](https://github.com/knomit/knomit).
