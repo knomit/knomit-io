@@ -1,6 +1,6 @@
 ---
 title: Claude Code integration
-description: knomit as a persistent knowledge base for Claude Code — the 10 slash commands, the 4 editor hooks, and one-time scaffolding with claude init.
+description: knomit as a persistent knowledge base for Claude Code — the 11 slash commands, the 4 editor hooks, and one-time scaffolding with claude init.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -34,7 +34,7 @@ This renders embedded templates into the project:
 | `.mcp.json` | merge-required (a companion file is written if one already exists) |
 | `.claude/settings.json` (hook registration) | merge-required |
 | `CLAUDE.md` (knomit usage block) | merge-required |
-| `.claude/skills/knomit-*/SKILL.md` (all 10 commands) | **owned** — always (over)written |
+| `.claude/skills/knomit-*/SKILL.md` (all 11 commands) | **owned** — always (over)written |
 
 - `--source` is the source-code slug used in generated `src://` refs (e.g.
   `src://knomit/internal/store/service.go@<sha>`). It defaults to `--repo` if
@@ -46,7 +46,7 @@ The skills are deployed **only** by `claude init` from embedded templates — ne
 hand-edit `.claude/skills/`. They are overwritten on the next run.
 </Aside>
 
-## The 10 slash commands
+## The 11 slash commands
 
 | Command | When to use |
 |---------|-------------|
@@ -58,6 +58,7 @@ hand-edit `.claude/skills/`. They are overwritten on the next run.
 | `/knomit-retract <fact-path>` | A fact is wrong or its subject no longer exists — remove it |
 | `/knomit-bootstrap <area>` | An area has zero facts and you're about to work in it — seed foundational facts |
 | `/knomit-review` | After a burst of fact-writing or a refactor — prune (dedup), distill (synthesis), reflect (methodology) |
+| `/knomit-harden [area]` | Periodic corpus hardening, or after an incident traced to a misapplied fact — adversarially audits facts that are true but compressible into falsehoods, verifies the consequences a hurried reader would derive against the current code, and repairs the trap |
 | `/knomit-hypothesize` | **User-requested only** — generate falsifiable predictions from synthesis facts |
 | `/knomit-principle` | **User-invoked only** — author a designer principle (agents must not invoke; validation rejects agent attempts) |
 
