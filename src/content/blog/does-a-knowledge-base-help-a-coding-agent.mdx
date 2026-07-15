@@ -1,0 +1,315 @@
+---
+title: 'Does a knowledge base actually help a coding agent? An A/B experiment'
+description: "The same task, with and without the knowledge base, eight runs per arm, judged blind. The assisted arm was always faster and cheaper — but one subtly flawed fact made it worse than no knowledge at all. Repairing that single fact flipped 30 of 32 blind comparisons and prevented a mistake models invent unprompted."
+pubDate: 2026-07-15
+author: The knomit team
+tags: [dogfooding, evaluation, agents, knowledge]
+draft: false
+---
+
+import FactCard from '../../components/FactCard.astro';
+
+knomit gives a coding agent long-term project memory: facts (invariants,
+decisions, gotchas, principles) stored as markdown in git, retrieved over MCP.
+We claim it makes an agent:
+
+1. **faster** — retrieval substitutes for re-deriving project knowledge from
+   the code on every task;
+2. **safer against known pitfalls** — mistakes the project already paid for
+   are recorded and not repeated;
+3. **consistent with the project's shape** — solutions respect the invariants
+   and design intent, not just whatever the code happens to permit.
+
+We A/B-tested these claims on knomit's own codebase — the repo that
+[runs on knomit day to day](/blog/dogfooding-how-knomit-holds-its-shape/):
+the same task given to agents with and without knomit, repeatedly, then judged
+blind. After three rounds, the honest summary is:
+
+- **Claim 1 held in every round.** With knomit: 23–35% cheaper and 41–54%
+  faster on knowledge-heavy tasks.
+- **Claims 2 and 3 are conditional — on the corpus, not the mechanism.** With
+  a subtly flawed fact in the retrieval path, the knomit-assisted arm produced
+  *worse* solutions than the unassisted one (and all eight runs made the same
+  error). After repairing that one fact — changing nothing else — the assisted
+  arm won 30 of 32 blind comparisons while keeping the speed advantage.
+- **A result we didn't design for: the repaired fact prevented model
+  mistakes, not just corpus ones.** In the final round the *unassisted* arm
+  invented the same misreading on its own, in 5 of 8 runs — it is exactly the
+  conclusion a model reaches from a partial read of the code. The arm reading
+  the repaired fact made it in 2 of 8.
+
+The story is not any single verdict — it is the three together. A knowledge
+base amplifies whatever it holds: share accurate facts and every agent
+downstream gets faster, sharper, and truer to the project's shape, even where
+the model's own instincts point the wrong way; let one flawed fact in and
+eight independent runs make the same mistake in the same words. The leverage
+therefore lives upstream, in how facts are written and whether the store can
+be audited. knomit stores facts as plain markdown in git
+([why that substrate](/blog/git-is-not-storage/)) so agents and humans read
+the same file, and either can verify it against the code — an agent through
+an adversarial audit ([`/knomit-harden`](/docs/claude-code/#the-11-slash-commands)),
+a human with their own two eyes.
+
+## Caveats first
+
+- **Small scale.** 8 runs per arm per experiment, one codebase (knomit
+  itself), one model (Claude Opus 4.8 as both agent and judge), one task type
+  per experiment. Nothing here is a cross-project benchmark.
+- **LLM-as-judge is noisy.** We measured the noise instead of ignoring it:
+  every pair is judged in both orderings (swapped-order self-consistency
+  ranged from 56% to 88% across rounds), verdicts come from a Bradley–Terry
+  model with bootstrap confidence intervals, and a verbosity probe regresses
+  wins on answer length. These guards changed verdicts — see round 1.
+- **Our first results were dominated by instrument bugs**, not by knomit:
+  a judge that favored longer answers, and answer keys sitting readable in the
+  repo. We report them because any single-run agent evaluation — including
+  ours — should be assumed broken until its instrument is checked.
+- **The final positive result used the strongest form of repair.** The fixed
+  fact doesn't just state the correct mechanics; it names the misreading
+  explicitly. A minimal correction might have done less.
+- **Conformance counts are not directly comparable across rounds**, because
+  part of the judge's ground-truth checklist is harvested from the answers
+  under test (by design — see below). The one violation present in both
+  rounds' checklists is comparable, and it is the one we track.
+
+## The experiment
+
+### Harness
+
+The harness is a single Python script — stdlib only, no third-party
+dependencies — that drives the `claude` CLI in headless JSON mode end to end:
+it runs both arms, isolates runs from one another, orchestrates the blind
+judging, fits the statistics, and writes a machine-readable results file plus
+a markdown report per experiment.
+
+Each experiment runs the same task prompt 8 times per arm:
+
+- **with** — knomit fully active (MCP server, session hooks, a directive to
+  actually consult it);
+- **without** — no knomit MCP server, no hooks; everything else identical.
+
+Both arms (and the judge) run under a permissions deny-list blocking the
+benchmark's own files — task definitions, rubrics, prior runs, and archived
+design docs. After each run, any working files the agent left in the plans
+directory are swept into that run's results folder, so no run can read a
+previous run's output.
+
+Quality is judged blind, comparatively:
+
+- an absolute rubric score per answer (a validity floor, not the signal);
+- pairwise diff-then-judge: the judge enumerates substantive differences,
+  rules per rubric criterion, then picks a winner — every pair in both
+  orderings, scheduled as a cyclic round-robin (32 judgments per experiment);
+- all judgments feed a Bradley–Terry model (Davidson tie extension); the arm
+  effect is the mean latent gap with a bootstrap CI;
+- a joint logistic fits win probability on answer-length delta *and* arm: the
+  length coefficient is a bias alarm, the arm coefficient is the
+  length-adjusted quality signal. A BT edge that is not separable after length
+  control is demoted to a tie;
+- the judge may read the repository (read-only, knomit off) to verify factual
+  disagreements before ruling;
+- a **conformance sweep**: the judge checks every answer against a checklist
+  of ground-truth notes — curated invariants verified by hand, plus notes
+  *harvested* per experiment by a knomit-enabled agent that reads all
+  anonymized answers and exports the KB facts for every area any answer
+  touches. Violations are reported as structured output and tallied per arm.
+
+Efficiency is read from the CLI's own accounting: cost, tokens, turns, and
+wall-clock time per run.
+
+### The tasks
+
+Both task types are project-specific — answerable well only against the real
+codebase:
+
+- **Code review** (round 1): a developer's implementation plan for a
+  `knomit restore` command that hot-swaps a repo's live store from a snapshot
+  without restarting the server. The plan looks plausible and is subtly
+  incomplete; the task is to review it against the actual code — what the
+  naive swap gets wrong, which existing code already solves this exact
+  problem, and what a correct swap must do, in what order — naming real files
+  and functions, not speculating.
+- **Design proposal** (round 1): a contradiction-detection capability for the
+  knowledge base. Retired after round 1, when the repo turned out to contain
+  finished design documents for exactly this feature (see below).
+- **Design proposal** (rounds 2 and 3): ontology refactoring — first-class
+  restructuring of the `kb/<topic>/<category>/<uuid>` tree as a growing
+  corpus outgrows its categories. The prompt demands coverage of the
+  operations, fact identity and inbound references under a move, git and
+  peer-sync semantics when peers diverge, derived state (search index,
+  embeddings, property graph) after a mass rename, hand-made moves with plain
+  git, and the automation boundary — every decision grounded in knomit's
+  actual architecture and named invariants. Capped at 1200 words, with an
+  explicit warning that unsupported claims and padding count against the
+  answer.
+
+### Round 1: measuring our own bugs
+
+Two tasks — a code-tracing bug question and a design proposal. Initial
+readouts: the assisted arm "won quality" on the code task (+57% cost), and
+tied on the design task (−23% cost).
+
+Both readouts were wrong. The code-task "win" (BT +1.18) did not survive
+length control — assisted answers were simply longer, and the judge favored
+length (+1.65/kchar); the length-adjusted arm effect was +0.26 with a CI
+straddling zero. The design-task "tie" was contaminated: the repo contained 13
+finished design documents for that exact topic, and the transcripts showed 6
+of 8 unassisted runs and 8 of 8 assisted runs reading them. Worse, the
+benchmark polluted itself: runs saved their proposals into the shared plans
+directory, where later runs found them.
+
+We fixed the instrument — word caps, an explicit length policy for the judge,
+the length-adjusted model, deny-lists, per-run sweeps — and wrote a fresh,
+uncontaminated design task: ontology refactoring (renaming and restructuring
+the knowledge tree, which stresses path-based references, derived indexes, and
+peer sync).
+
+### Round 2: a real negative result
+
+With a clean instrument, the unassisted arm won decisively: BT −1.26
+(CI [−1.48, −0.27]), 23 of 32 pairwise judgments, and the gap survived length
+control. The assisted arm was still 27% cheaper and 54% faster (130s vs 279s
+median).
+
+The conformance sweep explained why. All 8 assisted runs asserted the same
+claim: *"embeddings are content-addressed by blob hash, so a mass category
+rename re-embeds nothing — this is the decisive win."* Verified against the
+code, the claim is false: the vector table is keyed by row id; a moved fact is
+a new row and is re-embedded. Several answers built their cost analysis on it.
+(The sweep flagged it as a major violation in 7 of the 8 answers — the eighth
+asserted it without building on it — so 7/8 is the number we track.)
+
+The source was one fact in the corpus. Here it is as it stood during round 2 —
+every sentence in it is true:
+
+<FactCard
+  path="kb/invariants/store/facts-row-immutable-cow/8f299f86.md"
+  frontmatter={{
+    type: 'principle',
+    confidence: 0.95,
+    domain: ['store', 'schema', 'invariants'],
+    entities: ['facts', 'branch_facts', 'blob_hash', 'Upsert'],
+    refs: ['src://knomit/.claude/plans/2026-03-29-branch-scoped-indexing-design.md@0938d83'],
+  }}
+  body={'facts rows are IMMUTABLE once created — content-addressed by UNIQUE(path, blob_hash). COW semantics: when one branch modifies a fact, a new row is created with a different blob_hash; the old row stays for branches still referencing it. LOAD-BEARING CONSEQUENCES: (a) Graph nodes for a fact version are immutable — once built, never updated. Upsert SKIPS graph sync on COW hits. (b) **Embeddings are immutable. Upsert SKIPS embedding on COW hits.** (c) SIMILAR_TO edges are stable; only NEW fact versions trigger edge computation.'}
+  commit="e60a329"
+  signer="agent/dev-7c9"
+  evolution={null}
+/>
+
+But it stated structure without the consequence for a *move*, its only
+reference was a months-old design document rather than the enforcing code, and
+it compressed naturally into "vectors are keyed by content". Eight runs
+compressed it the same way. The agents were instructed to verify load-bearing
+facts against the code; 0 of 8 did — the retrieved fact felt sufficient. The
+54% time saving was, in part, the skipped verification.
+
+### The repair
+
+We updated the one fact: the key is stated uncompressibly ("path is part of
+the identity"), the consequence is explicit ("a pure move mints a new row and
+IS re-embedded"), a "what this does not mean" section names the false
+corollary, and the references now pin the enforcing source files at the
+current commit. The fact's own history records the change — authored
+2026-05-22, repaired 2026-07-04:
+
+<FactCard
+  path="kb/invariants/store/facts-row-immutable-cow/8f299f86.md"
+  frontmatter={{
+    type: 'principle',
+    confidence: 0.95,
+    domain: ['store', 'schema', 'invariants'],
+    entities: ['facts', 'branch_facts', 'blob_hash', 'Upsert'],
+    refs: ['src://knomit/internal/store/search_crud.go@4657949'],
+  }}
+  body={'facts rows are IMMUTABLE once created — content-addressed by UNIQUE(path, blob_hash); **PATH IS PART OF THE IDENTITY**. (…) Embeddings are immutable PER ROW and skipped only on COW HITS — `facts_vec` is keyed by facts.rowid, NOT by blob_hash; there is no by-content vector lookup. WHAT THIS DOES NOT MEAN (documented misreading): "content-addressed" does NOT make vectors reusable by content alone. A pure MOVE/RENAME (same blob, NEW path) is a COW MISS: it mints a NEW facts row with a NEW rowid, and the moved fact **IS RE-EMBEDDED**.'}
+  commit="0ca0dd5"
+  signer="agent/harness-repair"
+  evolution={null}
+/>
+
+Nothing else changed — same task, same harness, same judge, same model.
+
+### Round 3: the repair, measured
+
+- BT gap: **−1.26 → +2.50**; length-adjusted +2.03 (CI [+1.58, +2.50]).
+- Pairwise: 9–23 → **30–2**.
+- The specific violation: 7 of 8 assisted answers → **2 of 8**.
+- The criterion that decided round 2 (derived-state consistency) flipped from
+  4–10 against to 13–1 in favor.
+- Speed and cost advantages held: −41% time, −35% cost.
+- Judge self-consistency rose to 88%; no low-confidence caveats on the verdict.
+
+Meanwhile the unassisted arm committed the embedding misreading independently
+in 5 of 8 runs, plus in-place row updates the immutability invariant forbids —
+12 major violations total. The false belief is not something only a bad fact
+teaches; it is the conclusion a model reaches on its own from a partial read
+of the code. So the repaired fact did more than stop transmitting an error —
+it prevented one the model was going to make anyway. Correcting the corpus
+corrected the model.
+
+### What one fact repair demonstrates
+
+The loop, end to end: measure → diagnose from the violation table → repair the
+fact at its source → re-measure. One upstream edit moved the outcome from
+"significantly worse than no knowledge" to "wins 94% of blind comparisons",
+with the efficiency gains intact throughout. Knowledge sharing is worth it
+when the system, not each reader, carries the burden of keeping knowledge
+true — and the burden is real: our corpus had at least one trap, and we found
+it only because the harness forced a conformance check against ground truth.
+
+## Lessons learned
+
+1. **Evaluations measure their own bugs first.** Our judge preferred longer
+   answers (logistic coefficient +1.65/kchar on decisive judgments); a
+   "statistically significant" quality win evaporated once answer length was
+   controlled for. Separately, the repo contained 13 old design documents for
+   the exact task we were testing — both arms read them.
+2. **A true fact can be a trap.** The fact that caused round 2's failure was
+   correct. It was *compressible*: readers reduced "content-addressed by
+   (path, blob_hash)" to "content-addressed", dropped the path component, and
+   derived a false consequence from the compressed version.
+3. **Shared knowledge correlates errors.** Eight independent runs made the
+   *same* mistake in the same words. Without the knowledge base, runs made
+   fewer-of-a-kind, uncorrelated mistakes. A KB shifts the error distribution
+   from random to systematic — which is exactly why one upstream repair fixes
+   every downstream consumer.
+4. **The speed win and the quality risk are the same behavior.** The assisted
+   arm was fast *because* it trusted retrieved facts instead of re-reading the
+   code — and a retrieved fact feels verified even when nothing has checked it
+   against the current source.
+5. **Models invent the attractive misreading on their own.** In the final
+   round, the *unassisted* arm independently produced the same false belief in
+   5 of 8 runs. A consequence-grained fact doesn't just stop transmitting an
+   error — it inoculates against an error models produce unprompted.
+6. **Write facts so they can't be compressed into falsehoods**: state the
+   operational consequence ("a pure move mints a new row and IS re-embedded"),
+   name the foreseeable misreading ("this does NOT mean vectors are reusable
+   by content alone"), and anchor references to the enforcing code, not to
+   design documents.
+
+## What we changed as a result
+
+- **Authoring contract** (recorded in the corpus itself): invariant facts must
+  state operational consequences, name foreseeable misreadings, and reference
+  enforcing code.
+- **A hardening pass** ([`/knomit-harden`](/docs/claude-code/#the-11-slash-commands)): an adversarial audit that
+  deliberately compresses each fact to its slogan, derives the consequences a
+  hurried consumer would, and verifies those derivations — not the fact —
+  against the code.
+- **Planned**: drift badges on query results (the server knows when a fact's
+  pinned references have moved), a one-call verify affordance so checking a
+  fact costs a tool call instead of a code excursion, and entailment-based
+  tension detection between facts whose fragments compose into contradictions.
+
+The repair machinery the experiment leaned on — update a fact in place, keep
+its history, retract what no longer holds — is the subject of
+[keeping facts honest after the code moves](/blog/keeping-facts-honest-after-the-code-moves/);
+the type system that keeps a guess from passing as an observation is
+[its own essay](/blog/a-guess-is-not-a-fact/).
+
+The benchmark harness and the full run data are not published yet; the
+harness section above is the spec, and we may release both once they are
+cleaned up for use outside this repo.
+
+Read the code on [GitHub](https://github.com/knomit/knomit).
