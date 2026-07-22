@@ -44,6 +44,25 @@ The same Ed25519 key that authenticates SSH remotes also signs commits and names
 the agent branch — one identity, end to end.
 </Aside>
 
+### SSH host-key verification
+
+SSH remotes verify the server's host key against an OpenSSH `known_hosts` file,
+on a trust-on-first-use model:
+
+| Situation | Behaviour |
+|-----------|-----------|
+| Host not yet listed | Accepted, and its key is appended to `known_hosts` |
+| Host listed under the same key | Accepted |
+| Host listed under a **different** key | **Rejected** — the sync fails |
+| `known_hosts` unusable (bad path, unparseable) | Hard error; there is no insecure fallback |
+
+The file is set by `[remote] known_hosts` / `KNOMIT_REMOTE_KNOWN_HOSTS` and
+defaults to `<KNOMIT_HOME>/known_hosts`; point it at `~/.ssh/known_hosts` to
+share pins with your shell's git. It is re-read on every connection, so an edit
+takes effect without a restart. Each first-use pin is logged with the key's
+SHA-256 fingerprint — verify that fingerprint out-of-band if the remote is
+untrusted. See [Configuration](/docs/configuration/).
+
 ### Credential encryption
 
 Auth tokens are **never stored in plaintext**. They are encrypted with
@@ -71,6 +90,13 @@ REST endpoints / the web UI's "Connect Remote" flow. The stored record carries:
 On clone/init, knomit prefers `main` over a remote agent-branch HEAD as the
 consensus upstream, and syncs **both** the agent branch and the upstream.
 
+`PATCH /origin/upstream` takes a `{"branch": "…"}` body and changes only the
+upstream branch — auth is untouched and the connect flow is not re-run. The
+branch is validated against a conservative subset of git's ref-name rules
+(control characters, spaces, `~ ^ : ? * [ \`, a leading `-` or `/`, a trailing
+`/`, and the `..` / `@{` sequences are rejected with 400). The reconcile loop
+re-reads the record each tick, so the change takes effect on the next cycle.
+
 ## Local-path origins (security gate)
 
 Cloning from a local filesystem path is **disabled by default**. To allow it, set
@@ -89,6 +115,15 @@ The "Connect Remote" flow is session-based and ephemeral (≈10-min idle expiry)
    local-only / remote-only / shared / dead-ref facts) for "local wins" vs
    "remote wins".
 3. `POST …/apply` then `…/commit` performs the merge.
+
+These endpoints serve `application/hal+json`, and errors as
+`application/problem+json`:
+
+| Endpoint | Response shape |
+|----------|----------------|
+| `GET /repos/{repo}/origin-sessions` | HAL collection — a `count` plus the sessions under `_embedded.sessions`, **not** a bare JSON array |
+| `POST /repos/{repo}/origin-sessions` | `session_id` plus `_links` |
+| `GET …/origin-sessions/{sessionID}` | Session detail (`state`, `url`, and any `history` / `last_preview` / `last_apply`) plus `_links` |
 
 Disjoint histories (e.g. reconnecting after a token refresh against a repo with
 no shared history) are reconciled via a cursor replay with one-level dead-ref

@@ -40,9 +40,19 @@ $KNOMIT_HOME/
 │   └── embeddinggemma/         # cached ONNX model + tokenizer
 ├── bin/
 │   └── knomit-bridge           # symlink the desktop app creates on launch
+├── control.db                  # machine-local control plane: lenses + per-repo MCP profile
+├── known_hosts                 # SSH host-key pins for git remotes (default location)
 ├── id_ed25519 / .pub           # agent SSH key (signs commits; derives credential-encryption key)
 └── …
 ```
+
+<Aside type="note">
+`control.db` is a SQLite database holding lens definitions (tables `lenses`,
+`lens_reads`) and per-repo MCP profile settings (table `repo_settings`). It is
+machine-local operational config: deliberately **not** git-backed, and it does
+not sync. Lenses store per-machine repo *names*; repo settings are keyed by repo
+ID (the root commit hash).
+</Aside>
 
 Repos are discovered by scanning `repos/` for `*.db` files at startup (and at
 runtime via `POST /api/v1/repos:rescan`); the filename minus `.db` is the repo
@@ -50,7 +60,9 @@ name, and names must match `[a-z0-9_-]+`.
 
 <Aside type="note">
 The `*.sessions.db` sidecar is **not** opened as a repo — repo discovery globs
-`repos/*.db` and filters session DBs out.
+`repos/*.db` and filters session DBs out. A rescan also skips any repo whose
+create or restore is still in flight: the `.db` file is on disk before the name
+is registered, and opening it there would double-open the same database.
 </Aside>
 
 ### The default repo
@@ -110,6 +122,7 @@ user        = ""
 password    = ""
 ssh_key     = ""                # path to an SSH private key
 auth_method = ""                # "token" | "basic" | "ssh" | "none" (inferred if empty)
+known_hosts = ""                # SSH host-key pins; "" = <KNOMIT_HOME>/known_hosts
 
 [cluster_cache]
 resolution         = 4.0        # Louvain γ (higher = more, smaller communities)
@@ -140,6 +153,33 @@ crash_file      = ""            # non-empty redirects fd 2 (stderr) to persist f
 addr = ""                       # diagnostics port (pprof + /metrics + /runtime/*); "" = off. Bind local only.
 ```
 
+### SSH host-key verification
+
+SSH remotes verify the server's host key against an OpenSSH `known_hosts` file.
+`remote.known_hosts` (env `KNOMIT_REMOTE_KNOWN_HOSTS`) selects that file; the
+value is tilde-expanded, and an unset value resolves to
+`<KNOMIT_HOME>/known_hosts`. Point it at `~/.ssh/known_hosts` to share the pins
+with your interactive `ssh` client.
+
+Verification is trust-on-first-use, because syncs run unattended and cannot
+prompt:
+
+- An **unknown** host is accepted and its key is appended to the file.
+- A host already listed under a **different** key is **rejected**.
+
+Per-request auth specs — a credential supplied with a single API call — carry
+only the credential and inherit the operator's `known_hosts` setting, so every
+SSH path pins against the same file.
+
+<Aside type="caution">
+An unusable `known_hosts` path (empty, unreadable, unparseable, or in a
+directory that cannot be created) is a **hard error**: the operation fails.
+knomit never falls back to accepting unverified host keys. Earlier versions used
+`ssh.InsecureIgnoreHostKey()`, which accepted every host key forever — after
+upgrading, a remote whose host key has changed fails the sync instead of
+succeeding silently.
+</Aside>
+
 ## Environment variables
 
 ### Config-backed (override `knomit.toml`)
@@ -168,6 +208,7 @@ addr = ""                       # diagnostics port (pprof + /metrics + /runtime/
 | `KNOMIT_REMOTE_PASSWORD` | `remote.password` | — |
 | `KNOMIT_REMOTE_SSH_KEY` | `remote.ssh_key` | `~/.knomit/id_ed25519` |
 | `KNOMIT_REMOTE_AUTH` | `remote.auth_method` | auto-detected |
+| `KNOMIT_REMOTE_KNOWN_HOSTS` | `remote.known_hosts` | `~/.knomit/known_hosts` |
 | `KNOMIT_METHODOLOGY_MIN_SCORE` | `methodology_min_score` | `0.15` |
 | `KNOMIT_CLUSTER_CACHE_RESOLUTION` | `cluster_cache.resolution` | `4.0` |
 | `KNOMIT_CLUSTER_CACHE_MIN_COMMUNITY_SIZE` | `cluster_cache.min_community_size` | `2` |

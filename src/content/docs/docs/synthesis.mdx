@@ -22,6 +22,26 @@ served, until the phase completes. Sessions track three independent axes:
 - **phase** — workflow: `work` · `reflect` · `done` (advanced by atomic CAS transitions)
 - **effort** — the discovery dial: `normal` · `medium` · `high`
 
+### Answering the right work item
+
+Each work item carries an `id`. Echo it back as the optional `item_id` parameter
+on the next `knomit_review` / `knomit_hypothesize` call, and the server rejects
+the call if that item is no longer the current one. This matters because the
+queue can grow between rendering an item and answering it — applying a distill
+item enqueues RAPTOR follow-up items — so without the id a response reasoned
+about against one item's facts can be applied to a different one. Omitting
+`item_id` preserves the previous behaviour of answering whatever item is
+current.
+
+A response is decoded and validated before the item is claimed, and the claim
+itself is an atomic compare-and-swap, so a failed validation leaves the item
+unanswered and retryable, while a lost claim applies nothing twice.
+
+Distill work items are **chunked** at roughly 64 KiB of marshalled fact JSON per
+item, so a large cluster arrives as several items rather than one oversized
+prompt. Prune clusters are not chunked. The bound is a constant, not a
+configuration knob — there is no setting to tune it.
+
 <Aside type="note">
 Only **epistemic** facts seed the pipeline — pragmatic facts (policies,
 heuristics) never enter synthesis.
@@ -36,6 +56,11 @@ heuristics) never enter synthesis.
 | **Reflect** (methodology) | Reflects on hypothesis→outcome transitions to record reasoning lessons as `methodology` facts. Reinforcement appends the methodology's path to the transition fact's `refs` — git is the only source of truth, no side-channel counter. New-methodology proposals are hard-capped (`KNOMIT_REFLECT_PROPOSE_CAP`, default 1) and gated by a novelty/cosine floor (`KNOMIT_REFLECT_NOVELTY_THRESHOLD`). |
 
 `knomit_review` does **not** generate new hypotheses.
+
+The final result (`done: true`) carries a populated `summary` with the session's
+running totals — `Pruned`, `Merged`, `Updated`, `Synthesized`. The counts are
+informational: if they cannot be read back, the summary degrades to zeros rather
+than failing the session. `knomit_hypothesize` reports no summary.
 
 <Aside type="tip">
 Run `review` at higher `effort` to surface emergent **consequences** — see
