@@ -4,13 +4,17 @@ interface Props {
   title: string;
   lead?: string;
   align?: 'start' | 'center';
+  /** Heading level for the title. Use 'h1' on a page's primary heading so the
+   *  page has exactly one H1; defaults to 'h2' for subsequent section headings.
+   *  Purely semantic — the .k-heading__title class fixes the visual size. */
+  as?: 'h1' | 'h2';
 }
-const { eyebrow, title, lead, align = 'start' } = Astro.props;
+const { eyebrow, title, lead, align = 'start', as: Tag = 'h2' } = Astro.props;
 ---
 
 <div class={`k-heading k-heading--${align}`}>
   {eyebrow && <p class="k-eyebrow">{eyebrow}</p>}
-  <h2 class="k-heading__title">{title}</h2>
+  <Tag class="k-heading__title">{title}</Tag>
   {lead && <p class="k-lead k-heading__lead">{lead}</p>}
 </div>
 
