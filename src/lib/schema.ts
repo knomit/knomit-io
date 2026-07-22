@@ -28,7 +28,7 @@ export function softwareApplicationSchema(site: URL) {
     '@type': 'SoftwareApplication',
     name: SITE_NAME,
     applicationCategory: 'DeveloperApplication',
-    operatingSystem: 'macOS, Linux, Windows',
+    operatingSystem: 'macOS, Linux',
     url: site.origin + '/',
     description:
       'Git-backed knowledge for AI agents: a distributed knowledge base of typed, provenanced facts.',
