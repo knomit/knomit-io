@@ -1,25 +1,55 @@
 ---
 title: Web UI
-description: Browse, search, inspect provenance, time-travel, and trigger synthesis from the embedded web UI.
+description: Browse, search, inspect provenance, time-travel, and watch tasks stream live from the embedded web UI.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-The server embeds a React single-page app at `/`. It's the same UI the
-[live demo](/explore) runs — browse facts, search, inspect provenance,
-time-travel through history, and monitor tasks in real time over SSE.
+The server embeds a React single-page app at `/` — browse facts, search, inspect
+provenance, time-travel through history, and monitor tasks in real time over SSE.
+It browses either a single repo or a [lens](/docs/lenses/): one write repo plus
+any number of read mounts, federated into one virtual knowledge base.
 
-<Aside type="tip" title="Try it without installing">
-The [live demo](/explore) is this exact UI, running read-only against knomit's
-own knowledge base. It's the fastest way to see everything below in action.
+<Aside type="tip" title="See it without installing">
+A hosted read-only instance is not up yet. When it is, [/explore](/explore) will
+embed this exact UI; until then the [Docker image](/docs/deployment/) or the
+[desktop app](/docs/desktop/) is the fastest way to see everything below.
 </Aside>
 
 ## The top bar
 
-- A **repo selector** appears when more than one repo exists.
+- A **context switcher** lists two groups, Repos and Lenses. It appears when more
+  than one repo exists, when any lens exists, or when you are already browsing a
+  lens.
+- In a lens context the right zone adds a **lens chip**, an **`N mounts`** pill,
+  and a **`writes → <write repo>`** pill naming the write mount.
 - A **gear icon** opens remote-origin configuration (see [Remote sync](/docs/remote-sync/)).
 - A **"Manage repos"** menu creates, archives, restores, and purges repos at
-  runtime — no CLI, no restart.
+  runtime — no CLI, no restart. Lenses are created, edited, and deleted from the
+  same surface.
+
+## Browsing a lens
+
+The **browse context** — a repo or a lens — is the single source of truth for
+what you are looking at. In a lens context the active repo and branch stay
+pointed at the lens's write mount, so write routing never breaks. The context is
+persisted and restored across reloads; a lens deleted since the last visit falls
+back to a repo context rather than erroring.
+
+| Surface | In a lens context |
+|---------|-------------------|
+| Library | one ontology tree, merged across every mount |
+| Sources dropdown | narrows the union to a subset of read mounts; selecting every mount collapses back to "all mounts" |
+| `repo:` filter | recognised as a chip category (a repo context leaves `repo:foo` as free text) |
+| Fact view | shows a source-mount badge; editing is permitted only for write-repo facts |
+| Colours | each repo gets a deterministic colour, the same wherever it appears |
+
+The Sources dropdown renders only in a lens context.
+
+Creating a lens takes a name, an optional description, one write repo — pinned as
+an always-on first row, since the server also mounts it for reading — and any
+number of checkbox read rows, each with a branch picker offering only branches
+that exist. Lens management also has a detail view per lens.
 
 ## What you can do
 
@@ -30,13 +60,24 @@ own knowledge base. It's the fastest way to see everything below in action.
 - **Time-travel** — view the knowledge graph as-of any past commit; refs resolve
   to the versions that existed at that point in time.
 - **Ontology browser** — navigate topics and categories and see inheritance.
-- **Synthesis & tasks** — trigger a synthesis run and watch progress stream live
-  over server-sent events.
+- **Synthesis & tasks** — watch task progress stream live over server-sent
+  events.
+- **Console** — a persistent panel that logs task, status, and remote events as
+  they arrive.
+
+A panel that crashes renders a contained inline fallback; the rest of the app
+stays usable.
 
 ## Keyboard
 
-The UI is keyboard-friendly — search (`/`) and a command palette (`:`) keep you
-on the keyboard while browsing and inspecting.
+Four global keys, ignored while a text field has focus:
+
+| Key | Effect |
+|-----|--------|
+| `/` | Focus the search/filter input |
+| `Escape` | While time-travelling, return to now; otherwise clear the active filters |
+| `Backspace` / `Delete` | Navigate back |
+| `h` | Return to HEAD, leaving time-travel |
 
 <Aside type="tip" title="Run it as a native app">
 The same UI ships as a system-tray [desktop app](/docs/desktop/)

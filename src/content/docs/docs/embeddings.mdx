@@ -41,6 +41,52 @@ knomit warm-models                        # configured model
 knomit warm-models --model embeddinggemma
 ```
 
+`warm-models` only fetches files — it neither boots the app nor initialises ONNX
+Runtime, so it runs in a build stage without the ORT shared library present.
+
+### Download integrity
+
+The cache is skip-if-present: a file that lands corrupt is never re-fetched, and
+surfaces as a cryptic ONNX failure on every subsequent boot. So each download is
+verified **before** it is renamed into place, and written to a temp file in the
+destination directory and `Sync()`ed first, so the rename is atomic and the file
+carries no unwritten tail blocks.
+
+| Check | Applies when |
+|-------|--------------|
+| SHA-256 against a pinned digest (`ModelSHA256` / `DataSHA256` / `TokenizerSHA256`) | The registry pins one for that file |
+| Byte count against the response's `Content-Length` | The server declares one — catches a 200 whose body is cut short, which `io.Copy` reports as success |
+
+A response with neither is accepted; there is nothing left to compare against.
+The registry entries ship unpinned, because their URLs point at mutable Hugging
+Face `main` refs that a pin would break on every upstream republish.
+
+### Timeouts and the stall watchdog
+
+Embeddings are mandatory, so the model download runs before the server listens.
+A connection that accepts but never delivers data therefore used to hang boot
+indefinitely. A watchdog samples a progress counter every 5s and aborts the
+transfer after **90 seconds with no bytes received**.
+
+| Bound | Value |
+|-------|-------|
+| Dial | 30s |
+| TLS handshake | 30s |
+| Response headers | 60s |
+| No-progress stall | 90s |
+| Whole request | none — by design |
+
+There is deliberately no whole-request timeout: the model is hundreds of
+megabytes, and a legitimate download over a slow link must be allowed to run
+long. The stall watchdog is what a whole-request timeout is usually reaching for
+— it distinguishes "slow" from "dead".
+
+`EnsureModel` and `NewEmbedder` take a `context.Context` that bounds these
+downloads; cancelling it aborts a fetch in progress, and `knomit warm-models`
+passes the command context. `EmbedQuery` and `EmbedDocument` also take a context,
+but only as a pre-flight checkpoint — the ONNX `Run` call cannot be interrupted,
+so cancelling after that check does not stop an inference already underway.
+
 The ONNX Runtime shared library is located at runtime via
 `ONNXRUNTIME_SHARED_LIBRARY` (or `onnx_lib_path`); it is fetched into
 `dist/<platform>/lib/` at build time by `fetchlibs`.

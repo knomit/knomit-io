@@ -137,6 +137,17 @@ view of the identical data.
 |--------|------|---------|
 | `knomit_embed_inference_seconds` | histogram | ONNX embedding inference latency per batch |
 | `knomit_cypher_retry_total` | counter | GraphQLite `cypher()` transient-collision retries (read contention) |
+| `knomit_http_requests_total` | counter vec | HTTP requests, labelled `route`, `method`, `status`. `route` is the chi route *pattern* (`/repos/{repo}`), never the concrete path, so cardinality stays bounded; unmatched paths collapse to `other` |
+| `knomit_llm_request_seconds` | histogram | LLM completion latency per **logical** request — the whole retry loop, not each attempt. Buckets run 0.5s…900s, sized so a fully-retried request still lands in a bucket rather than `+Inf` |
+| `knomit_llm_retries_total` | counter | LLM attempts retried after a retryable failure. Zero on a healthy system, so a sustained rise is an early signal that a provider is degrading |
+
+The two `knomit_llm_*` series come from the shared resilience decorator that
+wraps every provider adapter, so they are emitted for all providers — Gemini,
+Anthropic, Bedrock, Ollama, and the CLI adapters alike.
+
+Those nine series are the whole registration surface: the four gauges above are
+registered by the runtime collector, and the five application metrics are the
+only other `Counter` / `CounterVec` / `Histogram` call sites in the tree.
 
 <Aside type="tip">
 For a containerized deployment, the usual shape is `KNOMIT_LOG_FORMAT=json` for

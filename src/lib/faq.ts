@@ -46,6 +46,6 @@ export const FAQ_ITEMS: FaqItem[] = [
   },
   {
     q: 'Where can I run knomit?',
-    a: 'knomit ships three binaries: a server (knomit), a desktop tray app (knomit-desktop), and a bridge (knomit-bridge) that proxies MCP over stdio into clients like Claude Code and Claude Desktop. It runs on macOS, Linux, and Windows.',
+    a: 'knomit ships three binaries: a server (knomit), a desktop tray app (knomit-desktop), and a bridge (knomit-bridge) that proxies MCP over stdio into clients like Claude Code and Claude Desktop. It runs on macOS and Linux.',
   },
 ];

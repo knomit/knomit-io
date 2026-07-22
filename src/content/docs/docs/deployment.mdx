@@ -50,7 +50,7 @@ docker run -d --name knomit \
   knomit:latest
 ```
 
-Open **http://localhost:19278/**. The default `trunk` repo is created on first
+Open **http://localhost:19278/**. The default `core` repo is created on first
 run.
 
 <Aside type="caution" title="Use a named volume, not a bind mount">
@@ -88,14 +88,19 @@ Common additions for a container deployment:
 ## Running a read-only / demo instance
 
 Set **`KNOMIT_READ_ONLY=true`** to serve a public, browse-only instance — this is
-exactly how the [live demo](/explore) runs. Read-only is **startup-only** (it
-cannot be toggled at runtime) and, across every surface:
+how the [/explore](/explore) demo will run once it is hosted. Read-only is
+**startup-only** (it cannot be toggled at runtime) and, across every surface:
 
 - **HTTP** — all mutating methods (`POST`/`PUT`/`PATCH`/`DELETE`) return `403`,
-  and the built-in git smart-HTTP endpoint is not mounted.
-- **MCP** — only the read tools are exposed (`knomit_query`, `knomit_explain`);
-  the write tools (`knomit_learn`, `knomit_update`, `knomit_retract`,
-  `knomit_hypothesize`, `knomit_review`) are omitted from the tool list.
+  and the built-in git smart-HTTP endpoint is not mounted. Both MCP dispatch
+  routes (`/repos/{repo}/branches/{branch}/mcp` and `/lenses/{lens}/mcp`) are
+  exempt from the method gate, because MCP reads are `POST`s; read-only-ness
+  there is enforced by tool filtering instead. The [lens](/docs/lenses/) REST
+  endpoints (`/lenses`, `/lenses/{lens}`) stay gated, so lens CRUD is blocked.
+- **MCP** — only the read tools are exposed (`knomit_query`, `knomit_explain`,
+  `knomit_repos`); the write tools (`knomit_learn`, `knomit_update`,
+  `knomit_retract`, `knomit_hypothesize`, `knomit_review`) are omitted from the
+  tool list.
 - **Origin sync** — pull-only: it fetches and fast-forwards from origin but never
   pushes back.
 
