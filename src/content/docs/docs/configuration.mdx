@@ -14,6 +14,12 @@ Configuration is layered, lowest to highest precedence:
 `KNOMIT_HOME` is resolved *first* (it is the config search root) and therefore
 cannot be overridden from inside the TOML file.
 
+A `.env` file in the process's working directory is loaded into the environment
+before config resolution, so its entries participate as ordinary environment
+variables at layer 3. It is optional; a missing or unreadable `.env` is ignored.
+Variables already present in the environment win — `.env` does not overwrite
+them.
+
 <Aside type="caution">
 Malformed numeric or duration env values fail at boot rather than being silently
 ignored — a typo in `KNOMIT_PORT` or a duration knob stops the server, it doesn't
@@ -40,11 +46,17 @@ $KNOMIT_HOME/
 │   └── embeddinggemma/         # cached ONNX model + tokenizer
 ├── bin/
 │   └── knomit-bridge           # symlink the desktop app creates on launch
+├── crashes/                    # crash-report bundles written by the post-mortem reporter
+├── dumps/                      # goroutine dumps written on SIGUSR1 (server keeps running)
 ├── control.db                  # machine-local control plane: lenses + per-repo MCP profile
+├── running.marker              # clean-shutdown marker; present at boot ⇒ previous run crashed
 ├── known_hosts                 # SSH host-key pins for git remotes (default location)
 ├── id_ed25519 / .pub           # agent SSH key (signs commits; derives credential-encryption key)
 └── …
 ```
+
+`crashes/`, `dumps/`, and `running.marker` are the native post-mortem surface —
+see [Observability](/docs/observability/).
 
 <Aside type="note">
 `control.db` is a SQLite database holding lens definitions (tables `lenses`,
@@ -138,6 +150,13 @@ effort_default         = "normal"  # "normal" | "medium" | "high"
 confidence_threshold   = 0.5       # min confidence to write a discovered proposal
 blast_radius_threshold = 1         # min reach for a backward keystone proposal (0 = off)
 bridge                 = "both"    # "domain" | "entity" | "both"
+# Bridge quality gate — TOML only, no KNOMIT_* env override (see below)
+coh_floor              = 0.5       # min intra-cluster cohesion for a bridge seed set
+max_members            = 5         # max members in a scored bridge seed set
+quality_floor          = 0.0       # min weighted quality score Q (0 disables the gate)
+w_coh                  = 1.0       # cohesion weight in Q
+w_gap                  = 1.0       # derivation-gap weight in Q
+w_spec                 = 1.0       # specificity weight in Q
 
 [log]
 format          = "console"     # "console" (human, stderr) | "json" (structured, stdout)
@@ -152,6 +171,16 @@ crash_file      = ""            # non-empty redirects fd 2 (stderr) to persist f
 [runtime]
 addr = ""                       # diagnostics port (pprof + /metrics + /runtime/*); "" = off. Bind local only.
 ```
+
+<Aside type="caution" title="The bridge quality gate is TOML-only">
+`coh_floor`, `max_members`, `quality_floor`, `w_coh`, `w_gap`, and `w_spec` are
+the only `[discovery]` keys with **no** `KNOMIT_*` environment override — the
+env overlay in `internal/config/config.go` covers `effort_default`, `bridge`,
+`confidence_threshold`, and `blast_radius_threshold` and stops there. A
+deployment configured purely through environment variables (a container, for
+instance) cannot reach them; it needs a `knomit.toml` at
+`KNOMIT_HOME/knomit.toml` or next to the binary.
+</Aside>
 
 ### SSH host-key verification
 
@@ -256,15 +285,19 @@ These are read by the LLM adapters, not through `knomit.toml`:
 | `GOOGLE_AI_API_KEY` | Gemini API key (fallback) |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | AWS credentials for Bedrock |
 | `AWS_REGION` | AWS region for Bedrock — no default; an unset region fails at call time |
+| `OLLAMA_HOST` | Ollama server base URL; unset defaults to `http://localhost:11434`. Health-checked at adapter creation (`GET /api/tags`, 5s) — an unreachable server is a hard error |
 
 ### Standalone knobs (no TOML key)
 
 | Variable | Read by | Purpose | Default |
 |----------|---------|---------|---------|
 | `KNOMIT_REFLECT_PROPOSE_CAP` | synthesize/reflect | Max new methodologies a reflect step may propose (`0` = none) | `1` |
-| `KNOMIT_REFLECT_NOVELTY_THRESHOLD` | synthesize/reflect | Cosine floor to reject near-duplicate methodologies | `0.85` (model-dependent) |
+| `KNOMIT_REFLECT_NOVELTY_THRESHOLD` | synthesize/reflect | Cosine floor to reject near-duplicate methodologies | the active model's calibrated `Thresholds.ReflectNovelty` — `0.69` for EmbeddingGemma |
 | `KNOMIT_BASE_URL` | `knomit-bridge claude` | Server URL for the `claude init` / `claude hook` helpers. **Does not affect the MCP proxy** — that resolves its base URL from the positional argument, then `server.json`, then the hardcoded default | `http://localhost:19278` |
 | `KNOMIT_MCP_DEBUG` | `knomit-bridge` | Non-empty → debug logging | — (info) |
+| `KNOMIT_LLM_TRACE` | app wiring | Non-empty → wraps the LLM adapter in a tracing adapter that writes every request/response to this path | — (off) |
+| `ORT_LIB_PATH` | embeddings | ONNX Runtime shared library. This is the live knob that `onnx_lib_path` / `ONNXRUNTIME_SHARED_LIBRARY` never became | — (probes `lib/` next to the binary) |
+| `GRAPHQLITE_LIB_PATH` | store | graphqlite SQLite extension, given **without** the file extension — the driver appends `.so` / `.dylib` / `.dll` | — (probes exe-relative, then source tree) |
 
 <Aside type="note">
 `KNOMIT_PPROF_ADDR` was replaced by the gated **runtime diagnostics port**
@@ -286,6 +319,7 @@ adapter:
 | Bedrock | `KNOMIT_LLM_PROVIDER=bedrock` · `KNOMIT_LLM_MODEL=us.anthropic.claude-sonnet-4-6-v1` · `AWS_ACCESS_KEY_ID=…` · `AWS_SECRET_ACCESS_KEY=…` |
 | Claude CLI | `KNOMIT_LLM_PROVIDER=claudecli` — uses the `claude` CLI (no API key; works with Anthropic Max) |
 | Gemini CLI | `KNOMIT_LLM_PROVIDER=geminicli` — uses the `gemini` CLI (no API key; works with Google AI Pro) |
+| Ollama | `KNOMIT_LLM_PROVIDER=ollama` · `KNOMIT_LLM_MODEL=<any model the server has pulled>` · `OLLAMA_HOST=…` (default `http://localhost:11434`). No API key. Never inferred from a model name, so the provider must be set explicitly |
 
 Provider names are matched exactly: `gemini`, `anthropic`, `bedrock`,
 `claudecli`, `geminicli`, `ollama`. Anything else fails with

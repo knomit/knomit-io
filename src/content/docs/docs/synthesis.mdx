@@ -57,6 +57,14 @@ heuristics) never enter synthesis.
 
 `knomit_review` does **not** generate new hypotheses.
 
+`KNOMIT_REFLECT_NOVELTY_THRESHOLD` defaults to the **active embedding model's
+calibrated `ReflectNovelty` value** — `0.69` under the default EmbeddingGemma —
+not to a fixed number, because a cosine floor is only meaningful against the
+distribution the model produces. A literal `0.85` exists in the code as a
+fallback for a model whose calibrated value is missing, which no normal
+deployment reaches: an embedder is mandatory. See
+[Embeddings](/docs/embeddings/).
+
 The final result (`done: true`) carries a populated `summary` with the session's
 running totals — `Pruned`, `Merged`, `Updated`, `Synthesized`. The counts are
 informational: if they cannot be read back, the summary degrades to zeros rather
@@ -73,6 +81,10 @@ Distillation is recursive: synthesis facts can themselves be clustered and
 distilled again at greater depth, RAPTOR-style. This runs through the **same**
 work-item queue; the item's priority orders the depth, so deeper summaries build
 on shallower ones without a separate scheduler.
+
+Recursion is hard-capped at **depth 3**: a distill item at that depth enqueues no
+follow-ups, so a productive session always drains its queue. The cap is a
+constant in the code, not a setting — there is nothing to tune.
 
 ## `knomit_hypothesize` — generate predictions
 

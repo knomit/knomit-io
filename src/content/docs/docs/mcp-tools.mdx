@@ -30,6 +30,22 @@ pointed to, so the graph you inspect is the one that existed when the claim was
 made.
 </Aside>
 
+## Read-only mode
+
+Each tool is registered with a `write` flag, and a read-only server drops every
+tool carrying it. Three tools survive: `knomit_query`, `knomit_explain`, and
+`knomit_repos`. The other five — `knomit_learn`, `knomit_update`,
+`knomit_retract`, `knomit_review`, `knomit_hypothesize` — are never added to
+the server, so they do not appear in `tools/list` at all rather than failing at
+call time. `knomit_review` and `knomit_hypothesize` count as writes because
+both commit facts.
+
+Read-only is set by `KNOMIT_READ_ONLY` (or `read_only` in `knomit.toml`) and is
+**startup-only** — it is read once when the server is constructed and cannot be
+toggled at runtime. The MCP dispatch routes are exempt from the HTTP method
+gate, because MCP reads arrive as `POST`s; tool filtering is what enforces
+read-only-ness here. See [Deployment](/docs/deployment/) for the operator view.
+
 ## The endpoint
 
 The MCP endpoint is **branch-scoped** — each agent reads and writes its own
