@@ -11,7 +11,7 @@ connected.
 
 ## Requirements
 
-- **Go 1.24+** — the entire backend.
+- **Go 1.25+** — the entire backend.
 - **Node.js + npm** — builds the embedded React frontend.
 - **Git CLI** — knomit shells out to `git`.
 - **A C compiler** — Xcode Command Line Tools on macOS (`xcode-select --install`),
@@ -20,8 +20,10 @@ connected.
 
 <Aside type="note">
 Two native shared libraries — **ONNX Runtime** (embeddings) and **graphqlite**
-(graph queries) — are downloaded automatically into `dist/lib/` by
-`make setup` / `make build`. You don't install them by hand.
+(graph queries) — are downloaded automatically into `dist/<goos>-<goarch>/lib/`
+by `make setup` / `make build`. You don't install them by hand. The build also
+drops top-level `dist/knomit` and `dist/knomit-bridge` symlinks pointing into
+that platform directory.
 </Aside>
 
 ## Build and run
@@ -56,19 +58,21 @@ Two native shared libraries — **ONNX Runtime** (embeddings) and **graphqlite**
 </Steps>
 
 Open <strong>http://localhost:19278/</strong> for the web UI. The default repo
-(`trunk`) is created automatically on first run.
+(`core`) is created automatically on first run.
 
 <Aside type="tip" title="Prefer a native app?">
 Instead of `make run`, build the [desktop app](/docs/desktop/) with `make
-desktop` — a system-tray app (`Knomit.app` on macOS, a `.desktop` launcher on
-Linux) that runs the server in-process and lets MCP clients auto-discover it. No
-terminal needed to keep knomit running.
+desktop` — a system-tray app that runs the server in-process and lets MCP
+clients auto-discover it. No terminal needed to keep knomit running. On macOS
+that produces `dist/Knomit.app`; on Linux it produces the `dist/knomit-desktop`
+binary only — run `make desktop-install` afterwards to install the `.desktop`
+launcher and icon.
 </Aside>
 
 <Aside type="tip" title="No CLI to create repos">
 Additional repos are created, archived, restored, and purged at runtime through
 the web UI ("Manage repos") or the [REST API](/docs/api/) — there is no CLI
-command to create a repo. The default `trunk` repo is always created if missing.
+command to create a repo. The default `core` repo is always created if missing.
 </Aside>
 
 ## Connect an agent over MCP
@@ -84,13 +88,15 @@ agent branch from the running server, so you never look it up by hand.
     "mcpServers": {
       "knomit": {
         "command": "dist/knomit-bridge",
-        "args": ["--repo", "trunk", "--source", "trunk", "--profile", "code"]
+        "args": ["--repo", "core"]
       }
     }
   }
   ```
 
-  `--source` is the slug used in `src://` refs (defaults to `--repo` if omitted).
+  To read across several repos at once, use a [lens](/docs/lenses/) instead:
+  `"args": ["--lens", "<lens-name>"]`. `--lens` and `--repo` are mutually
+  exclusive — passing both is a fatal error.
 
   </TabItem>
   <TabItem label="Streamable HTTP">
@@ -103,14 +109,26 @@ agent branch from the running server, so you never look it up by hand.
     "mcpServers": {
       "knomit": {
         "type": "streamable-http",
-        "url": "http://localhost:19278/api/v1/repos/trunk/branches/agent:hostname-abc123/mcp"
+        "url": "http://localhost:19278/api/v1/repos/core/branches/agent:hostname-abc123/mcp"
       }
     }
   }
   ```
 
+  A [lens](/docs/lenses/) has no branch segment — its URL is
+  `http://localhost:19278/api/v1/lenses/<lens-name>/mcp`.
+
   </TabItem>
 </Tabs>
+
+<Aside type="caution" title="Upgrading from an older bridge">
+The `--source` and `--profile` flags have been removed. An existing `.mcp.json`
+that still passes them fails at startup with
+`flag provided but not defined: -source`, and the bridge exits non-zero.
+Delete those two arguments; `--repo`
+alone is enough. The source slug now follows the repo, and the MCP profile is a
+per-repo server setting rather than a client flag.
+</Aside>
 
 <Aside type="note">
 knomit's tool descriptions carry all the behavioral guidance the model needs —
@@ -129,7 +147,7 @@ confidence: 0.8
 domain: [music]
 entities: [alice]
 refs:
-  - knomit://github.com/org/repo/src/preferences.ts
+  - src://myrepo/src/preferences.ts@abc1234
 ---
 Alice prefers rock music over jazz.
 ```

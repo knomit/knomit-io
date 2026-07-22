@@ -6,8 +6,11 @@ description: Every subcommand and flag for knomit (server & admin), knomit-bridg
 import { Aside } from '@astrojs/starlight/components';
 
 Three binaries expose a command line: `knomit` (server + admin), `knomit-bridge`
-(MCP proxy + Claude integration), and `knomit-desktop` (the app). All three answer
-`version` (and `--version`) with the same build string.
+(MCP proxy + Claude integration), and `knomit-desktop` (the app). All three print
+the same build string, but the accepted spelling differs: `knomit` and
+`knomit-bridge` take only the bare `version` subcommand — `--version` is an
+unknown flag on both. `knomit-desktop` accepts `version`, `--version` and
+`-version`.
 
 ## `knomit` — server & admin
 
@@ -40,7 +43,7 @@ Destroys the repo's database and recreates it fresh.
 
 | Flag | Type | Default | Meaning |
 |------|------|---------|---------|
-| `--name` | string | `trunk` | Repo to reset |
+| `--name` | string | `core` | Repo to reset |
 
 ### `knomit verify` — integrity check
 
@@ -50,7 +53,7 @@ clean atomic snapshot. Exit codes: `0` clean, `1` issues found, `2` command erro
 
 | Flag | Type | Default | Meaning |
 |------|------|---------|---------|
-| `--repo` | string | `trunk` | Repo to verify |
+| `--repo` | string | `core` | Repo to verify |
 | `--all` | bool | `false` | Verify all configured repos |
 | `--deep` | bool | `false` | Parse every fact (slower, stricter) |
 
@@ -75,22 +78,31 @@ subcommands, and `version`.
 ### Default mode — stdio ↔ HTTP MCP proxy
 
 Reads JSON-RPC from stdin, POSTs to the server's MCP endpoint, writes responses
-to stdout. This is what an MCP client launches. It discovers the agent branch via
-`GET /api/v1/repos/{repo}`, then targets
-`{base-url}/api/v1/repos/{repo}/branches/{branch}/mcp?profile={profile}` (the
-branch `/` is URL-encoded as `:`). It maintains the `Mcp-Session-Id` header and
-handles SSE responses.
+to stdout. This is what an MCP client launches. In repo mode it discovers the
+agent branch via `GET /api/v1/repos/{repo}`, then targets
+`{base-url}/api/v1/repos/{repo}/branches/{branch}/mcp` (the branch `/` is
+URL-encoded as `:`). In lens mode it skips branch discovery entirely and targets
+`{base-url}/api/v1/lenses/{lens}/mcp` — a lens resolves each mount's branch
+server-side. It maintains the `Mcp-Session-Id` header and handles SSE responses.
 
 | Flag / arg | Default | Meaning |
 |------------|---------|---------|
-| `--repo` | `trunk` | Repository name |
-| `--source` | (= `--repo`, with a warning) | Source-code slug used in generated `src://` refs |
-| `--profile` | `code` | MCP profile: `code`, `chat`, or `generic` |
+| `--repo` | `core` | Repository name |
+| `--lens` | — | [Lens](/docs/lenses/) name; connects to the lens MCP endpoint. Mutually exclusive with an explicitly-set `--repo` — passing both is a fatal error |
 | `[base-url]` (positional) | `http://localhost:19278` | Server base URL |
-| `--log` | platform default (`~/.knomit/bridge.log`) | Bridge log file (4 MB rotation) |
+| `--log` | `/tmp/knomit-bridge.log` | Bridge log file (4 MB rotation, 3 backups, 7 days) |
 
-The base URL is auto-discovered from the `server.json` lockfile when present;
-`KNOMIT_BASE_URL` overrides it. `KNOMIT_MCP_DEBUG=1` raises the log level to debug.
+The base URL resolves in this order: the positional argument, then the
+`server.json` lockfile, then `http://localhost:19278`. `KNOMIT_BASE_URL` does
+**not** apply here — it is read only by the `claude` subcommands. Pass the base
+URL positionally to override discovery. `KNOMIT_MCP_DEBUG=1` raises the log
+level to debug.
+
+<Aside type="caution">
+`--source` and `--profile` were removed. A `.mcp.json` that still passes them
+fails with `flag provided but not defined: -source`. Delete both arguments. The
+MCP profile is now a per-repo server setting, not a client flag.
+</Aside>
 
 ### `knomit-bridge claude init` — scaffold Claude Code integration
 
@@ -100,8 +112,12 @@ Renders embedded templates into the current directory. See
 | Flag | Default | Meaning |
 |------|---------|---------|
 | `--repo` | cwd basename | knomit repo name |
-| `--source` | (required) | source slug for `src://` refs |
-| `--profile` | `code` | MCP profile |
+| `--lens` | — | [Lens](/docs/lenses/) name; writes a lens-scoped `.mcp.json`. Mutually exclusive with `--repo` |
+
+Whichever name is used is validated against the server's grammar
+(`[a-z0-9_-]+`) before any file is written, so an invalid value is rejected
+rather than baked into a broken `.mcp.json`. The generated file contains
+`"args": ["--repo", "<name>"]`, or `"args": ["--lens", "<name>"]` in lens mode.
 
 ### `knomit-bridge claude hook <event>` — run an editor hook
 
@@ -110,17 +126,17 @@ Valid events: `session-start`, `post-edit`, `post-ask`, `pre-compact`.
 
 ## `knomit-desktop` — tray/desktop app
 
-No arguments boots the app (picks a free looknomitck port, defaulting to `19278`,
-boots the server in-process, opens the webview, writes `server.json`). On Linux it
-runs headless (no systray); `knomit-desktop window` opens the webview, normally
-triggered from the `.desktop` launcher.
+No arguments boots the app (picks a free loopback port, defaulting to `19278`,
+boots the server in-process, opens the webview, writes `server.json`). The system
+tray is created on every platform, Linux included. `version` is the only argument
+the binary inspects; anything else is ignored and the app boots normally.
 
 | Arg | Meaning |
 |-----|---------|
 | (none) | Boot the app |
-| `window` (Linux) | Open the webview window |
-| `version` / `--version` | Print version |
+| `version` / `--version` / `-version` | Print version |
 
 Logs go to stderr and a rotating file under the platform logs dir
-(`~/Library/Logs/knomit` on macOS, `$XDG_STATE_HOME/logs/knomit` on Linux). See
+(`~/Library/Logs/knomit` on macOS, `$XDG_STATE_HOME/knomit` — default
+`~/.local/state/knomit` — on Linux). See
 [Desktop app](/docs/desktop/) for how it differs from a bare `knomit serve`.

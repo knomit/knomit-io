@@ -44,6 +44,25 @@ The same Ed25519 key that authenticates SSH remotes also signs commits and names
 the agent branch — one identity, end to end.
 </Aside>
 
+### SSH host-key verification
+
+SSH remotes verify the server's host key against an OpenSSH `known_hosts` file,
+on a trust-on-first-use model:
+
+| Situation | Behaviour |
+|-----------|-----------|
+| Host not yet listed | Accepted, and its key is appended to `known_hosts` |
+| Host listed under the same key | Accepted |
+| Host listed under a **different** key | **Rejected** — the sync fails |
+| `known_hosts` unusable (bad path, unparseable) | Hard error; there is no insecure fallback |
+
+The file is set by `[remote] known_hosts` / `KNOMIT_REMOTE_KNOWN_HOSTS` and
+defaults to `<KNOMIT_HOME>/known_hosts`; point it at `~/.ssh/known_hosts` to
+share pins with your shell's git. It is re-read on every connection, so an edit
+takes effect without a restart. Each first-use pin is logged with the key's
+SHA-256 fingerprint — verify that fingerprint out-of-band if the remote is
+untrusted. See [Configuration](/docs/configuration/).
+
 ### Credential encryption
 
 Auth tokens are **never stored in plaintext**. They are encrypted with
@@ -63,13 +82,20 @@ REST endpoints / the web UI's "Connect Remote" flow. The stored record carries:
 |-------|---------|
 | `URL` | Git remote URL |
 | `Branch` | Upstream **consensus** branch — default `main`, configurable (e.g. `master`); changeable later via `PATCH /origin/upstream` |
-| `Interval` / `PushInterval` | Pull / push cadence (seconds), run independently |
+| `Interval` / `PushInterval` | Pull / push cadence (seconds); a single reconcile loop ticks at the shorter of the two and does both |
 | `AuthMethod` | `token` · `basic` · `ssh` · `none` (inferred if empty) |
 | `AuthToken` | Encrypted at rest (see above) |
 | `LastSyncAt` / `LastStatus` / `LastError` (+ push variants) | Last-outcome bookkeeping, surfaced through the gear-icon indicator |
 
 On clone/init, knomit prefers `main` over a remote agent-branch HEAD as the
 consensus upstream, and syncs **both** the agent branch and the upstream.
+
+`PATCH /origin/upstream` takes a `{"branch": "…"}` body and changes only the
+upstream branch — auth is untouched and the connect flow is not re-run. The
+branch is validated against a conservative subset of git's ref-name rules
+(control characters, spaces, `~ ^ : ? * [ \`, a leading `-` or `/`, a trailing
+`/`, and the `..` / `@{` sequences are rejected with 400). The reconcile loop
+re-reads the record each tick, so the change takes effect on the next cycle.
 
 ## Local-path origins (security gate)
 
@@ -85,10 +111,22 @@ trusted exemption.
 The "Connect Remote" flow is session-based and ephemeral (≈10-min idle expiry):
 
 1. `POST /repos/{repo}/origin-sessions` with the URL + credentials → a session.
-2. `GET …/test` checks connectivity; `GET …/preview` shows the merge (counts of
-   local-only / remote-only / shared / dead-ref facts) for "local wins" vs
-   "remote wins".
-3. `POST …/apply` then `…/commit` performs the merge.
+2. `GET …/test` checks connectivity; `GET …/preview` shows one merge summary —
+   counts of local-only / remote-only / shared-path / dead-ref facts. The
+   conflict strategy is not a preview input; it is an argument to apply.
+3. `POST …/apply` then `…/commit` performs the merge, taking
+   `conflict_strategy` in the apply body.
+
+`…/test`, `…/preview`, `…/apply` and `…/commit` are SSE streams
+(`text/event-stream`), each ending in a `done` event carrying its result. The
+session endpoints below serve `application/hal+json`, and errors as
+`application/problem+json`:
+
+| Endpoint | Response shape |
+|----------|----------------|
+| `GET /repos/{repo}/origin-sessions` | HAL collection — a `count` plus the sessions under `_embedded.sessions`, **not** a bare JSON array |
+| `POST /repos/{repo}/origin-sessions` | `session_id` plus `_links` |
+| `GET …/origin-sessions/{sessionID}` | Session detail (`state`, `url`, and any `history` / `last_preview` / `last_apply`) plus `_links` |
 
 Disjoint histories (e.g. reconnecting after a token refresh against a repo with
 no shared history) are reconciled via a cursor replay with one-level dead-ref
@@ -100,6 +138,11 @@ A per-repo reconcile loop re-reads the remote config fresh every tick, runs an
 initial synchronous reconcile first (so credential errors surface immediately),
 and escalates its log level WARN→ERROR after five consecutive failures. Sync uses
 a compare-and-swap watermark on `last_commit`.
+
+Pull and push share one loop rather than running on separate timers: every tick
+syncs, then pushes (push is skipped in read-only mode). The loop interval is the
+shorter of `Interval` and `PushInterval` — a non-positive `PushInterval` is
+ignored, and if neither yields a positive value the interval falls back to 300s.
 
 ## Serving git over HTTP
 

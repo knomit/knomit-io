@@ -14,6 +14,12 @@ Configuration is layered, lowest to highest precedence:
 `KNOMIT_HOME` is resolved *first* (it is the config search root) and therefore
 cannot be overridden from inside the TOML file.
 
+A `.env` file in the process's working directory is loaded into the environment
+before config resolution, so its entries participate as ordinary environment
+variables at layer 3. It is optional; a missing or unreadable `.env` is ignored.
+Variables already present in the environment win — `.env` does not overwrite
+them.
+
 <Aside type="caution">
 Malformed numeric or duration env values fail at boot rather than being silently
 ignored — a typo in `KNOMIT_PORT` or a duration knob stops the server, it doesn't
@@ -29,20 +35,36 @@ fall back to the default.
 $KNOMIT_HOME/
 ├── knomit.toml                 # optional config file
 ├── repos/
-│   ├── trunk.db                # the default repo (SQLite cache; git is source of truth)
-│   ├── trunk.db-shm / -wal     # SQLite sidecars
-│   ├── trunk.sessions.db       # ephemeral: tool cursors + pipeline work-steal sessions
+│   ├── core.db                 # the default repo (SQLite cache; git is source of truth)
+│   ├── core.db-shm / -wal      # SQLite sidecars
+│   ├── core.sessions.db        # ephemeral: tool cursors + pipeline work-steal sessions
 │   ├── <name>.db               # any additional repo (auto-discovered by *.db glob)
 │   └── archive/
 │       ├── <ksuid>.db          # archived (deleted-but-recoverable) repo
-│       └── <ksuid>.json        # archive manifest {id, repo_name, archivedAt, originURL}
+│       └── <ksuid>.json        # archive manifest {id, name, origin, archivedAt}
 ├── models/
 │   └── embeddinggemma/         # cached ONNX model + tokenizer
 ├── bin/
 │   └── knomit-bridge           # symlink the desktop app creates on launch
+├── crashes/                    # crash-report bundles written by the post-mortem reporter
+├── dumps/                      # goroutine dumps written on SIGUSR1 (server keeps running)
+├── control.db                  # machine-local control plane: lenses + per-repo MCP profile
+├── running.marker              # clean-shutdown marker; present at boot ⇒ previous run crashed
+├── known_hosts                 # SSH host-key pins for git remotes (default location)
 ├── id_ed25519 / .pub           # agent SSH key (signs commits; derives credential-encryption key)
 └── …
 ```
+
+`crashes/`, `dumps/`, and `running.marker` are the native post-mortem surface —
+see [Observability](/docs/observability/).
+
+<Aside type="note">
+`control.db` is a SQLite database holding lens definitions (tables `lenses`,
+`lens_reads`) and per-repo MCP profile settings (table `repo_settings`). It is
+machine-local operational config: deliberately **not** git-backed, and it does
+not sync. Lenses store per-machine repo *names*; repo settings are keyed by repo
+ID (the root commit hash).
+</Aside>
 
 Repos are discovered by scanning `repos/` for `*.db` files at startup (and at
 runtime via `POST /api/v1/repos:rescan`); the filename minus `.db` is the repo
@@ -50,14 +72,16 @@ name, and names must match `[a-z0-9_-]+`.
 
 <Aside type="note">
 The `*.sessions.db` sidecar is **not** opened as a repo — repo discovery globs
-`repos/*.db` and filters session DBs out.
+`repos/*.db` and filters session DBs out. A rescan also skips any repo whose
+create or restore is still in flight: the `.db` file is on disk before the name
+is registered, and opening it there would double-open the same database.
 </Aside>
 
 ### The default repo
 
-The default repo is named **`trunk`** (`config.DefaultRepoName`), stored at
-`repos/trunk.db`. It is opened first on startup and initialized on first run.
-"trunk" is only the *repo* name — the MCP server name and the git committer
+The default repo is named **`core`** (`config.DefaultRepoName`), stored at
+`repos/core.db`. It is opened first on startup and initialized on first run.
+"core" is only the *repo* name — the MCP server name and the git committer
 identity are both still `knomit`.
 
 ### Server discovery lockfile
@@ -81,9 +105,9 @@ shown:
 repo            = "~/.knomit"   # KNOMIT_HOME (the TOML key is "repo"); resolved before TOML, so setting it here is a no-op
 host            = "localhost"
 port            = "19278"
-socket          = ""            # Unix socket path (alternative to host:port)
+socket          = ""            # Unix socket path; an *additional* listener alongside host:port
 ontology_root   = "kb"          # path within git where facts live
-onnx_lib_path   = ""            # override the ONNX Runtime shared library
+onnx_lib_path   = ""            # DEAD: parsed but never read — use the ORT_LIB_PATH env var
 local_origin_root = ""          # root for permitted local-path git origins ("" = disabled)
 read_only       = false         # read-only demo: reject mutations, hide git + write tools, pull-only sync
 methodology_min_score = 0.15    # composite-score floor for methodology candidates
@@ -91,7 +115,7 @@ methodology_min_score = 0.15    # composite-score floor for methodology candidat
 [llm]
 model    = "gemini-2.5-flash"
 provider = "gemini"
-api_key  = ""
+api_key  = ""                   # DEAD: parsed but never read — adapters read their own credential env vars
 cache    = false
 batch    = false
 
@@ -100,8 +124,8 @@ model = "embeddinggemma"
 
 [git]
 origin          = ""            # remote URL for the default repo
-serve           = true          # expose the built-in git smart-HTTP server
-port            = ""            # git-serve port
+serve           = true          # expose the built-in git smart-HTTP server (mounted at /git on the main port)
+port            = ""            # DEAD: parsed but never read — there is no separate git listener
 network_timeout = "120s"        # bounds every remote git network op (clone/fetch/push)
 
 [remote]
@@ -110,6 +134,7 @@ user        = ""
 password    = ""
 ssh_key     = ""                # path to an SSH private key
 auth_method = ""                # "token" | "basic" | "ssh" | "none" (inferred if empty)
+known_hosts = ""                # SSH host-key pins; "" = <KNOMIT_HOME>/known_hosts
 
 [cluster_cache]
 resolution         = 4.0        # Louvain γ (higher = more, smaller communities)
@@ -125,6 +150,13 @@ effort_default         = "normal"  # "normal" | "medium" | "high"
 confidence_threshold   = 0.5       # min confidence to write a discovered proposal
 blast_radius_threshold = 1         # min reach for a backward keystone proposal (0 = off)
 bridge                 = "both"    # "domain" | "entity" | "both"
+# Bridge quality gate — TOML only, no KNOMIT_* env override (see below)
+coh_floor              = 0.5       # min intra-cluster cohesion for a bridge seed set
+max_members            = 5         # max members in a scored bridge seed set
+quality_floor          = 0.0       # min weighted quality score Q (0 disables the gate)
+w_coh                  = 1.0       # cohesion weight in Q
+w_gap                  = 1.0       # derivation-gap weight in Q
+w_spec                 = 1.0       # specificity weight in Q
 
 [log]
 format          = "console"     # "console" (human, stderr) | "json" (structured, stdout)
@@ -140,6 +172,43 @@ crash_file      = ""            # non-empty redirects fd 2 (stderr) to persist f
 addr = ""                       # diagnostics port (pprof + /metrics + /runtime/*); "" = off. Bind local only.
 ```
 
+<Aside type="caution" title="The bridge quality gate is TOML-only">
+`coh_floor`, `max_members`, `quality_floor`, `w_coh`, `w_gap`, and `w_spec` are
+the only `[discovery]` keys with **no** `KNOMIT_*` environment override — the
+env overlay in `internal/config/config.go` covers `effort_default`, `bridge`,
+`confidence_threshold`, and `blast_radius_threshold` and stops there. A
+deployment configured purely through environment variables (a container, for
+instance) cannot reach them; it needs a `knomit.toml` at
+`KNOMIT_HOME/knomit.toml` or next to the binary.
+</Aside>
+
+### SSH host-key verification
+
+SSH remotes verify the server's host key against an OpenSSH `known_hosts` file.
+`remote.known_hosts` (env `KNOMIT_REMOTE_KNOWN_HOSTS`) selects that file; the
+value is tilde-expanded, and an unset value resolves to
+`<KNOMIT_HOME>/known_hosts`. Point it at `~/.ssh/known_hosts` to share the pins
+with your interactive `ssh` client.
+
+Verification is trust-on-first-use, because syncs run unattended and cannot
+prompt:
+
+- An **unknown** host is accepted and its key is appended to the file.
+- A host already listed under a **different** key is **rejected**.
+
+Per-request auth specs — a credential supplied with a single API call — carry
+only the credential and inherit the operator's `known_hosts` setting, so every
+SSH path pins against the same file.
+
+<Aside type="caution">
+An unusable `known_hosts` path (empty, unreadable, unparseable, or in a
+directory that cannot be created) is a **hard error**: the operation fails.
+knomit never falls back to accepting unverified host keys. Earlier versions used
+`ssh.InsecureIgnoreHostKey()`, which accepted every host key forever — after
+upgrading, a remote whose host key has changed fails the sync instead of
+succeeding silently.
+</Aside>
+
 ## Environment variables
 
 ### Config-backed (override `knomit.toml`)
@@ -152,22 +221,23 @@ addr = ""                       # diagnostics port (pprof + /metrics + /runtime/
 | `KNOMIT_SOCKET` | `socket` | — |
 | `KNOMIT_READ_ONLY` | `read_only` | `false` |
 | `KNOMIT_LOCAL_ORIGIN_ROOT` | `local_origin_root` | — (disabled) |
-| `ONNXRUNTIME_SHARED_LIBRARY` | `onnx_lib_path` | — |
+| `ONNXRUNTIME_SHARED_LIBRARY` | `onnx_lib_path` — **dead**, see below | — |
 | `KNOMIT_EMBED_MODEL` | `embeddings.model` | `embeddinggemma` |
 | `KNOMIT_LLM_MODEL` | `llm.model` | `gemini-2.5-flash` |
 | `KNOMIT_LLM_PROVIDER` | `llm.provider` | `gemini` |
-| `KNOMIT_API_KEY` | `llm.api_key` | — |
+| `KNOMIT_API_KEY` | `llm.api_key` — **dead**, see below | — |
 | `KNOMIT_LLM_CACHE` | `llm.cache` | `false` |
 | `KNOMIT_LLM_BATCH` | `llm.batch` | `false` |
 | `KNOMIT_GIT_ORIGIN` | `git.origin` | — |
 | `KNOMIT_GIT_SERVE` | `git.serve` | `true` |
-| `KNOMIT_GIT_PORT` | `git.port` | — |
+| `KNOMIT_GIT_PORT` | `git.port` — **dead**, see below | — |
 | `KNOMIT_GIT_NETWORK_TIMEOUT` | `git.network_timeout` | `120s` |
 | `KNOMIT_REMOTE_TOKEN` | `remote.token` | — |
 | `KNOMIT_REMOTE_USER` | `remote.user` | — |
 | `KNOMIT_REMOTE_PASSWORD` | `remote.password` | — |
 | `KNOMIT_REMOTE_SSH_KEY` | `remote.ssh_key` | `~/.knomit/id_ed25519` |
 | `KNOMIT_REMOTE_AUTH` | `remote.auth_method` | auto-detected |
+| `KNOMIT_REMOTE_KNOWN_HOSTS` | `remote.known_hosts` | `~/.knomit/known_hosts` |
 | `KNOMIT_METHODOLOGY_MIN_SCORE` | `methodology_min_score` | `0.15` |
 | `KNOMIT_CLUSTER_CACHE_RESOLUTION` | `cluster_cache.resolution` | `4.0` |
 | `KNOMIT_CLUSTER_CACHE_MIN_COMMUNITY_SIZE` | `cluster_cache.min_community_size` | `2` |
@@ -188,6 +258,22 @@ addr = ""                       # diagnostics port (pprof + /metrics + /runtime/
 | `KNOMIT_CRASH_LOG` | `log.crash_file` | — (off) |
 | `KNOMIT_RUNTIME_ADDR` | `runtime.addr` | — (off) |
 
+<Aside type="caution" title="Three knobs are parsed but never read">
+`onnx_lib_path` / `ONNXRUNTIME_SHARED_LIBRARY`, `llm.api_key` /
+`KNOMIT_API_KEY`, and `git.port` / `KNOMIT_GIT_PORT` are loaded into the config
+struct and then consumed by nothing. Setting them has no effect. Use these
+instead:
+
+- **ONNX Runtime shared library** — `ORT_LIB_PATH`, read directly by the
+  embedder. Unset, it probes for the library next to the binary.
+- **LLM credentials** — each adapter reads its own environment: Gemini takes
+  `GEMINI_API_KEY`, falling back to `GOOGLE_AI_API_KEY`; Anthropic uses the
+  SDK's own variable; Bedrock uses the AWS default credential chain.
+- **Git port** — none. Git smart-HTTP is mounted at `/git` on the main server
+  router, so it shares `KNOMIT_HOST` / `KNOMIT_PORT`. There is no separate
+  listener.
+</Aside>
+
 ### Provider credentials (read directly)
 
 These are read by the LLM adapters, not through `knomit.toml`:
@@ -195,18 +281,23 @@ These are read by the LLM adapters, not through `knomit.toml`:
 | Variable | Purpose |
 |----------|---------|
 | `ANTHROPIC_API_KEY` | Anthropic API key |
-| `GOOGLE_AI_API_KEY` | Gemini API key |
+| `GEMINI_API_KEY` | Gemini API key (checked first) |
+| `GOOGLE_AI_API_KEY` | Gemini API key (fallback) |
 | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | AWS credentials for Bedrock |
-| `AWS_REGION` | AWS region for Bedrock (default `us-east-1`) |
+| `AWS_REGION` | AWS region for Bedrock — no default; an unset region fails at call time |
+| `OLLAMA_HOST` | Ollama server base URL; unset defaults to `http://localhost:11434`. Health-checked at adapter creation (`GET /api/tags`, 5s) — an unreachable server is a hard error |
 
 ### Standalone knobs (no TOML key)
 
 | Variable | Read by | Purpose | Default |
 |----------|---------|---------|---------|
 | `KNOMIT_REFLECT_PROPOSE_CAP` | synthesize/reflect | Max new methodologies a reflect step may propose (`0` = none) | `1` |
-| `KNOMIT_REFLECT_NOVELTY_THRESHOLD` | synthesize/reflect | Cosine floor to reject near-duplicate methodologies | `0.85` (model-dependent) |
-| `KNOMIT_BASE_URL` | `knomit-bridge` | Override the discovered server URL | `http://localhost:19278` |
+| `KNOMIT_REFLECT_NOVELTY_THRESHOLD` | synthesize/reflect | Cosine floor to reject near-duplicate methodologies | the active model's calibrated `Thresholds.ReflectNovelty` — `0.69` for EmbeddingGemma |
+| `KNOMIT_BASE_URL` | `knomit-bridge claude` | Server URL for the `claude init` / `claude hook` helpers. **Does not affect the MCP proxy** — that resolves its base URL from the positional argument, then `server.json`, then the hardcoded default | `http://localhost:19278` |
 | `KNOMIT_MCP_DEBUG` | `knomit-bridge` | Non-empty → debug logging | — (info) |
+| `KNOMIT_LLM_TRACE` | app wiring | Non-empty → wraps the LLM adapter in a tracing adapter that writes every request/response to this path | — (off) |
+| `ORT_LIB_PATH` | embeddings | ONNX Runtime shared library. This is the live knob that `onnx_lib_path` / `ONNXRUNTIME_SHARED_LIBRARY` never became | — (probes `lib/` next to the binary) |
+| `GRAPHQLITE_LIB_PATH` | store | graphqlite SQLite extension, given **without** the file extension — the driver appends `.so` / `.dylib` / `.dll` | — (probes exe-relative, then source tree) |
 
 <Aside type="note">
 `KNOMIT_PPROF_ADDR` was replaced by the gated **runtime diagnostics port**
@@ -216,20 +307,31 @@ live process controls together. See [Observability](/docs/observability/).
 
 ## LLM configuration
 
-Synthesis is the **only** LLM-backed feature. Configure a provider via the model
-name and credentials:
+Synthesis is the **only** LLM-backed feature. Set **both** the provider and the
+model — the shipped default is `provider = "gemini"`, and an explicit provider
+is always used as-is, so changing only the model leaves you on the Gemini
+adapter:
 
 | Provider | Variables |
 |----------|-----------|
-| Gemini (default) | `KNOMIT_LLM_MODEL=gemini-2.5-flash` · `GOOGLE_AI_API_KEY=…` |
-| Anthropic | `KNOMIT_LLM_MODEL=claude-sonnet-4-6` · `ANTHROPIC_API_KEY=…` |
-| Bedrock | `KNOMIT_LLM_MODEL=us.anthropic.claude-sonnet-4-6-v1` · `AWS_ACCESS_KEY_ID=…` · `AWS_SECRET_ACCESS_KEY=…` |
-| Claude CLI | `KNOMIT_LLM_PROVIDER=claude-cli` — uses the `claude` CLI (no API key; works with Anthropic Max) |
-| Gemini CLI | `KNOMIT_LLM_PROVIDER=gemini-cli` — uses the `gemini` CLI (no API key; works with Google AI Pro) |
+| Gemini (default) | `KNOMIT_LLM_PROVIDER=gemini` · `KNOMIT_LLM_MODEL=gemini-2.5-flash` · `GEMINI_API_KEY=…` |
+| Anthropic | `KNOMIT_LLM_PROVIDER=anthropic` · `KNOMIT_LLM_MODEL=claude-sonnet-4-6` · `ANTHROPIC_API_KEY=…` |
+| Bedrock | `KNOMIT_LLM_PROVIDER=bedrock` · `KNOMIT_LLM_MODEL=us.anthropic.claude-sonnet-4-6-v1` · `AWS_ACCESS_KEY_ID=…` · `AWS_SECRET_ACCESS_KEY=…` |
+| Claude CLI | `KNOMIT_LLM_PROVIDER=claudecli` — uses the `claude` CLI (no API key; works with Anthropic Max) |
+| Gemini CLI | `KNOMIT_LLM_PROVIDER=geminicli` — uses the `gemini` CLI (no API key; works with Google AI Pro) |
+| Ollama | `KNOMIT_LLM_PROVIDER=ollama` · `KNOMIT_LLM_MODEL=<any model the server has pulled>` · `OLLAMA_HOST=…` (default `http://localhost:11434`). No API key. Never inferred from a model name, so the provider must be set explicitly |
 
-For API providers the provider is auto-detected from the model name; CLI
-providers must be set explicitly via `KNOMIT_LLM_PROVIDER`. Embeddings are a
-separate, local model and never call an LLM — see [Embeddings](/docs/embeddings/).
+Provider names are matched exactly: `gemini`, `anthropic`, `bedrock`,
+`claudecli`, `geminicli`, `ollama`. Anything else fails with
+`unknown provider "…"`. Note there is no hyphen in the CLI names.
+
+Inference from the model name happens **only** when the provider is explicitly
+empty (`KNOMIT_LLM_PROVIDER=` or `provider = ""` in `knomit.toml`). In that case
+`claude-*` → `anthropic`, `gemini-*` → `gemini`, `anthropic.*` / `us.*` / `eu.*`
+→ `bedrock`, and the bare names `claude` / `gemini` → `claudecli` / `geminicli`.
+
+Embeddings are a separate, local model and never call an LLM — see
+[Embeddings](/docs/embeddings/).
 
 <Aside type="note" title="No key, no problem — for reads">
 If you only browse, search, and query, you never need an LLM key. It's required

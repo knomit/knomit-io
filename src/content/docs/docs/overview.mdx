@@ -14,7 +14,8 @@ commit.
 Knowledge is reached over two surfaces:
 
 - an **MCP server** — cognitive tools (learn, query, explain, update, retract,
-  review, hypothesize), and
+  review, hypothesize) plus `knomit_repos`, which reports the mounts behind the
+  current binding, and
 - a **REST API** (`/api/v1`, HAL+JSON, commit-anchored URIs) that the web UI and
   any HTTP client use.
 
@@ -23,7 +24,7 @@ Knowledge is reached over two surfaces:
 | Artifact | Binary | What it is |
 |----------|--------|------------|
 | **Server** | `knomit` | The core HTTP server. Serves the REST API, the MCP endpoint, the embedded web UI, and (optionally) a git smart-HTTP endpoint. CGO build (ONNX Runtime + graphqlite). |
-| **Desktop app** | `knomit-desktop` | A Wails v3 tray/desktop app that boots the server in-process on a looknomitck port and shows the web UI in a native webview. Ships as `Knomit.app` on macOS; a binary + `.desktop` launcher on Linux. See [Desktop app](/docs/desktop/). |
+| **Desktop app** | `knomit-desktop` | A Wails v3 tray/desktop app that boots the server in-process on a loopback port and shows the web UI in a native webview. Ships as `Knomit.app` on macOS; a binary on Linux, where `make desktop-install` adds the `.desktop` launcher and icon. See [Desktop app](/docs/desktop/). |
 | **Bridge** | `knomit-bridge` | A small pure-Go adapter. Its primary job is a **stdio ↔ HTTP MCP proxy** that an MCP client (Claude Code, Claude Desktop, Claude Cowork) spawns to talk to the server. It also scaffolds Claude Code integration and runs the editor hooks. |
 
 A fourth UI layer, the **web UI** (React/TypeScript), is built to static assets
@@ -41,8 +42,10 @@ implementation plans unattended.
 <RequestFlow />
 
 - The **bridge** discovers the running server through a lockfile (`server.json`,
-  written by the desktop app/tray) or a base URL, resolves the agent branch, and
-  forwards JSON-RPC to `…/branches/{branch}/mcp?profile=code`.
+  written by the desktop app/tray) or a base URL. In repo mode it resolves the
+  agent branch and forwards JSON-RPC to `…/repos/{repo}/branches/{branch}/mcp`;
+  in [lens mode](/docs/lenses/) it skips branch discovery and posts to
+  `…/lenses/{lens}/mcp`, leaving each mount's branch for the server to resolve.
 - The **server** translates tool/HTTP calls into fact reads and writes. Git is the
   only source of truth; the SQLite index (per repo, under
   `KNOMIT_HOME/repos/<name>.db`) is a rebuildable cache for search, the graph, and
@@ -50,12 +53,14 @@ implementation plans unattended.
 
 ## The core model, in one paragraph
 
-A **repo** is one knowledge base (default: `trunk`). Each machine writes only its
+A **repo** is one knowledge base (default: `core`). Each machine writes only its
 own **agent branch** (`agent/<host>-<fp8>`); **`main` is consensus** and is never
 written directly by the MCP server — agreement is reached by merging agent
 branches into `main`. Facts are immutable, content-addressed Markdown with YAML
-frontmatter (`topic`, `category`, `kind`, `type`, `domain`, `entities`,
-`confidence`, `sources`, `refs`). Reads are **commit-anchored**: a fact resolves
+frontmatter (`kind`, `type`, `domain`, `entities`, `confidence`, `sources`,
+`refs`, `evidence_weight`, `origin`); topic and category are not frontmatter
+keys — they are path segments in `kb/<topic>/<category>/<uuid8>.md`, passed as
+`knomit_learn` arguments. Reads are **commit-anchored**: a fact resolves
 at a commit, not at HEAD, so the graph can be walked as of any point in history.
 
 See [Concepts](/docs/concepts/) for the full conceptual model; the rest of this

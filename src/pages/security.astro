@@ -20,6 +20,10 @@ const pillars = [
     body: 'Cloning from a local filesystem path is disabled by default. To allow it, you must explicitly set an allowed root directory; a local origin is accepted only if it resolves to a path inside that root. Network origins always pass. Every clone and fetch path is gated — there is no trusted exemption.',
   },
   {
+    title: 'Verified SSH host keys',
+    body: 'SSH remotes are checked against a known_hosts file you choose — by default one under KNOMIT_HOME, or your own ~/.ssh/known_hosts. An unknown host is pinned on first contact; a host that later presents a different key is rejected and the sync fails. If the known_hosts file cannot be read or parsed, the operation errors out: there is no fallback to accepting unverified keys.',
+  },
+  {
     title: 'It is just git — review like code',
     body: 'Each machine is the sole writer of its own agent branch. No peer merges another peer\'s branch directly. Facts land on main through review and merge, exactly like a pull request. You can host the store on any git host and apply the same access controls you already use for code.',
   },
@@ -32,7 +36,7 @@ const pillars = [
 
 <BaseLayout
   title="Security & privacy — knomit"
-  description="How knomit keeps knowledge secure: local-first, Ed25519-signed history, encrypted remote credentials, guarded remotes, git-native review, and open source."
+  description="How knomit keeps knowledge secure: local-first, Ed25519-signed history, encrypted remote credentials, guarded remotes, verified SSH host keys, git-native review, and open source."
 >
   <section class="k-section">
     <div class="k-container">

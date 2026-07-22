@@ -2,7 +2,7 @@
   "mcpServers": {
     "knomit": {
       "command": "knomit-bridge",
-      "args": ["--repo", "knomit-kb", "--source", "knomit-io", "--profile", "code"]
+      "args": ["--lens", "knomit-website"]
     }
   }
 }

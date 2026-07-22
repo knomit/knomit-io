@@ -28,6 +28,12 @@ similarity clusters (distinct Louvain communities over the embedding graph). Tha
 cross-cluster shared token is the signal similarity missed. Discovery seeds from
 bridges and runs them in two directions.
 
+The communities come from the cluster cache, whose Louvain parameters are
+`[cluster_cache] resolution` (default `4.0` — higher γ yields more, smaller
+communities) and `min_community_size` (default `2`, below which a community is
+relabelled as noise). Both have `KNOMIT_CLUSTER_CACHE_*` overrides; see
+[Configuration](/docs/configuration/#config-backed-override-knomittoml).
+
 ## The two directions
 
 | Direction | Shape | Operation | Produces |
@@ -44,16 +50,56 @@ direction to each, never a new fact type.
 `effort` (`normal` · `medium` · `high`) is a dial on the existing `review` /
 `hypothesize` operations rather than a separate tool — and it doubles as a budget.
 `normal` is the default and reproduces pre-discovery behaviour **byte-for-byte** (a
-hard invariant); `medium` / `high` engage the structural-bridge engine (single-hop
-bridges at `medium`, multi-hop at `high`). On an **unfiltered** run, `effort` also
-bounds how many bridge candidates are considered, so a `high` run never attempts
-the whole corpus.
+hard invariant); `medium` / `high` engage the structural-bridge engine. Between
+those two levels `effort` changes exactly one thing: the candidate budget — the
+bridge pool is capped at 12 seed sets at `medium` and 48 at `high`. The cap
+applies to scoped and unscoped runs alike, so a `high` run never attempts the
+whole corpus.
+
+A call that omits `effort` falls back to
+`KNOMIT_DISCOVERY_EFFORT_DEFAULT` (or `[discovery] effort_default`), default
+`normal`. Set it to `medium` or `high` to make discovery the standing behaviour
+of an endpoint rather than a per-call opt-in.
 
 An optional **scope filter** (`domain` / `entities` args) bounds the seed pool;
 empty = whole corpus. A scoped run is **exempt from the synthesis watermark**, so
 you can re-target discovery at one area without disturbing unscoped runs.
 Discovery never feeds on its own output — `origin: discovered` facts are excluded
 as bridge seeds.
+
+## The bridge quality gate
+
+Not every bridge is worth spending a work item on. Before a seed set reaches the
+model, the scorer rejects it outright unless all three hold:
+
+- **Cohesion** ≥ `coh_floor` (default `0.5`) — the fraction of member pairs
+  joined by a `SIMILAR_TO` edge. A set whose members are unrelated to each other
+  is noise, not a seam.
+- **Separation** ≥ 2 distinct communities — a set inside one cluster is not a
+  bridge. This is fixed in code, not configurable.
+- **Members** ≤ `max_members` (default `5`) — larger sets are gated out rather
+  than scored.
+
+Sets that pass are scored
+`Q = w_coh·cohesion + w_gap·derivation_gap + w_spec·specificity` (weights all
+default `1.0`) and kept when `Q ≥ quality_floor` (default `0.0`, which keeps
+every gate-passing set). The three components measure different things:
+**cohesion** is how tightly the members hang together, **derivation gap** is the
+fraction of member pairs *not* already linked by `DERIVED_FROM` (a set whose
+members already derive from one another states nothing new), and
+**specificity** is the rarity of the shared token, `1/df`, so a token appearing
+on half the corpus contributes almost nothing.
+
+Tune it when discovery is spending its budget on candidates you keep rejecting.
+Raising `quality_floor` above `0` is the blunt lever; the weights let you say
+*why* — raise `w_spec` if the run keeps bridging on generic tags, raise `w_gap`
+if it keeps re-stating things already derived. The scored components are
+exposed by the calibrate tool, so a floor can be picked against a real corpus
+rather than guessed.
+
+These six keys are **TOML-only** — they have no `KNOMIT_*` environment
+override, so a purely env-configured deployment cannot reach them. Defaults and
+placement are in [Configuration](/docs/configuration/#knomittoml).
 
 ## Verification is model-less
 
@@ -70,7 +116,9 @@ chain:
   elsewhere.
 
 Bridge behaviour is per-repo configurable via `KNOMIT_DISCOVERY_BRIDGE`
-(`domain` · `entity` · `both`, default `both`).
+(`domain` · `entity` · `both`, default `both`). It is honoured on **unscoped**
+runs only; a scoped run uses the filtered bridge generator, which always bridges
+on both axes.
 
 ## The origin axis
 
