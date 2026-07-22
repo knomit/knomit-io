@@ -153,7 +153,13 @@ points to another fact in the same knowledge base, or to any web resource:
 |------|---------|---------|
 | Relative (no authority) | Fact in the current knowledge base | `knomit:/kb/technology/debugging/pool-fix.md` |
 | Absolute (with host) | Fact in an external repo | `knomit://github.com/org/repo/src/main.ts` |
+| Repo-qualified | Fact on another mount of a [lens](/docs/lenses/), addressed by 12-hex repo id | `kb://a1b2c3d4e5f6/kb/technology/debugging/pool-fix.md` |
 | Plain URL | Any web resource — article, paper, commit | `https://example.com/doc` |
+
+A `kb://` path is a stable identifier: pass it back as `knomit_explain`'s `file`,
+or store it in a fact's `refs` to cite across repos — the server never rewrites
+it. It is classified as an **external** ref rather than a local fact edge, so it
+contributes no evidence weight and creates no local provenance edge.
 
 ## Synthesis & hypotheses
 
@@ -170,9 +176,10 @@ effort dial and the bridge engine.
 ## The MCP operational loop
 
 MCP is the primary interface for humans (via Claude Code and editors) and agents
-alike. Seven tools cover the full fact lifecycle — their descriptions carry all
+alike. Eight tools cover the full fact lifecycle — their descriptions carry all
 the behavioral guidance a model needs, no prompt scaffolding required. Each agent
 connects to a **branch-scoped endpoint**, so reads and writes land on its own
-branch automatically; isolation is structural, not convention. Three profiles
-(`code`, `chat`, `generic`) tailor the tool descriptions to the client. See
-[MCP tools](/docs/mcp-tools/).
+branch automatically; isolation is structural, not convention. A single MCP
+server instance serves every repo and [lens](/docs/lenses/); each handler
+resolves its binding from the request, and the instructions sent to the model are
+computed per session from that binding. See [MCP tools](/docs/mcp-tools/).

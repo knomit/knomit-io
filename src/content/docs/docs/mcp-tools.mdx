@@ -1,6 +1,6 @@
 ---
 title: MCP tools
-description: The knomit MCP tool set, the branch-scoped endpoint, profiles, and the stdio bridge — with full per-tool parameters.
+description: The knomit MCP tool set, the branch-scoped endpoint, session instructions, and the stdio bridge — with full per-tool parameters.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -20,6 +20,7 @@ model needs — no prompt scaffolding required.
 | `knomit_retract` | Remove a fact. Git history retains the provenance. |
 | `knomit_review` | Interactive session to review and maintain the knowledge base (prune, distill, reflect). |
 | `knomit_hypothesize` | Generate falsifiable hypotheses from synthesis facts. |
+| `knomit_repos` | List the repos (mounts) behind this endpoint: name, stable repo id, branch, and role. |
 
 <Aside type="tip" title="Learn before you write; explain before you trust">
 `knomit_query` surfaces what's already known so an agent builds on it instead of
@@ -35,7 +36,7 @@ The MCP endpoint is **branch-scoped** — each agent reads and writes its own
 branch:
 
 ```
-POST /api/v1/repos/{repo}/branches/{branch}/mcp?profile={code|chat|generic}
+POST /api/v1/repos/{repo}/branches/{branch}/mcp
 ```
 
 The agent branch is logged on startup (`branch=agent/hostname-abc123`) and is
@@ -43,22 +44,28 @@ also available via `GET /api/v1/repos/{repo}` (the `agent_branch` field). Branch
 names use `:` in place of `/` in URL path segments
 (e.g. `agent:hostname-abc123`).
 
-## Profiles
+A [lens](/docs/lenses/) — one write repo federated with N read mounts — has its
+own endpoint and no branch segment, because each mount resolves its own branch:
 
-There are exactly **three MCP server instances**, one per profile, shared across
-all repos; each tool handler resolves the target repo/branch from the request
-context. The profile changes only the **instructions** sent to the calling model
-— the same seven tools are registered in every profile:
+```
+POST /api/v1/lenses/{lens}/mcp
+```
 
-| Profile | Default for | Instruction emphasis |
-|---------|-------------|----------------------|
-| `code` | software development (the bridge default) | structured technical knowledge: architecture, API contracts, debugging, conventions; reference source in `refs` |
-| `chat` | conversational use | insights, preferences, decisions; natural-language bodies; conservative confidence |
-| `generic` | general knowledge | any domain; descriptive tags; self-contained bodies |
+A `?profile=` query parameter on either endpoint is deprecated: the value is
+logged at debug level and discarded.
 
-Per-session instructions are computed from the repo's ontology via an
-`AfterInitialize` hook, so the model is told the exact topics and categories that
-repo accepts.
+## Session instructions
+
+There is a **single MCP server instance**, shared across every repo and lens;
+each tool handler resolves the target binding from the request context. The
+instructions sent to the calling model are computed **per session** from that
+binding via an `AfterInitialize` hook, so the model is told the exact topics and
+categories the repo accepts.
+
+For a lens binding, the instructions also carry a lens addendum: the mounts
+table, the `kb://` path convention, and read coverage per mount. A single-repo
+binding emits no addendum, so those sessions are byte-identical to before
+lenses existed.
 
 ## The stdio bridge
 
@@ -72,11 +79,15 @@ by hand:
   "mcpServers": {
     "knomit": {
       "command": "dist/knomit-bridge",
-      "args": ["--repo", "trunk", "--source", "trunk", "--profile", "code"]
+      "args": ["--repo", "trunk"]
     }
   }
 }
 ```
+
+`--lens <name>` connects to a lens endpoint instead; it is mutually exclusive
+with `--repo` and skips branch discovery, since each mount resolves its own
+branch server-side.
 
 See the [Quick start](/docs/quick-start/) for the full connection walkthrough and
 the streamable-HTTP alternative, and the [CLI reference](/docs/cli-reference/) for
@@ -108,7 +119,8 @@ Each fact object:
 | `title` | string | ✓ | | Short descriptive title |
 | `body` | string | ✓ | | Fact body, natural language |
 | `kind` | string | | `epistemic` | `epistemic` (descriptive) or `pragmatic` (prescriptive) |
-| `type` | string | | `observation` | Leaf type — depends on `kind` (see below) |
+| `type` | string | | `observation` | Leaf type — depends on `kind` (see below). A JSON-schema `enum`, so a typo'd type is rejected at the protocol layer |
+| `origin` | string | | | `authored` · `distilled` · `discovered`. Omit for a fact you write yourself — `authored` is the default for every type **except** `synthesis`, where omitting `origin` means `distilled`, so set it explicitly on a synthesis fact you wrote. Immutable after the write |
 | `domain` | string[] | | | Cross-cutting domain tags |
 | `entities` | string[] | | | Entities the fact mentions |
 | `confidence` | number | | `0.7` | 0.0–1.0 |
@@ -118,7 +130,9 @@ Each fact object:
 **Types** — epistemic: `observation`, `concept`, `process`, `principle`,
 `pattern`, `reference`, `synthesis`, `insight`, `hypothesis`, `methodology`.
 Pragmatic: `policy`, `heuristic`. A single batch may **not** mix observed types
-with inferred types (`hypothesis` / `methodology`).
+with inferred types (`hypothesis` / `methodology`). The `kind`, `type`, and
+`origin` vocabularies are generated from one source, so the `learn` schema, the
+`update` schema, and the session instructions cannot disagree.
 
 ### `knomit_query` — search
 
@@ -142,6 +156,7 @@ full bodies. Paginated via an opaque `cursor`. At least one of `text`,
 | `min_similarity` | number | Cosine floor for text search; 0 = model's calibrated recall floor |
 | `sort` | string | `relevance` (default) or `recent` (browse, needs no other filter) |
 | `limit` | number | Default 20, max 100 (snippet mode); 3/5 with `include_body` |
+| `max_results` | number | Maximum total results materialised across all pages (snapshot depth). Default 500; higher values are clamped to 500. Page size is `limit`, not this. A value ≤ 0 is an error |
 | `include_body` | bool | Full bodies (small pages only) |
 | `cursor` | string | Page token; freezes filters |
 
@@ -155,9 +170,14 @@ referrer pointed to**. Summaries may be flagged `deleted` (retracted since) or
 
 | Param | Type | Req | Notes |
 |-------|------|-----|-------|
-| `file` | string | ✓ | Fact path (e.g. `kb/technology/go/abc123.md`) |
+| `file` | string | ✓ | Fact path — bare (`kb/technology/go/abc123.md`) for the write repo, or qualified (`kb://<id12>/kb/…`) for a fact on a read mount |
 | `commit` | string | | Anchor commit; omit for HEAD. Drill into a summary by re-calling with its `path` + `commit` |
 | `cursor` | string | | Session id to page the walk |
+
+`knomit_explain` never fans out across mounts: the fact's own path fixes the
+mount, and the whole provenance walk stays inside it. A `kb://` ref is
+classified as **External**, not a local fact edge — it carries no evidence
+weight and creates no local provenance edge.
 
 ### `knomit_update` — revise a fact in place
 
@@ -169,6 +189,9 @@ referrer pointed to**. Summaries may be flagged `deleted` (retracted since) or
 
 `updates` fields: `title`, `body`, `kind`, `type`, `confidence`, `sources`,
 `domain` (replaces), `entities` (replaces), `refs` (**appended**, not replaced).
+`type` carries the same `enum` as `knomit_learn`, but the update schema
+deliberately declares no defaults — an omitted field means "leave it alone", not
+"reset it". `origin` is not updatable.
 
 ### `knomit_retract` — remove a fact
 
@@ -179,6 +202,10 @@ referrer pointed to**. Summaries may be flagged `deleted` (retracted since) or
 
 Retraction is a commit, not a hard delete — the fact remains in history and
 resolves under commit-anchored reads (e.g. `?fallback=before`).
+
+Both `knomit_update` and `knomit_retract` reject a `kb://<read-mount-id>/…`
+path: *read-only mount: repo X is not this binding's write repo — facts there
+can only be changed through their own endpoint*.
 
 ### `knomit_review` — maintain the KB
 
@@ -192,6 +219,7 @@ See [Synthesis & hypotheses](/docs/synthesis/) and [Emergent discovery](/docs/di
 |-------|------|-------|
 | `session_id` | string | Omit to start a new session |
 | `response` | string | JSON decisions for the previous work item |
+| `item_id` | number | Echo back `item.id` from the work item you are answering, so the server can reject a stale answer. Optional and additive — omitting it keeps the old "answer whatever is current" behaviour. It matters because applying a distill item enqueues RAPTOR follow-up items, so the current item can change between render and answer |
 | `effort` | string | `normal` (default) · `medium` · `high` — medium/high engage the bridge discovery engine |
 | `domain` | string[] | Scope filter on the seed pool (empty = whole corpus) |
 | `entities` | string[] | Scope filter on the seed pool |
@@ -207,6 +235,34 @@ hypothesis; skipping is the expected outcome for most.
 |-------|------|-------|
 | `session_id` | string | Omit to start |
 | `response` | string | Acknowledgement for the previous work item |
+| `item_id` | number | Echo back `item.id` from the work item you are answering, so the server can reject a stale answer. Optional and additive |
 | `effort` | string | `normal` (default) · `medium` · `high` — medium/high engage the backward (keystone) bridge engine |
 | `domain` | string[] | Scope filter (empty = whole corpus) |
 | `entities` | string[] | Scope filter |
+
+### `knomit_repos` — list the mounts behind this endpoint
+
+Read-only and parameterless. Returns the binding and one row per mount:
+
+```json
+{
+  "binding": "trunk",
+  "mounts": [
+    {"name": "trunk", "id": "a1b2c3d4e5f6", "branch": "main",
+     "role": "read+write", "write_branch": "agent/hostname-abc123"},
+    {"name": "vendor-kb", "id": "0f9e8d7c6b5a", "branch": "main", "role": "read"}
+  ]
+}
+```
+
+| Field | Notes |
+|-------|-------|
+| `name` | Repo name |
+| `id` | 12-hex prefix of the repo's root commit — the same id that appears in `kb://<id>/…` paths |
+| `branch` | The branch this mount is **read** at |
+| `role` | `read+write` on the write mount when writes are permitted; `read` otherwise |
+| `source` | Source slug, when the mount has one |
+| `write_branch` | Present only on the `read+write` row — where writes actually commit, which may differ from `branch` |
+
+This is how a session discovers its source slug and its repo ids; it replaces
+the bridge's removed `--source` flag.

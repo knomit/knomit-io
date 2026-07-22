@@ -1,6 +1,6 @@
 ---
 title: Claude Code integration
-description: knomit as a persistent knowledge base for Claude Code — the 11 slash commands, the 4 editor hooks, and one-time scaffolding with claude init.
+description: knomit as a persistent knowledge base for Claude Code — the 11 slash commands, the 4 editor hooks, and one-time scaffolding with claude init in repo or lens mode.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -24,7 +24,7 @@ agent reaches for, not a firehose.
 From a project's root:
 
 ```bash
-knomit-bridge claude init --source <slug> [--repo <name>] [--profile code|chat|generic]
+knomit-bridge claude init [--repo <name> | --lens <name>]
 ```
 
 This renders embedded templates into the project:
@@ -36,10 +36,20 @@ This renders embedded templates into the project:
 | `CLAUDE.md` (knomit usage block) | merge-required |
 | `.claude/skills/knomit-*/SKILL.md` (all 11 commands) | **owned** — always (over)written |
 
-- `--source` is the source-code slug used in generated `src://` refs (e.g.
-  `src://knomit/internal/store/service.go@<sha>`). It defaults to `--repo` if
-  omitted.
 - `--repo` defaults to the current directory's basename.
+- `--lens` binds the project to a lens instead of a single repo. The two flags
+  are mutually exclusive. See [lens mode](#lens-mode).
+- Both names are validated against the repo-name grammar `[a-z0-9_-]+` before
+  any file is written, so a JSON-hostile value is rejected up front rather than
+  baked into a broken `.mcp.json`.
+
+<Aside type="note">
+There is no `--source` and no `--profile` flag. The source slug used in
+generated `src://` refs is a per-repo server setting; skills read it from the
+`knomit_repos` mount table's `source` column, falling back to the repo name when
+no source is listed. Profile is likewise a per-repo setting with no client-side
+switch.
+</Aside>
 
 <Aside type="caution">
 The skills are deployed **only** by `claude init` from embedded templates — never
@@ -47,6 +57,10 @@ hand-edit `.claude/skills/`. They are overwritten on the next run.
 </Aside>
 
 ## The 11 slash commands
+
+All eleven are embedded templates under `templates/skills/` in the bridge, and
+`claude init` writes all eleven. Any other skill in a project's `.claude/skills/`
+is that project's own — the bridge neither installs nor overwrites it.
 
 | Command | When to use |
 |---------|-------------|
@@ -82,6 +96,46 @@ used — Claude Code discards its output — so the Stop / `pre-compact` paths c
 that role instead.
 </Aside>
 
+## Lens mode
+
+A [lens](/docs/lenses/) mounts several repos behind one binding: one is the
+**write** repo, the rest are read-only. To scaffold a project against a lens
+instead of a single repo:
+
+```bash
+knomit-bridge claude init -lens <name>
+```
+
+The only difference in the scaffold is the argument vector in `.mcp.json` —
+`["--repo", "<name>"]` becomes `["--lens", "<name>"]`. The skills, the hook
+registrations, and the `CLAUDE.md` block are identical:
+
+```jsonc
+{
+  "mcpServers": {
+    "knomit": {
+      "command": "knomit-bridge",
+      "args": ["--lens", "work"]
+    }
+  }
+}
+```
+
+The hooks read the binding out of `.mcp.json` themselves. A `--lens` argument
+puts them in lens mode, where they resolve the lens's write repo via
+`GET /api/v1/lenses/{name}`. `--lens` wins over `--repo` if a hand-edited file
+somehow carries both, in either order. On any resolution failure — server down,
+unknown lens, malformed response — the hook skips with reason `lens_unresolved`.
+A lens-configured session never falls back to the directory basename, because
+that basename could name an unrelated repo.
+
+<Aside type="caution">
+Hook reads are deliberately **write-repo-scoped**, not lens-wide. In a lens
+session, the session-start context and the post-edit staleness lookup cover the
+write repo only — not the union of mounts. The `knomit_*` MCP tools are
+unaffected: they see every mount.
+</Aside>
+
 ## Intent detection
 
 The "is this moment worth capturing?" signal is computed **entirely in the
@@ -89,7 +143,6 @@ bridge** via regex — there is no server-side `/detect` endpoint. Intents
 (correction, discovery, decision, fix-bug, gotcha…) are *conversational signals*,
 not fact kinds: a "fix-bug" moment might become an `incident` or a `gotcha` fact.
 
-## Profiles
-
-`claude init --profile` selects the MCP instruction set; `code` is the default and
-the right choice for a code repo. See [MCP tools](/docs/mcp-tools/#profiles).
+`post-ask` and `pre-compact` run entirely on the transcript and never contact the
+server. Only `session-start` and `post-edit` resolve a repo and read facts, which
+is why they are the two hooks the lens-mode scope limit applies to.

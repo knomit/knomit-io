@@ -608,20 +608,25 @@ const toc = [
         <h2>The MCP operational loop</h2>
         <p>
           MCP is not an optional add-on — it is the primary interface for
-          humans (via Claude Code and editors) and agents alike. Seven tools
+          humans (via Claude Code and editors) and agents alike. Eight tools
           cover the full fact lifecycle; their descriptions carry all the
           behavioral guidance a model needs, with no prompt scaffolding required.
         </p>
         <p>
           Each agent connects to a <strong>branch-scoped endpoint</strong>, so
           reads and writes land on its own branch automatically — isolation is
-          structural, not enforced by convention. Three profiles
-          (<code>code</code>, <code>chat</code>, <code>generic</code>) tailor
-          the tool descriptions to the kind of client connecting.
+          structural, not enforced by convention. One server instance serves
+          every repo and <a href="/docs/lenses/">lens</a>: each handler resolves
+          its binding from the request, and the instructions the model receives
+          are computed per session from that binding.
         </p>
       </div>
       <div class="concept-block__art">
         <div class="mcp-card" aria-hidden="true">
+          <div class="mcp-row">
+            <span class="mcp-phase k-mono">orient</span>
+            <span class="mcp-tool k-mono">knomit_repos</span>
+          </div>
           <div class="mcp-row">
             <span class="mcp-phase k-mono">recall</span>
             <span class="mcp-tool k-mono">knomit_query</span>

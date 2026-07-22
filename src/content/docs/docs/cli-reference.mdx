@@ -75,22 +75,28 @@ subcommands, and `version`.
 ### Default mode — stdio ↔ HTTP MCP proxy
 
 Reads JSON-RPC from stdin, POSTs to the server's MCP endpoint, writes responses
-to stdout. This is what an MCP client launches. It discovers the agent branch via
-`GET /api/v1/repos/{repo}`, then targets
-`{base-url}/api/v1/repos/{repo}/branches/{branch}/mcp?profile={profile}` (the
-branch `/` is URL-encoded as `:`). It maintains the `Mcp-Session-Id` header and
-handles SSE responses.
+to stdout. This is what an MCP client launches. In repo mode it discovers the
+agent branch via `GET /api/v1/repos/{repo}`, then targets
+`{base-url}/api/v1/repos/{repo}/branches/{branch}/mcp` (the branch `/` is
+URL-encoded as `:`). In lens mode it skips branch discovery entirely and targets
+`{base-url}/api/v1/lenses/{lens}/mcp` — a lens resolves each mount's branch
+server-side. It maintains the `Mcp-Session-Id` header and handles SSE responses.
 
 | Flag / arg | Default | Meaning |
 |------------|---------|---------|
 | `--repo` | `trunk` | Repository name |
-| `--source` | (= `--repo`, with a warning) | Source-code slug used in generated `src://` refs |
-| `--profile` | `code` | MCP profile: `code`, `chat`, or `generic` |
+| `--lens` | — | [Lens](/docs/lenses/) name; connects to the lens MCP endpoint. Mutually exclusive with an explicitly-set `--repo` — passing both is a fatal error |
 | `[base-url]` (positional) | `http://localhost:19278` | Server base URL |
-| `--log` | platform default (`~/.knomit/bridge.log`) | Bridge log file (4 MB rotation) |
+| `--log` | `/tmp/knomit-bridge.log` | Bridge log file (4 MB rotation, 3 backups, 7 days) |
 
 The base URL is auto-discovered from the `server.json` lockfile when present;
 `KNOMIT_BASE_URL` overrides it. `KNOMIT_MCP_DEBUG=1` raises the log level to debug.
+
+<Aside type="caution">
+`--source` and `--profile` were removed. A `.mcp.json` that still passes them
+fails with `flag provided but not defined: -source`. Delete both arguments. The
+MCP profile is now a per-repo server setting, not a client flag.
+</Aside>
 
 ### `knomit-bridge claude init` — scaffold Claude Code integration
 
@@ -100,8 +106,12 @@ Renders embedded templates into the current directory. See
 | Flag | Default | Meaning |
 |------|---------|---------|
 | `--repo` | cwd basename | knomit repo name |
-| `--source` | (required) | source slug for `src://` refs |
-| `--profile` | `code` | MCP profile |
+| `--lens` | — | [Lens](/docs/lenses/) name; writes a lens-scoped `.mcp.json`. Mutually exclusive with `--repo` |
+
+Whichever name is used is validated against the server's grammar
+(`[a-z0-9_-]+`) before any file is written, so an invalid value is rejected
+rather than baked into a broken `.mcp.json`. The generated file contains
+`"args": ["--repo", "<name>"]`, or `"args": ["--lens", "<name>"]` in lens mode.
 
 ### `knomit-bridge claude hook <event>` — run an editor hook
 

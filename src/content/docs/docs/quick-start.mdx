@@ -84,13 +84,15 @@ agent branch from the running server, so you never look it up by hand.
     "mcpServers": {
       "knomit": {
         "command": "dist/knomit-bridge",
-        "args": ["--repo", "trunk", "--source", "trunk", "--profile", "code"]
+        "args": ["--repo", "trunk"]
       }
     }
   }
   ```
 
-  `--source` is the slug used in `src://` refs (defaults to `--repo` if omitted).
+  To read across several repos at once, use a [lens](/docs/lenses/) instead:
+  `"args": ["--lens", "<lens-name>"]`. `--lens` and `--repo` are mutually
+  exclusive — passing both is a fatal error.
 
   </TabItem>
   <TabItem label="Streamable HTTP">
@@ -109,8 +111,20 @@ agent branch from the running server, so you never look it up by hand.
   }
   ```
 
+  A [lens](/docs/lenses/) has no branch segment — its URL is
+  `http://localhost:19278/api/v1/lenses/<lens-name>/mcp`.
+
   </TabItem>
 </Tabs>
+
+<Aside type="caution" title="Upgrading from an older bridge">
+The `--source` and `--profile` flags have been removed. An existing `.mcp.json`
+that still passes them fails at startup with
+`flag provided but not defined: -source`, and the bridge exits non-zero.
+Delete those two arguments; `--repo`
+alone is enough. The source slug now follows the repo, and the MCP profile is a
+per-repo server setting rather than a client flag.
+</Aside>
 
 <Aside type="note">
 knomit's tool descriptions carry all the behavioral guidance the model needs —

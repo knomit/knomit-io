@@ -14,7 +14,8 @@ commit.
 Knowledge is reached over two surfaces:
 
 - an **MCP server** — cognitive tools (learn, query, explain, update, retract,
-  review, hypothesize), and
+  review, hypothesize) plus `knomit_repos`, which reports the mounts behind the
+  current binding, and
 - a **REST API** (`/api/v1`, HAL+JSON, commit-anchored URIs) that the web UI and
   any HTTP client use.
 
@@ -41,8 +42,10 @@ implementation plans unattended.
 <RequestFlow />
 
 - The **bridge** discovers the running server through a lockfile (`server.json`,
-  written by the desktop app/tray) or a base URL, resolves the agent branch, and
-  forwards JSON-RPC to `…/branches/{branch}/mcp?profile=code`.
+  written by the desktop app/tray) or a base URL. In repo mode it resolves the
+  agent branch and forwards JSON-RPC to `…/repos/{repo}/branches/{branch}/mcp`;
+  in [lens mode](/docs/lenses/) it skips branch discovery and posts to
+  `…/lenses/{lens}/mcp`, leaving each mount's branch for the server to resolve.
 - The **server** translates tool/HTTP calls into fact reads and writes. Git is the
   only source of truth; the SQLite index (per repo, under
   `KNOMIT_HOME/repos/<name>.db`) is a rebuildable cache for search, the graph, and

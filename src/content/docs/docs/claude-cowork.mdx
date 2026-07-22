@@ -14,7 +14,7 @@ for Claude Desktop.
 
 1. **A running knomit server.** The simplest path is the
    [desktop app](/docs/desktop/) (`Knomit.app` / `knomit-desktop`), which boots
-   the server on a looknomitck port and writes the `server.json` lockfile the bridge
+   the server on a local port and writes the `server.json` lockfile the bridge
    uses to discover it. A bare `knomit serve` on `localhost:19278` works too.
 2. **The `knomit-bridge` binary on disk.** The macOS app symlinks it into `~/bin`
    on launch; otherwise point at the built binary.
@@ -35,27 +35,34 @@ entry mirrors a Claude Desktop server:
 }
 ```
 
-Optional arguments select a different repo or profile:
+Optional arguments select a different repo, or bind the server to a
+[lens](/docs/lenses/) instead:
 
 ```jsonc
 {
   "mcpServers": {
     "knomit": {
       "command": "/Users/<you>/bin/knomit-bridge",
-      "args": ["--repo", "trunk", "--profile", "chat"]
+      "args": ["--repo", "trunk"]
     }
   }
 }
 ```
 
-- `--repo` defaults to `trunk`; `--profile` defaults to `code`. For a
-  conversational Cowork surface, `chat` is usually the better profile.
+- `--repo` defaults to `trunk`. `--lens <name>` connects to
+  `/api/v1/lenses/<name>/mcp` instead, and is mutually exclusive with an
+  explicit `--repo`.
+- There is no `--profile` flag. Profile is a per-repo server setting; the
+  `?profile=` query parameter is deprecated and ignored.
 - If the server is not on the default port and the lockfile isn't found, pass the
   base URL as a positional argument (or set `KNOMIT_BASE_URL`), e.g.
   `"args": ["http://localhost:19278"]`.
 
-Once registered, Cowork sees the seven knomit MCP tools — see
-[MCP tools](/docs/mcp-tools/).
+Once registered, Cowork sees the eight knomit MCP tools — see
+[MCP tools](/docs/mcp-tools/). `knomit_repos` is the one to call first: it takes
+no parameters and returns the binding name plus a mount table (name, repo id,
+branch, `read` or `read+write` role, and the `src://` source slug where one is
+set), which tells a Cowork session what it is actually pointed at.
 
 <Aside type="note">
 Unlike the [Claude Code integration](/docs/claude-code/), Cowork does **not** use
