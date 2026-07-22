@@ -1,0 +1,267 @@
+---
+title: Lenses
+description: Federate one write repo with N read mounts into a single virtual knowledge base — the write-repo rule, kb:// addressing, union read semantics, validation rules, and the lens REST and MCP surfaces.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+A **lens** is a named federation of one **write repo** plus N **read mounts**,
+presented to a client as one virtual knowledge base. A query through a lens fans
+out to every mount and returns a single merged, deduplicated result set; a write
+through a lens lands in exactly one repo. Everything else in knomit — facts,
+branches, provenance, sync — is unchanged underneath.
+
+## What a lens is made of
+
+| Field | Meaning |
+|-------|---------|
+| `name` | Lens name. Matches `[a-z0-9_-]+`, and shares one namespace with repo names. |
+| `write` | The write repo, by per-machine repo name. |
+| `description` | Free markdown, display-only. Capped at 4096 **bytes**. |
+| `reads[]` | The read mounts: `repo`, optional `branch`, optional `source`. |
+
+On a read mount, `branch: ""` means "that repo's agent branch, resolved at bind
+time" — the lens does not freeze it. `source` is an optional `src://` slug
+surfaced in provenance metadata.
+
+The write repo is **always also a read mount**. A lens definition is normalized
+before it is stored: reads are deduped by repo (first occurrence wins, so an
+explicit entry for the write repo keeps its configured branch), the write repo
+is appended if absent, and the result is sorted by repo name. That sorted list
+is the *binding order* referred to throughout this page.
+
+## Writes always go to the write repo's agent branch
+
+There is deliberately no write-branch field. The branch a mount is **read** at
+and the branch writes **land** on are two different things: writes always commit
+to the write repo's own agent branch (`agent/<hostname>-<fingerprint8>`), exactly
+as they would through that repo's own endpoint. A lens changes what you can see,
+never where you write.
+
+`knomit_repos` reports both: the `branch` column is the read branch, and
+`write_branch` — present only on the `read+write` mount — is where writes commit.
+
+<Aside type="caution" title="Lens definitions are machine-local and unsynced">
+Lenses live in a control-plane SQLite database at `<KNOMIT_HOME>/control.db`
+(tables `lenses` and `lens_reads`), which is deliberately **not** git-backed. It
+stores per-machine repo **names**, not repo ids. So a lens is local operational
+config: it does not sync, it is not in git, and it does not travel with the
+corpus. Recreate it on every machine that needs it.
+</Aside>
+
+## Defining a lens
+
+Create a lens with `POST /api/v1/lenses` (or from the web UI). The definition is
+validated against the live repo set, and the same rule set is re-validated on
+every `PATCH`:
+
+| Rule | Status |
+|------|--------|
+| Name must be non-empty and match `[a-z0-9_-]+` | 400 |
+| A write repo is required | 400 |
+| Name must not collide with an existing **repo** name | 409 |
+| Name must not collide with an existing **lens** | 409 |
+| Two mounts must not resolve to the same repo ID (a replica or clone) | 409 |
+| Every member repo must be registered | 422 |
+| A pinned branch must exist in its member repo | 422 |
+| Description must be ≤ 4096 bytes | 422 |
+
+Two consequences worth stating plainly:
+
+- **Repo and lens names share one namespace.** A lens cannot take a name a repo
+  already has, and vice versa. (They share it because a lens and a lens-of-one
+  repo both surface the same identity for cursor pinning.)
+- **A repo referenced by a lens cannot be archived or purged.** Delete the lens
+  first. `DELETE /api/v1/lenses/{lens}` removes the definition only and returns
+  204; member repos are untouched.
+
+## Addressing: `kb://<id>/…`
+
+A repo's ID is its **root-commit hash**; the wire form is the first **12 hex
+chars**. In lens results:
+
+| Form | Means |
+|------|-------|
+| `kb/technology/…/fact.md` | A fact in the **write repo**. |
+| `kb://a1b2c3d4e5f6/kb/technology/…/fact.md` | A fact on the read mount with that 12-hex repo id. |
+
+These qualified paths are stable identifiers. Pass one back as
+`knomit_explain`'s `file`, or store one in a fact's `refs` to cite across repos —
+the server never rewrites it. A `kb://` ref is classified as **external**, not a
+local fact edge, so it contributes no evidence weight and produces no local
+provenance edge (see [the `knomit:` URI scheme](/docs/concepts/#the-knomit-uri-scheme)).
+
+Call `knomit_repos` (no parameters) to get the mount table:
+
+```json
+{
+  "binding": "work",
+  "mounts": [
+    { "name": "notes", "id": "a1b2c3d4e5f6", "branch": "agent/box-9f2c",
+      "role": "read", "source": "src://notes" },
+    { "name": "trunk", "id": "0f1e2d3c4b5a", "branch": "main",
+      "role": "read+write", "write_branch": "agent/box-9f2c" }
+  ]
+}
+```
+
+`role` is `read` or `read+write`. `write_branch` appears only on the write mount.
+
+## What a union read actually does
+
+A lens read is not a concatenation. Four rules govern it:
+
+**Relevance ordering uses Reciprocal Rank Fusion.** Native similarity scores are
+not comparable across mounts, so raw scores are discarded and each row is scored
+`1/(60 + rank)` within its own mount's list, then merged. Ties break by mount
+order, so fusion is deterministic. With a single mount the output order is the
+input order.
+
+**Recency ordering uses a k-way merge on `committed_at`.** Commit timestamps
+*are* comparable across mounts, so recency needs no fusion — rank fusion exists
+for incomparable scores and would be wrong here.
+
+**Dedupe is by repo-relative path, and the write mount wins.** When the same
+`kb/<topic>/<category>/<uuid>.md` path exists on two mounts, the write repo's
+copy is emitted and the read-mount copy is dropped — even when the shadowed copy
+ranks higher. Remaining collisions resolve in binding order. (This is not
+hypothetical: a re-rooted fork of a read-mounted upstream has a different
+root-commit ID, so it mounts, but it shares the upstream's fact UUIDs.)
+
+**Fan-out is ontology-aware.** A bare path filter of the form `kb/<topic>/` skips
+mounts whose ontology lacks that topic. The topic must be fully delimited by a
+trailing slash — `kb/decisions/` constrains, `kb/decisions` is a prefix that
+could also match `kb/decisions-x/` and constrains nothing. The skip is an
+internal optimization: a skipped mount is indistinguishable from one that matched
+nothing.
+
+Per-mount candidate depth is capped (500 rows per mount on the REST reads), and
+the fused union is truncated to the requested `limit` last.
+
+<Aside type="note" title="A lens never silently shrinks its read set">
+**Any mount error fails the whole request.** If a member repo is unavailable, the
+lens returns 503 "Lens unavailable" rather than partial results from the mounts
+that answered. Failures are exhaustively classified: registry not started → 503,
+registry lookup failure → 500, no such lens → 404, member repo unavailable →
+503. A panic inside a per-mount fan-out goroutine is converted into that mount's
+error — the request fails, the process does not.
+</Aside>
+
+## Using a lens
+
+### Bridge
+
+```sh
+knomit-bridge --lens work
+```
+
+`--lens` is mutually exclusive with an explicitly-set `--repo`. In lens mode the
+bridge skips agent-branch discovery entirely — each mount resolves its own branch
+server-side — and connects to `<base>/api/v1/lenses/<lens>/mcp`. See the
+[CLI reference](/docs/cli-reference/).
+
+### Claude Code
+
+```sh
+knomit-bridge claude init -lens work
+```
+
+The hooks read the binding out of `.mcp.json` and resolve the lens's write repo
+via `GET /api/v1/lenses/{name}`. On any failure — server down, unknown lens,
+malformed response — they skip with reason `lens_unresolved` rather than falling
+back to the directory basename. Hook reads are **write-repo-scoped**:
+session-start context and post-edit lookups cover the write repo only, not the
+union. See [Claude Code](/docs/claude-code/#lens-mode).
+
+### Web UI
+
+The context switcher has two groups, Repos and Lenses. In lens context the top
+bar shows the mount count and a `writes → <write repo>` pill, a **Sources**
+dropdown narrows the union to a subset of read mounts, and a `repo:` filter facet
+is available (lens context only). Facts from read mounts carry a source badge and
+are not editable there. See [Web UI](/docs/web-ui/).
+
+### Through MCP
+
+Session instructions gain a **lens addendum**: the mounts table (repo · id ·
+branch · role · source), a note that the branch column is the *read* branch while
+writes go to the write repo's agent branch, the `kb://` convention with a worked
+example, how to correct a read-mount fact, and read coverage — which topics each
+mount has. For a lens of one the addendum is empty, so single-repo sessions are
+byte-identical to before lenses existed.
+
+Three behaviours differ from a repo binding:
+
+- `knomit_update` and `knomit_retract` reject a `kb://<read-mount-id>/…` path:
+  *"read-only mount: repo X is not this binding's write repo — facts there can
+  only be changed through their own endpoint."* Edit it through that repo's own
+  endpoint, or through a lens whose write repo it is.
+- `knomit_explain` **never fans out.** The fact's own path fixes the mount and
+  the entire provenance walk stays inside it. A `kb://` id that is not mounted
+  returns *"repo &lt;id&gt; is not mounted in this binding"*.
+- Pagination cursors are **pinned to their binding**. A cursor is a frozen view
+  of one binding's read set; resuming it through a different binding is rejected,
+  as is resuming after the lens's mounts or branch pins changed.
+
+See [MCP tools](/docs/mcp-tools/).
+
+## REST surface
+
+All paths are under `/api/v1`.
+
+| Endpoint | Notes |
+|----------|-------|
+| `GET /lenses`, `POST /lenses` | List and create. |
+| `GET /lenses/{lens}` | The definition — including `write`, which is what the Claude Code hooks resolve. |
+| `PATCH /lenses/{lens}` | Edit. **The name is immutable** — there is no field for it. |
+| `DELETE /lenses/{lens}` | 204. Definition only; member repos untouched. |
+| `GET /lenses/{lens}/facts`, `/facts/{path}` | Union fact collection and single-fact read. |
+| `GET /lenses/{lens}/search` | Union relevance search. |
+| `GET /lenses/{lens}/completions`, `/stats`, `/topics`, `/topics/{path}` | Union metadata. |
+| `GET/POST/PUT/DELETE /lenses/{lens}/mcp` | The lens MCP endpoint. |
+
+On `PATCH`, an absent key keeps its current value and a present key replaces
+wholesale: `reads` replaces **as a set**, it never merges. The full create rule
+set is re-validated.
+
+Points that differ from the repo endpoints:
+
+- **Lens read endpoints use a flat envelope, not the HAL collection envelope** —
+  `{facts, total}`, `{results, total}`, `{values}` — mirroring the MCP query
+  response. They carry no `_links`, because a lens has no single per-branch
+  anchor. `total` is the **post-dedupe** union size; `limit`/`offset` page within
+  it.
+- **A bare `kb/…` path on the single-fact endpoint always reads the write repo**,
+  with no dedupe scan, even when a read mount shadows the same path. To target a
+  mount, use `kb://<id12>/kb/…`, percent-encoded as one path segment.
+- **Every not-found case on the single-fact endpoint returns a byte-identical
+  404** — unknown mount id, malformed `kb://`, missing fact, retracted fact — so
+  a caller cannot probe mount topology.
+- `repo=` (repeatable) narrows the fan-out to named mounts; naming a non-mount is
+  422.
+- `completions?category=repo` is lens-only and is served from the lens definition
+  alone: mount names in binding order, write repo first, prefix-filtered
+  case-insensitively.
+- On `stats`, `avg_confidence` is a count-weighted mean across mounts, while
+  `domains` and `entities` are summed per mount (not deduped). Empty maps
+  serialize as `{}`, never `null`.
+- In [read-only mode](/docs/deployment/), both MCP route shapes are exempt from
+  the mutating-method gate, but lens CRUD stays gated.
+
+See the [REST API reference](/docs/api/) for the full parameter set.
+
+## Limits and gotchas
+
+- Lens config is **machine-local and unsynced** — not in git, not part of the
+  corpus, keyed by per-machine repo names. See [Remote sync](/docs/remote-sync/)
+  for what *does* travel.
+- A bare path on the single-fact REST endpoint means the **write repo**, always.
+  Shadowing does not apply there.
+- On union reads, **the write mount's copy wins** a path collision, even against
+  a higher-ranked read-mount copy.
+- **One bad mount fails the whole read.** There is no partial result and no
+  coverage metadata.
+- The lens **name is immutable**; `reads` on `PATCH` replaces rather than merges.
+- Two mounts of the same underlying repo (a clone or replica sharing a
+  root-commit ID) are rejected at create time.
+- A repo cannot be archived or purged while a lens references it.
