@@ -24,7 +24,7 @@ Knowledge is reached over two surfaces:
 | Artifact | Binary | What it is |
 |----------|--------|------------|
 | **Server** | `knomit` | The core HTTP server. Serves the REST API, the MCP endpoint, the embedded web UI, and (optionally) a git smart-HTTP endpoint. CGO build (ONNX Runtime + graphqlite). |
-| **Desktop app** | `knomit-desktop` | A Wails v3 tray/desktop app that boots the server in-process on a looknomitck port and shows the web UI in a native webview. Ships as `Knomit.app` on macOS; a binary + `.desktop` launcher on Linux. See [Desktop app](/docs/desktop/). |
+| **Desktop app** | `knomit-desktop` | A Wails v3 tray/desktop app that boots the server in-process on a loopback port and shows the web UI in a native webview. Ships as `Knomit.app` on macOS; a binary on Linux, where `make desktop-install` adds the `.desktop` launcher and icon. See [Desktop app](/docs/desktop/). |
 | **Bridge** | `knomit-bridge` | A small pure-Go adapter. Its primary job is a **stdio ↔ HTTP MCP proxy** that an MCP client (Claude Code, Claude Desktop, Claude Cowork) spawns to talk to the server. It also scaffolds Claude Code integration and runs the editor hooks. |
 
 A fourth UI layer, the **web UI** (React/TypeScript), is built to static assets

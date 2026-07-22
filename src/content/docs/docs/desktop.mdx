@@ -1,6 +1,6 @@
 ---
 title: Desktop app
-description: knomit-desktop — a Wails v3 tray app that runs the server in-process on a looknomitck port and publishes a lockfile the bridge discovers.
+description: knomit-desktop — a Wails v3 tray app that runs the server in-process on a loopback port and publishes a lockfile the bridge discovers.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -16,7 +16,7 @@ wiring up MCP clients.
 ## How it differs from `knomit serve`
 
 - **Runs the server in-process.** The app boots the full knomit server inside
-  itself on a **looknomitck port** (it prefers `19278`, but picks a free port if
+  itself on a **loopback port** (it prefers `19278`, but picks a free port if
   that's taken) and serves the web UI from embedded assets. That port is a pure
   REST/MCP endpoint — the same one Claude Code and other MCP clients call.
 - **Publishes a discovery lockfile.** On startup it writes `server.json`
