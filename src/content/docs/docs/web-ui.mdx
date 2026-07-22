@@ -1,6 +1,6 @@
 ---
 title: Web UI
-description: Browse, search, inspect provenance, time-travel, and trigger synthesis from the embedded web UI.
+description: Browse, search, inspect provenance, time-travel, and watch tasks stream live from the embedded web UI.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -60,8 +60,8 @@ that exist. Lens management also has a detail view per lens.
 - **Time-travel** — view the knowledge graph as-of any past commit; refs resolve
   to the versions that existed at that point in time.
 - **Ontology browser** — navigate topics and categories and see inheritance.
-- **Synthesis & tasks** — trigger a synthesis run and watch progress stream live
-  over server-sent events.
+- **Synthesis & tasks** — watch task progress stream live over server-sent
+  events.
 - **Console** — a persistent panel that logs task, status, and remote events as
   they arrive.
 
@@ -70,8 +70,14 @@ stays usable.
 
 ## Keyboard
 
-The UI is keyboard-friendly — search (`/`) and a command palette (`:`) keep you
-on the keyboard while browsing and inspecting.
+Four global keys, ignored while a text field has focus:
+
+| Key | Effect |
+|-----|--------|
+| `/` | Focus the search/filter input |
+| `Escape` | While time-travelling, return to now; otherwise clear the active filters |
+| `Backspace` / `Delete` | Navigate back |
+| `h` | Return to HEAD, leaving time-travel |
 
 <Aside type="tip" title="Run it as a native app">
 The same UI ships as a system-tray [desktop app](/docs/desktop/)

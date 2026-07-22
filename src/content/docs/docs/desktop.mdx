@@ -24,12 +24,14 @@ wiring up MCP clients.
   can find the running server's port without being told. The file lives outside
   `KNOMIT_HOME`:
   - macOS: `~/Library/Application Support/knomit/server.json`
-  - Linux: `$XDG_STATE_HOME/knomit/server.json`
-- **Lives in the system tray.** On macOS it runs as a tray app
-  (`Knomit.app`). On Linux it runs headless (no systray); `knomit-desktop window`
-  opens the webview, normally triggered from the installed `.desktop` launcher.
-- **Symlinks the bridge.** The macOS app symlinks the bundled `knomit-bridge` into
-  `~/bin` on launch, giving MCP clients a stable path to point at.
+  - Linux: `$XDG_STATE_HOME/knomit/server.json` (falling back to
+    `~/.local/state/knomit/server.json` when `XDG_STATE_HOME` is unset)
+- **Lives in the system tray.** On macOS and Linux alike it runs as a tray app
+  (`Knomit.app` on macOS), with an "Open Knomit" menu item that shows the
+  webview window.
+- **Symlinks the bridge.** On launch the app symlinks the bundled
+  `knomit-bridge` into `$KNOMIT_HOME/bin` (default `~/.knomit/bin`) on every
+  platform, giving MCP clients a stable path to point at.
 
 <Aside type="tip" title="Why the lockfile matters">
 Because the app may land on a non-default port, the bridge discovers the server
@@ -50,6 +52,7 @@ Build the app with `make desktop`:
   launcher to `$XDG_DATA/applications`.
 
 Logs go to stderr and a rotating file under the platform logs dir
-(`~/Library/Logs/knomit` on macOS, `$XDG_STATE_HOME/logs/knomit` on Linux). See
+(`~/Library/Logs/knomit` on macOS, `$XDG_STATE_HOME/knomit` — fallback
+`~/.local/state/knomit` — on Linux). See
 the [CLI reference](/docs/cli-reference/#knomit-desktop--traydesktop-app) for the
 full argument list.

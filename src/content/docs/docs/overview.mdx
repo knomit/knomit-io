@@ -53,12 +53,14 @@ implementation plans unattended.
 
 ## The core model, in one paragraph
 
-A **repo** is one knowledge base (default: `trunk`). Each machine writes only its
+A **repo** is one knowledge base (default: `core`). Each machine writes only its
 own **agent branch** (`agent/<host>-<fp8>`); **`main` is consensus** and is never
 written directly by the MCP server — agreement is reached by merging agent
 branches into `main`. Facts are immutable, content-addressed Markdown with YAML
-frontmatter (`topic`, `category`, `kind`, `type`, `domain`, `entities`,
-`confidence`, `sources`, `refs`). Reads are **commit-anchored**: a fact resolves
+frontmatter (`kind`, `type`, `domain`, `entities`, `confidence`, `sources`,
+`refs`, `evidence_weight`, `origin`); topic and category are not frontmatter
+keys — they are path segments in `kb/<topic>/<category>/<uuid8>.md`, passed as
+`knomit_learn` arguments. Reads are **commit-anchored**: a fact resolves
 at a commit, not at HEAD, so the graph can be walked as of any point in history.
 
 See [Concepts](/docs/concepts/) for the full conceptual model; the rest of this

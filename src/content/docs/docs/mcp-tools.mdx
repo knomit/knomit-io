@@ -79,7 +79,7 @@ by hand:
   "mcpServers": {
     "knomit": {
       "command": "dist/knomit-bridge",
-      "args": ["--repo", "trunk"]
+      "args": ["--repo", "core"]
     }
   }
 }
@@ -188,10 +188,16 @@ weight and creates no local provenance edge.
 | `updates` | object | ✓ | Only the fields to change |
 
 `updates` fields: `title`, `body`, `kind`, `type`, `confidence`, `sources`,
-`domain` (replaces), `entities` (replaces), `refs` (**appended**, not replaced).
+`domain` (replaces), `entities` (replaces), `refs` (**replaces**).
 `type` carries the same `enum` as `knomit_learn`, but the update schema
 deliberately declares no defaults — an omitted field means "leave it alone", not
 "reset it". `origin` is not updatable.
+
+`refs` replaces the **entire** list — it is not appended to. Every ref you leave
+out of the array is dropped from the fact. To add or refresh one ref, read the
+fact's current refs first and resend the full merged list. Omit `refs` entirely
+to leave the existing refs untouched. `domain` and `entities` behave the same
+way.
 
 ### `knomit_retract` — remove a fact
 
@@ -246,9 +252,9 @@ Read-only and parameterless. Returns the binding and one row per mount:
 
 ```json
 {
-  "binding": "trunk",
+  "binding": "core",
   "mounts": [
-    {"name": "trunk", "id": "a1b2c3d4e5f6", "branch": "main",
+    {"name": "core", "id": "a1b2c3d4e5f6", "branch": "main",
      "role": "read+write", "write_branch": "agent/hostname-abc123"},
     {"name": "vendor-kb", "id": "0f9e8d7c6b5a", "branch": "main", "role": "read"}
   ]

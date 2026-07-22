@@ -82,7 +82,7 @@ REST endpoints / the web UI's "Connect Remote" flow. The stored record carries:
 |-------|---------|
 | `URL` | Git remote URL |
 | `Branch` | Upstream **consensus** branch — default `main`, configurable (e.g. `master`); changeable later via `PATCH /origin/upstream` |
-| `Interval` / `PushInterval` | Pull / push cadence (seconds), run independently |
+| `Interval` / `PushInterval` | Pull / push cadence (seconds); a single reconcile loop ticks at the shorter of the two and does both |
 | `AuthMethod` | `token` · `basic` · `ssh` · `none` (inferred if empty) |
 | `AuthToken` | Encrypted at rest (see above) |
 | `LastSyncAt` / `LastStatus` / `LastError` (+ push variants) | Last-outcome bookkeeping, surfaced through the gear-icon indicator |
@@ -111,12 +111,15 @@ trusted exemption.
 The "Connect Remote" flow is session-based and ephemeral (≈10-min idle expiry):
 
 1. `POST /repos/{repo}/origin-sessions` with the URL + credentials → a session.
-2. `GET …/test` checks connectivity; `GET …/preview` shows the merge (counts of
-   local-only / remote-only / shared / dead-ref facts) for "local wins" vs
-   "remote wins".
-3. `POST …/apply` then `…/commit` performs the merge.
+2. `GET …/test` checks connectivity; `GET …/preview` shows one merge summary —
+   counts of local-only / remote-only / shared-path / dead-ref facts. The
+   conflict strategy is not a preview input; it is an argument to apply.
+3. `POST …/apply` then `…/commit` performs the merge, taking
+   `conflict_strategy` in the apply body.
 
-These endpoints serve `application/hal+json`, and errors as
+`…/test`, `…/preview`, `…/apply` and `…/commit` are SSE streams
+(`text/event-stream`), each ending in a `done` event carrying its result. The
+session endpoints below serve `application/hal+json`, and errors as
 `application/problem+json`:
 
 | Endpoint | Response shape |
@@ -135,6 +138,11 @@ A per-repo reconcile loop re-reads the remote config fresh every tick, runs an
 initial synchronous reconcile first (so credential errors surface immediately),
 and escalates its log level WARN→ERROR after five consecutive failures. Sync uses
 a compare-and-swap watermark on `last_commit`.
+
+Pull and push share one loop rather than running on separate timers: every tick
+syncs, then pushes (push is skipped in read-only mode). The loop interval is the
+shorter of `Interval` and `PushInterval` — a non-positive `PushInterval` is
+ignored, and if neither yields a positive value the interval falls back to 300s.
 
 ## Serving git over HTTP
 

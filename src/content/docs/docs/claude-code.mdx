@@ -85,15 +85,15 @@ Registered in `.claude/settings.json`, each runs `knomit-bridge claude hook
 |-------|---------------------|--------------|
 | `session-start` | SessionStart | Pre-warms the session: emits known principles, recent facts, and the per-area TOC as a system reminder |
 | `post-edit` | PostToolUse(`Edit`/`Write`/`MultiEdit`) | If an edited file matches a fact's entities, nudges `/knomit-update` or `/knomit-retract` for possibly-stale facts |
-| `post-ask` | PostToolUse(`AskUserQuestion`) | After a resolved `AskUserQuestion` with non-obvious tradeoffs, nudges `/knomit-decided` before the authorized work begins |
+| `post-ask` | PostToolUse(`AskUserQuestion`) | Fires after every resolved `AskUserQuestion` and nudges `/knomit-decided` before the authorized work begins — the "is this worth recording" filter lives in the skill, not the hook |
 | `pre-compact` | PreCompact | Scans a wider window for capture-worthy moments and suggests `/knomit-remember` / `/knomit-decided` |
 
 <Aside type="note">
 `SessionStart` stdout is auto-wrapped as a system reminder, so that hook emits
 plain text; the other hooks inject context as
 `{"hookSpecificOutput":{"additionalContext":"…"}}` JSON. `SessionEnd` is **not**
-used — Claude Code discards its output — so the Stop / `pre-compact` paths cover
-that role instead.
+used — Claude Code discards its output — so the `pre-compact` path covers that
+role instead.
 </Aside>
 
 ## Lens mode
@@ -143,6 +143,8 @@ bridge** via regex — there is no server-side `/detect` endpoint. Intents
 (correction, discovery, decision, fix-bug, gotcha…) are *conversational signals*,
 not fact kinds: a "fix-bug" moment might become an `incident` or a `gotcha` fact.
 
-`post-ask` and `pre-compact` run entirely on the transcript and never contact the
-server. Only `session-start` and `post-edit` resolve a repo and read facts, which
-is why they are the two hooks the lens-mode scope limit applies to.
+Only `pre-compact` scans the transcript and runs the intent regexes; `post-ask`
+reads just its own hook payload (the questions and the answers). Neither
+contacts the server. Only `session-start` and `post-edit` resolve a repo and
+read facts, which is why they are the two hooks the lens-mode scope limit
+applies to.

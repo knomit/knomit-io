@@ -15,7 +15,7 @@ const toc = [
   { id: 'branches', label: 'Peers, branches & consensus' },
   { id: 'provenance', label: 'Provenance & signing' },
   { id: 'temporal', label: 'The temporal graph' },
-  { id: 'refs', label: 'The knomit: URI scheme' },
+  { id: 'refs', label: 'Ref forms' },
   { id: 'synthesis', label: 'Synthesis & hypotheses' },
   { id: 'discovery', label: 'Origin & discovery' },
   { id: 'mcp', label: 'The MCP loop' },
@@ -24,7 +24,7 @@ const toc = [
 
 <BaseLayout
   title="Concepts — how knomit works"
-  description="How knomit works: typed facts with provenance, ontology and inheritance, agent branches and consensus, the temporal graph, and the knomit: URI scheme."
+  description="How knomit works: typed facts with provenance, ontology and inheritance, agent branches and consensus, the temporal graph, and the forms a ref can take."
 >
   <section class="k-section concepts-hero k-grid-bg">
     <div class="k-container">
@@ -71,7 +71,7 @@ const toc = [
             confidence: 0.72,
             domain: ['ai', 'agents', 'governance'],
             entities: ['OpenAI', 'KPMG', 'Anthropic'],
-            refs: ['knomit:/kb/technology/ai/trends/73f515b5.md'],
+            refs: ['kb/technology/ai/trends/73f515b5.md'],
           }}
           body={'By mid-2026 a consistent pattern emerges across independent sources: **agentic AI** is displacing chatbots as the primary mode of enterprise AI use, simultaneously driving workforce and safety governance responses.'}
           commit="124c68e"
@@ -487,19 +487,22 @@ const toc = [
     <!-- Refs -->
     <section id="refs" class="concept-block concept-block--reverse">
       <div class="concept-block__text k-prose-content">
-        <h2>The <code>knomit:</code> URI scheme</h2>
+        <h2>Ref forms</h2>
         <p>
           Refs anchor a fact to its source material — the evidence behind the
-          claim. A ref points to another fact in the same knowledge base, or to
-          any web resource: an article, a paper, a specific commit.
+          claim. A ref points to another fact, to a source file at a given
+          commit, or to any web resource: an article, a paper, a press release.
+          Refs are stored verbatim — never rewritten or resolved.
         </p>
         <table>
           <thead>
             <tr><th>Form</th><th>Meaning</th></tr>
           </thead>
           <tbody>
-            <tr><td><code>knomit:/kb/…</code></td><td>Fact in the current knowledge base</td></tr>
-            <tr><td><code>https://…</code></td><td>Any web resource — article, paper, commit</td></tr>
+            <tr><td><code>kb/technology/debugging/pool-fix.md</code></td><td>Local fact in this knowledge base</td></tr>
+            <tr><td><code>kb://&lt;id12&gt;/kb/…</code></td><td>Fact in another repo mounted in this lens</td></tr>
+            <tr><td><code>src://&lt;source&gt;/&lt;path&gt;@&lt;commit&gt;</code></td><td>Source file, optionally pinned to a commit</td></tr>
+            <tr><td><code>https://…</code></td><td>Any web resource — article, paper, press release</td></tr>
           </tbody>
         </table>
       </div>
@@ -507,12 +510,12 @@ const toc = [
         <div class="uri-card k-mono" aria-hidden="true">
           <div class="uri-row">
             <span class="uri-type">fact</span>
-            <div class="uri-text"><span class="uri-scheme">knomit:</span><span class="uri-host">/kb/technology/ai/agents/</span><span class="uri-path">124c68ec.md</span></div>
+            <div class="uri-text"><span class="uri-host">kb/technology/ai/agents/</span><span class="uri-path">124c68ec.md</span></div>
           </div>
           <div class="uri-divider"></div>
           <div class="uri-row">
-            <span class="uri-type">fact</span>
-            <div class="uri-text"><span class="uri-scheme">knomit:</span><span class="uri-host">/kb/technology/security/ai/</span><span class="uri-path">c7fbe083.md</span></div>
+            <span class="uri-type">source</span>
+            <div class="uri-text"><span class="uri-scheme">src://</span><span class="uri-host">knomit/internal/store/</span><span class="uri-path">service.go@cfef409</span></div>
           </div>
           <div class="uri-divider"></div>
           <div class="uri-row">
@@ -522,7 +525,7 @@ const toc = [
           <div class="uri-divider"></div>
           <div class="uri-row">
             <span class="uri-type">commit</span>
-            <div class="uri-text"><span class="uri-scheme">knomit-kb@</span><span class="uri-host">trunk/</span><span class="uri-path">124c68ec · 2026-06-26</span></div>
+            <div class="uri-text"><span class="uri-scheme">knomit-kb@</span><span class="uri-host">core/</span><span class="uri-path">124c68ec · 2026-06-26</span></div>
           </div>
         </div>
       </div>

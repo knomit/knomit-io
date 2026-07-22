@@ -27,7 +27,7 @@ domain: [music]
 entities: [alice]
 sources: 1
 refs:
-  - knomit://github.com/org/repo/src/preferences.ts
+  - src://knomit/src/preferences.ts@a1b2c3d
 ---
 Alice prefers rock music over jazz.
 ```
@@ -144,17 +144,21 @@ commits), the temporal model (history), and the distribution model
 (push/pull/merge); everything else is ephemeral cache.
 </Aside>
 
-## The `knomit:` URI scheme
+## Ref forms
 
 Refs anchor a fact to its source material — the evidence behind the claim. A ref
-points to another fact in the same knowledge base, or to any web resource:
+points to another fact, to a source file, or to any web resource:
 
 | Form | Meaning | Example |
 |------|---------|---------|
-| Relative (no authority) | Fact in the current knowledge base | `knomit:/kb/technology/debugging/pool-fix.md` |
-| Absolute (with host) | Fact in an external repo | `knomit://github.com/org/repo/src/main.ts` |
-| Repo-qualified | Fact on another mount of a [lens](/docs/lenses/), addressed by 12-hex repo id | `kb://a1b2c3d4e5f6/kb/technology/debugging/pool-fix.md` |
+| Local fact path | Fact in this knowledge base | `kb/technology/debugging/pool-fix.md` |
+| Repo-qualified | Fact in another repo mounted in this [lens](/docs/lenses/), addressed by 12-hex repo id | `kb://a1b2c3d4e5f6/kb/technology/debugging/pool-fix.md` |
+| Source anchor | Source file, optionally pinned to a commit | `src://knomit/internal/store/service.go@cfef409` |
 | Plain URL | Any web resource — article, paper, commit | `https://example.com/doc` |
+
+Refs are stored verbatim — never rewritten, resolved, or normalized. A ref is
+classified **local** when it does not start with `kb://` and does end in `.md`;
+everything else is external.
 
 A `kb://` path is a stable identifier: pass it back as `knomit_explain`'s `file`,
 or store it in a fact's `refs` to cite across repos — the server never rewrites

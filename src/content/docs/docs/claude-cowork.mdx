@@ -16,8 +16,9 @@ for Claude Desktop.
    [desktop app](/docs/desktop/) (`Knomit.app` / `knomit-desktop`), which boots
    the server on a local port and writes the `server.json` lockfile the bridge
    uses to discover it. A bare `knomit serve` on `localhost:19278` works too.
-2. **The `knomit-bridge` binary on disk.** The macOS app symlinks it into `~/bin`
-   on launch; otherwise point at the built binary.
+2. **The `knomit-bridge` binary on disk.** The desktop app symlinks it into
+   `$KNOMIT_HOME/bin` (default `~/.knomit/bin`) on launch; otherwise point at
+   the built binary.
 
 ## Configure Cowork
 
@@ -29,7 +30,7 @@ entry mirrors a Claude Desktop server:
 {
   "mcpServers": {
     "knomit": {
-      "command": "/Users/<you>/bin/knomit-bridge"
+      "command": "/Users/<you>/.knomit/bin/knomit-bridge"
     }
   }
 }
@@ -42,14 +43,14 @@ Optional arguments select a different repo, or bind the server to a
 {
   "mcpServers": {
     "knomit": {
-      "command": "/Users/<you>/bin/knomit-bridge",
-      "args": ["--repo", "trunk"]
+      "command": "/Users/<you>/.knomit/bin/knomit-bridge",
+      "args": ["--repo", "work"]
     }
   }
 }
 ```
 
-- `--repo` defaults to `trunk`. `--lens <name>` connects to
+- `--repo` defaults to `core`. `--lens <name>` connects to
   `/api/v1/lenses/<name>/mcp` instead, and is mutually exclusive with an
   explicit `--repo`.
 - There is no `--profile` flag. Profile is a per-repo server setting; the
@@ -68,6 +69,7 @@ set), which tells a Cowork session what it is actually pointed at.
 Unlike the [Claude Code integration](/docs/claude-code/), Cowork does **not** use
 the `knomit-bridge claude init` scaffolding — there are no project skills or
 hooks, it is purely the MCP server wiring. The bridge does not auto-recover a
-session if the server dies; the client owns restart, though it does lazily
-re-resolve the server from `server.json` on transport failure.
+session if the server dies; the client owns restart. It resolves the base URL
+once at startup — positional argument, then `server.json`, then the default —
+so a server that comes back on a different port needs the bridge restarted too.
 </Aside>

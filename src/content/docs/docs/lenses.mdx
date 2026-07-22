@@ -61,6 +61,7 @@ every `PATCH`:
 | A write repo is required | 400 |
 | Name must not collide with an existing **repo** name | 409 |
 | Name must not collide with an existing **lens** | 409 |
+| A create for the same name must not already be in flight | 409 |
 | Two mounts must not resolve to the same repo ID (a replica or clone) | 409 |
 | Every member repo must be registered | 422 |
 | A pinned branch must exist in its member repo | 422 |
@@ -89,7 +90,7 @@ These qualified paths are stable identifiers. Pass one back as
 `knomit_explain`'s `file`, or store one in a fact's `refs` to cite across repos —
 the server never rewrites it. A `kb://` ref is classified as **external**, not a
 local fact edge, so it contributes no evidence weight and produces no local
-provenance edge (see [the `knomit:` URI scheme](/docs/concepts/#the-knomit-uri-scheme)).
+provenance edge (see [Ref forms](/docs/concepts/#ref-forms)).
 
 Call `knomit_repos` (no parameters) to get the mount table:
 
@@ -99,7 +100,7 @@ Call `knomit_repos` (no parameters) to get the mount table:
   "mounts": [
     { "name": "notes", "id": "a1b2c3d4e5f6", "branch": "agent/box-9f2c",
       "role": "read", "source": "src://notes" },
-    { "name": "trunk", "id": "0f1e2d3c4b5a", "branch": "main",
+    { "name": "core", "id": "0f1e2d3c4b5a", "branch": "main",
       "role": "read+write", "write_branch": "agent/box-9f2c" }
   ]
 }
@@ -217,7 +218,8 @@ All paths are under `/api/v1`.
 | `DELETE /lenses/{lens}` | 204. Definition only; member repos untouched. |
 | `GET /lenses/{lens}/facts`, `/facts/{path}` | Union fact collection and single-fact read. |
 | `GET /lenses/{lens}/search` | Union relevance search. |
-| `GET /lenses/{lens}/completions`, `/stats`, `/topics`, `/topics/{path}` | Union metadata. |
+| `GET /lenses/{lens}/completions`, `/topics`, `/topics/{path}` | Union metadata. |
+| `GET /lenses/{lens}/stats` | Union stats and activity roll-up, plus a per-mount `repos[]` breakdown. |
 | `GET/POST/PUT/DELETE /lenses/{lens}/mcp` | The lens MCP endpoint. |
 
 On `PATCH`, an absent key keeps its current value and a present key replaces
@@ -242,9 +244,15 @@ Points that differ from the repo endpoints:
 - `completions?category=repo` is lens-only and is served from the lens definition
   alone: mount names in binding order, write repo first, prefix-filtered
   case-insensitively.
-- On `stats`, `avg_confidence` is a count-weighted mean across mounts, while
-  `domains` and `entities` are summed per mount (not deduped). Empty maps
-  serialize as `{}`, never `null`.
+- `stats` returns `total`, `repo_count`, `last_commit`, `avg_confidence`,
+  `domains`, `entities`, and `repos[]`. `avg_confidence` is a count-weighted
+  mean across mounts, while `total`, `domains`, and `entities` are summed per
+  mount (not deduped). Empty maps serialize as `{}`, never `null`.
+- `repos[]` is the per-mount breakdown — `id`, `name`, `source`, `branch`,
+  `is_write`, `total`, `avg_confidence`, `domains`, `entities`, `last_commit`,
+  `changes_7d`, `changes_30d`, `changes_90d` — in binding order. It is exact per
+  mount, so consumers needing collision-free numbers should read it rather than
+  the summed top-level fields.
 - In [read-only mode](/docs/deployment/), both MCP route shapes are exempt from
   the mutating-method gate, but lens CRUD stays gated.
 

@@ -44,10 +44,11 @@ direction to each, never a new fact type.
 `effort` (`normal` · `medium` · `high`) is a dial on the existing `review` /
 `hypothesize` operations rather than a separate tool — and it doubles as a budget.
 `normal` is the default and reproduces pre-discovery behaviour **byte-for-byte** (a
-hard invariant); `medium` / `high` engage the structural-bridge engine (single-hop
-bridges at `medium`, multi-hop at `high`). On an **unfiltered** run, `effort` also
-bounds how many bridge candidates are considered, so a `high` run never attempts
-the whole corpus.
+hard invariant); `medium` / `high` engage the structural-bridge engine. Between
+those two levels `effort` changes exactly one thing: the candidate budget — the
+bridge pool is capped at 12 seed sets at `medium` and 48 at `high`. The cap
+applies to scoped and unscoped runs alike, so a `high` run never attempts the
+whole corpus.
 
 An optional **scope filter** (`domain` / `entities` args) bounds the seed pool;
 empty = whole corpus. A scoped run is **exempt from the synthesis watermark**, so
@@ -70,7 +71,9 @@ chain:
   elsewhere.
 
 Bridge behaviour is per-repo configurable via `KNOMIT_DISCOVERY_BRIDGE`
-(`domain` · `entity` · `both`, default `both`).
+(`domain` · `entity` · `both`, default `both`). It is honoured on **unscoped**
+runs only; a scoped run uses the filtered bridge generator, which always bridges
+on both axes.
 
 ## The origin axis
 
