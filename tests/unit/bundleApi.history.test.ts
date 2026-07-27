@@ -83,6 +83,15 @@ describe('api.commitDetail', () => {
     expect(byPath['kb/architecture/adr.md']).toBe('added');
     expect(byPath['kb/gotchas/r1.md']).toBe('deleted');
     expect(byPath[A1]).toBeUndefined();     // unchanged between c2 and c3
+
+    // A deleted file's title has to come from the PARENT tree's blob — the
+    // blob no longer exists at the target commit — so this must be looked up
+    // on the `a` (there/parent) side of the `z ?? a!` fallback, not the `z`
+    // (here/target) side. Without this assertion, collapsing that lookup to
+    // `z!` still passes every other assertion in this test (action alone
+    // doesn't need the title) while silently blanking every deleted row's
+    // title in TimelineNav.
+    expect(d.files.find(f => f.path === 'kb/gotchas/r1.md')?.title).toBe('Retracted');
   });
 
   it('treats every file as added in the root commit', async () => {
