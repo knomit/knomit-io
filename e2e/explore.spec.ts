@@ -166,47 +166,69 @@ test.describe('/explore guided tour', () => {
 
     const bar = page.getByTestId('tour-bar');
     const frame = page.locator('.explore-frame');
+    const next = () => page.getByTestId('tour-next').click();
 
-    // 1 — ontological view.
-    await expect(bar).toContainText('1/7');
-    await expect(page.getByTestId('left-panel')).toHaveAttribute('data-sort', 'path');
+    // 1 — chronological. Asserted, not assumed: the tour can be restarted
+    // after the visitor has changed the sort themselves.
+    await expect(bar).toContainText('1/8');
+    await expect(page.getByTestId('left-panel')).toHaveAttribute('data-sort', 'recent');
     await expect(frame).toHaveAttribute('data-tour-highlight', 'library');
 
-    // 2 — a real filter chip lands, and the sort flips to relevance.
-    await page.getByTestId('tour-next').click();
-    await expect(bar).toContainText('2/7');
+    // 2 — ontological. A separate step so the switch is something you watch
+    // happen, rather than a state you arrive in already explained.
+    await next();
+    await expect(bar).toContainText('2/8');
+    await expect(page.getByTestId('left-panel')).toHaveAttribute('data-sort', 'path');
+
+    // 3 — a real filter chip lands, and the sort flips to relevance.
+    await next();
     await expect(page.getByTestId('left-panel')).toHaveAttribute('data-sort', 'relevance');
 
-    // 3 — a fact is open.
-    await page.getByTestId('tour-next').click();
+    // 4 — a fact is open.
+    await next();
     await expect(page.getByTestId('fact-title')).toBeVisible();
     await expect(frame).toHaveAttribute('data-tour-highlight', 'fact');
 
-    // 4 — hopped down an edge; the rail is the highlight.
-    await page.getByTestId('tour-next').click();
+    // 5 — hopped down an edge; the rail is the highlight.
+    await next();
     await expect(frame).toHaveAttribute('data-tour-highlight', 'edges');
     await expect(page.getByTestId('edges-rail-slot')).toBeVisible();
 
-    // 5 — time-travel: the filter input is replaced by the trail breadcrumb,
+    // 6 — time-travel: the filter input is replaced by the trail breadcrumb,
     // which is how we know the anchor really left live.
-    await page.getByTestId('tour-next').click();
-    await expect(bar).toContainText('5/7');
+    await next();
+    await expect(bar).toContainText('6/8');
     await expect(page.locator('#filter-input')).toHaveCount(0);
 
-    // 6 — back up the edge AND back to live. Regression guard: a stale-ref
-    // race used to leave this pinned in history, which stranded step 7.
-    await page.getByTestId('tour-next').click();
+    // 7 — back up the edge AND back to live. Regression guard: a stale-ref
+    // race used to leave this pinned in history, which stranded the last step.
+    await next();
     await expect(page.locator('#filter-input')).toHaveCount(1);
 
-    // 7 — the entity filter stacks on the type filter from step 2.
-    await page.getByTestId('tour-next').click();
-    await expect(bar).toContainText('7/7');
+    // 8 — the entity filter stacks on the type filter from step 3.
+    await next();
+    await expect(bar).toContainText('8/8');
     await expect(frame).toHaveAttribute('data-tour-highlight', 'filter');
-    await expect(page.locator('.explore-frame')).toContainText('entity:');
+    await expect(frame).toContainText('entity:');
 
     // Done clears up after itself.
-    await page.getByTestId('tour-next').click();
+    await next();
     await expect(bar).toHaveCount(0);
     await expect(page.getByTestId('tour-launcher')).toBeVisible();
+  });
+
+  test('the launcher names the real repo and links to it', async ({ page }) => {
+    await page.goto('/explore');
+    await page.getByTestId('tour-dismiss').click();
+    const launcher = page.getByTestId('tour-launcher');
+    // Typographic apostrophes in the copy (&rsquo;), so match around them.
+    await expect(launcher).toContainText(/browsing/);
+    await expect(launcher).toContainText(/own web UI, served as a static snapshot/);
+    await expect(launcher).toContainText(/147 facts, 83 commits of history/);
+    // Label and href both derive from bundle.repo, so this catches a
+    // retargeted KB_REPO_SLUG leaving the link pointing at the old repo.
+    const link = launcher.getByRole('link');
+    await expect(link).toHaveText('agentic-engineering-kb');
+    await expect(link).toHaveAttribute('href', 'https://github.com/knomit/agentic-engineering-kb');
   });
 });

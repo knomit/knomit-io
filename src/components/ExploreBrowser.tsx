@@ -352,6 +352,7 @@ function Browser({ bundle }: { bundle: Bundle }) {
       {!tour.active && !tour.invite && tourDeps && (
         <TourLauncher
           onStart={tour.start}
+          repo={bundle.repo}
           facts={Object.keys(bundle.trees[bundle.head] ?? {}).length}
           commits={bundle.commits.length}
         />

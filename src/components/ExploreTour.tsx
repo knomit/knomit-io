@@ -50,8 +50,16 @@ export interface TourStep {
 export function buildSteps(t: BundleTour): TourStep[] {
   return [
     {
-      label: 'Two lenses',
-      body: 'The library lists facts newest-first. The tree organises the same corpus by ontology — topic, then category. Same facts, two ways in.',
+      label: 'Chronological',
+      body: 'The library opens in chronological order — most recently committed first. This is the view you want when you are asking what the knowledge base has learned lately.',
+      highlight: 'library',
+      // Assert the default rather than assume it: the tour can be restarted
+      // from the launcher long after the visitor has changed the sort.
+      run: ({ dispatch }) => dispatch({ type: 'SET_LIBRARY_SORT', sort: 'recent' }),
+    },
+    {
+      label: 'Ontological',
+      body: 'The same corpus, organised instead by ontology — topic, then category, then the fact itself. Nothing was re-filed to produce this; the path is where the fact already lives in the repo.',
       highlight: 'library',
       run: ({ dispatch }) => dispatch({ type: 'SET_LIBRARY_SORT', sort: 'path' }),
     },
@@ -218,15 +226,20 @@ export function TourBar({
  * first visit and then unreachable forever, which makes it useless to anyone
  * who declines it once and later wonders what this page is. One slim row.
  */
-export function TourLauncher({ onStart, facts, commits }: {
-  onStart: () => void; facts: number; commits: number;
+export function TourLauncher({ onStart, repo, facts, commits }: {
+  onStart: () => void; repo: string; facts: number; commits: number;
 }) {
+  // Both the label and the href come from the bundle's own `repo` field, so
+  // retargeting KB_REPO_SLUG moves the link with it rather than leaving this
+  // line confidently pointing at the wrong repository.
+  const name = repo.split('/').pop() ?? repo;
   return (
     <div className="explore-tour explore-tour--launcher" data-testid="tour-launcher">
       <p className="explore-tour__body">
-        You are browsing a real knomit knowledge base — {facts.toLocaleString()} facts
-        across {commits.toLocaleString()} commits of history, served from a static
-        snapshot. Nothing here is a mock-up.
+        You&rsquo;re browsing{' '}
+        <a href={`https://github.com/${repo}`} rel="noopener" target="_blank">{name}</a>
+        {' '}&mdash; {facts.toLocaleString()} facts, {commits.toLocaleString()} commits
+        of history &mdash; in knomit&rsquo;s own web UI, served as a static snapshot.
       </p>
       <div className="explore-tour__actions">
         <button type="button" className="explore-tour__next" onClick={onStart} data-testid="tour-start">
