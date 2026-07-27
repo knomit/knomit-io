@@ -1,8 +1,12 @@
 import type { Bundle, BundleFact } from './bundleTypes';
 import { BUNDLE_SCHEMA_VERSION } from './bundleTypes';
-import { buildIndex, type KbIndex } from './kbIndex';
-import type {
-  Fact, DirChild, BrowseResponse, HistoryResponse, CommitDetail, CommitFile,
+import { buildIndex, tokenize, type KbIndex } from './kbIndex';
+import {
+  parseSearchQuery,
+  type Fact, type DirChild, type BrowseResponse, type HistoryResponse,
+  type CommitDetail, type CommitFile, type SearchResult, type RefGroup,
+  type RefVersion, type RecentResponse, type Stats, type ActivityStats,
+  type LensFactEntry, type LensSource, type LensStats, type LensBrowseResponse,
 } from '../generated/kb-ui/upstreamApi';
 
 let bundle: Bundle | null = null;
@@ -89,6 +93,94 @@ function historyOperation(op: Op): string {
   return op === 'deleted' ? 'retract' : op;
 }
 
+function headFacts(b: Bundle): Array<{ path: string; fact: BundleFact }> {
+  const tree = treeAt(b);
+  return Object.keys(tree)
+    .map(path => ({ path, fact: b.blobs[tree[path]] }))
+    .filter((x): x is { path: string; fact: BundleFact } => Boolean(x.fact));
+}
+
+// Every scoped query (search/recent/stats/activity) receives the currently
+// browsed directory the same way browse() does (RightPanel.tsx:526-527,
+// Library.tsx:300/339/511 all pass state's "path" — the ontology root, or a
+// deeper "path" filter chip once the user navigates into a subdirectory).
+// Without this, switching to Recent/Relevance sort inside a subdirectory
+// would silently show facts from the whole tree instead of that subtree.
+function scopedFacts(b: Bundle, dirPath: string): Array<{ path: string; fact: BundleFact }> {
+  if (!dirPath) return headFacts(b);   // '' means unscoped (root), not "no paths match"
+  const prefix = `${dirPath}/`;
+  return headFacts(b).filter(({ path }) => path.startsWith(prefix));
+}
+
+/** Newest commit that touched each HEAD path. */
+function lastTouched(b: Bundle, path: string): number {
+  const change = changesFor(b, path)[0];
+  return change ? (b.commits.find(c => c.sha === change.sha)?.ts ?? 0) : 0;
+}
+
+/** Title-weighted token overlap. The UI only reads `score`, never its provenance. */
+function scoreFact(fact: BundleFact, terms: string[]): number {
+  const title = new Set(tokenize(fact.title));
+  const body = new Set(tokenize(fact.body));
+  let score = 0;
+  for (const t of terms) {
+    if (title.has(t)) score += 3;
+    if (body.has(t)) score += 1;
+  }
+  return score;
+}
+
+/** First occurrence of each path, order preserved. EdgesRail keys rows by
+ *  `group.path` (`key={g.path}` in EdgeGroup), so a source pushing the same
+ *  kb/ ref twice — or a self-ref — must collapse to one row, not one per
+ *  occurrence. Applied at the point of use in `explain`: outgoing reads
+ *  `fact.refs` directly and incoming reads `ix.backlinks`, and buildIndex
+ *  does not dedupe either, so both sides need it. */
+function dedupePaths(paths: string[]): string[] {
+  return [...new Set(paths)];
+}
+
+/** Build a RefGroup for `path`: its title/type at HEAD plus its version list. */
+function refGroup(b: Bundle, path: string): RefGroup {
+  const versions: RefVersion[] = changesFor(b, path)
+    .filter(c => c.op !== 'deleted')
+    .map(({ sha }) => {
+      const blob = b.blobs[b.trees[sha][path]];
+      return {
+        commit: sha,
+        committed_at: b.commits.find(c => c.sha === sha)?.ts,
+        kind: blob?.kind, type: blob?.type,
+      };
+    });
+  const headSha = treeAt(b)[path];
+  const head = headSha ? b.blobs[headSha] : undefined;
+  // When the target is retracted, headSha is absent and there's no tree entry
+  // to read at the RETRACTION commit either (that commit's tree has no entry
+  // for a path it just removed) — so this must fall back to `versions[0]`,
+  // the newest commit where the path still existed, not the newest change.
+  const latestVersion = versions[0];
+  const latestSha = latestVersion ? b.trees[latestVersion.commit]?.[path] : undefined;
+  const latest = head ?? (latestSha ? b.blobs[latestSha] : undefined);
+  return {
+    path,
+    title: latest?.title ?? path.split('/').pop() ?? path,
+    kind: latest?.kind, type: latest?.type,
+    versions,
+    deleted: !headSha,
+  };
+}
+
+// Generic over T (rather than the brief's Promise<never>) so each call site's
+// `.then(r => r.facts)`/`.then(f => f.source)` still type-checks against the
+// real shape it would get from a live lens/write endpoint — `never` made every
+// such property read a type error, since nothing is assignable FROM `never`.
+const readOnly = <T,>(what: string) => async (..._args: unknown[]): Promise<T> => {
+  throw new Error(`${what} is unavailable: /explore is read-only`);
+};
+const noLens = <T,>(what: string) => async (..._args: unknown[]): Promise<T> => {
+  throw new Error(`${what} is unavailable: /explore browses a single repo, not a lens`);
+};
+
 export const api = {
   // ontologyRoot is unused: bundle tree keys are already full paths (e.g.
   // "kb/architecture/core/a1.md"), and dirPath arrives already prefixed with
@@ -170,6 +262,11 @@ export const api = {
 
   factDiff: async (
     _repo: string, _branch: string, path: string, from: string, to: string,
+    // FactDiffView.tsx:40 passes an AbortController#signal to cancel a
+    // superseded diff request. Every read here is a synchronous in-memory
+    // lookup, so there's nothing in flight to abort — accepted for arity
+    // parity with the real fetch-based implementation only.
+    _signal?: AbortSignal,
   ): Promise<{ from: Fact | null; to: Fact | null }> => {
     const { b } = state();
     return { from: readAt(b, path, from), to: readAt(b, path, to) };
@@ -203,4 +300,159 @@ export const api = {
       files,
     };
   },
+
+  search: async (
+    _repo: string, _branch: string, q: string, path = '', minConfidence = 0,
+    opts?: { types?: string[]; kinds?: string[]; excludeKinds?: string[];
+             origins?: string[]; eps?: string[]; domains?: string[]; entities?: string[] },
+  ): Promise<{ results: SearchResult[] }> => {
+    const { b } = state();
+    const { text, domains, entities } = parseSearchQuery(q);
+    const terms = tokenize(text);
+    const wantDomains = [...domains, ...(opts?.domains ?? [])];
+    const wantEntities = [...entities, ...(opts?.entities ?? [])];
+
+    const results: SearchResult[] = [];
+    for (const { path: p, fact } of scopedFacts(b, path)) {
+      if (fact.confidence < minConfidence) continue;
+      if (opts?.types?.length && !opts.types.includes(fact.type ?? '')) continue;
+      if (opts?.kinds?.length && !opts.kinds.includes(fact.kind ?? '')) continue;
+      if (opts?.excludeKinds?.length && opts.excludeKinds.includes(fact.kind ?? '')) continue;
+      if (opts?.origins?.length && !opts.origins.includes(fact.origin ?? '')) continue;
+      if (wantDomains.length && !wantDomains.every(d => fact.domain.includes(d))) continue;
+      if (wantEntities.length && !wantEntities.every(e => fact.entities.includes(e))) continue;
+
+      const score = terms.length ? scoreFact(fact, terms) : 1;
+      if (terms.length && score === 0) continue;
+      results.push({
+        path: p, title: fact.title, body: fact.body, score,
+        kind: fact.kind, type: fact.type, domain: fact.domain, entities: fact.entities,
+      });
+    }
+    results.sort((x, y) => y.score - x.score || x.path.localeCompare(y.path));
+    return { results: results.slice(0, 50) };
+  },
+
+  explain: async (
+    _repo: string, _branch: string, path: string, commit?: string,
+    opts?: { fallback?: 'before' },
+  ): Promise<{ incoming: RefGroup[]; outgoing: RefGroup[] }> => {
+    const { b, ix } = state();
+    let sha = treeAt(b, commit)[path];
+    // Mirrors `fact`'s ?fallback=before: a commit-anchored explain past a
+    // retraction has no tree entry at `commit` (RightPanel.tsx:483 passes this
+    // whenever the anchor isn't live), so walk back to the last commit where
+    // the path still existed and read ITS refs — matching what the fact panel
+    // itself falls back to, so the rail and the body never disagree.
+    if (!sha && commit && opts?.fallback === 'before') {
+      const from = b.commits.findIndex(c => c.sha === commit);
+      if (from !== -1) {
+        for (const c of b.commits.slice(from)) {
+          const s = treeAt(b, c.sha)[path];
+          if (s) { sha = s; break; }
+        }
+      }
+    }
+    const fact = sha ? b.blobs[sha] : undefined;
+
+    const outgoingPaths = dedupePaths((fact?.refs ?? []).filter(r => r.startsWith('kb/')));
+    const incomingPaths = dedupePaths(ix.backlinks.get(path) ?? []);
+    return {
+      incoming: incomingPaths.map(p => refGroup(b, p)),
+      outgoing: outgoingPaths.map(p => refGroup(b, p)),
+    };
+  },
+
+  recent: async (
+    _repo: string, _branch: string, path: string, query = '', limit = 50, offset = 0,
+    opts?: { typeFilter?: string; excludeType?: string; kinds?: string[]; excludeKinds?: string[];
+             origins?: string[]; domains?: string[]; entities?: string[]; eps?: string[] },
+  ): Promise<RecentResponse> => {
+    const { b } = state();
+    const q = query.trim().toLowerCase();
+    const all = scopedFacts(b, path)
+      .filter(({ fact }) => !q || fact.title.toLowerCase().includes(q))
+      .filter(({ fact }) => !opts?.typeFilter || fact.type === opts.typeFilter)
+      .filter(({ fact }) => !opts?.excludeType || fact.type !== opts.excludeType)
+      .filter(({ fact }) => !opts?.kinds?.length || opts.kinds.includes(fact.kind ?? ''))
+      .filter(({ fact }) => !opts?.excludeKinds?.length || !opts.excludeKinds.includes(fact.kind ?? ''))
+      .filter(({ fact }) => !opts?.origins?.length || opts.origins.includes(fact.origin ?? ''))
+      .filter(({ fact }) => !opts?.domains?.length || opts.domains.every(d => fact.domain.includes(d)))
+      .filter(({ fact }) => !opts?.entities?.length || opts.entities.every(e => fact.entities.includes(e)))
+      .map(({ path, fact }) => ({
+        path, title: fact.title, kind: fact.kind, type: fact.type,
+        committed_at: lastTouched(b, path),
+      }))
+      .sort((x, y) => y.committed_at - x.committed_at || x.path.localeCompare(y.path));
+    return { facts: all.slice(offset, offset + limit), total: all.length };
+  },
+
+  stats: async (_repo: string, _branch: string, path: string): Promise<Stats> => {
+    const { b } = state();
+    const facts = scopedFacts(b, path);
+    const domains: Record<string, number> = {};
+    const entities: Record<string, number> = {};
+    let sum = 0;
+    for (const { fact } of facts) {
+      for (const d of fact.domain) domains[d] = (domains[d] ?? 0) + 1;
+      for (const e of fact.entities) entities[e] = (entities[e] ?? 0) + 1;
+      sum += fact.confidence;
+    }
+    return {
+      total: facts.length, domains, entities,
+      avg_confidence: facts.length ? sum / facts.length : 0,
+    };
+  },
+
+  activity: async (_repo: string, _branch: string, path: string): Promise<ActivityStats> => {
+    const { b } = state();
+    const now = b.commits[0]?.ts ?? 0;
+    const since = (days: number) =>
+      b.commits.filter(c => now - c.ts <= days * 86400).length;
+    return {
+      last_commit: b.head,
+      total: scopedFacts(b, path).length,
+      changes_7d: since(7), changes_30d: since(30), changes_90d: since(90),
+    };
+  },
+
+  completions: async (
+    _repo: string, _branch: string, category: string, prefix = '',
+  ): Promise<{ values: string[] }> => {
+    const { b } = state();
+    const seen = new Set<string>();
+    for (const { fact } of headFacts(b)) {
+      const source =
+        category === 'domain' ? fact.domain :
+        category === 'entity' ? fact.entities :
+        category === 'type'   ? (fact.type ? [fact.type] : []) :
+        category === 'kind'   ? (fact.kind ? [fact.kind] : []) :
+        category === 'origin' ? (fact.origin ? [fact.origin] : []) : [];
+      for (const v of source) seen.add(v);
+    }
+    const p = prefix.toLowerCase();
+    return { values: [...seen].filter(v => v.toLowerCase().startsWith(p)).sort() };
+  },
+
+  getAgentBranch: async (_repo: string): Promise<string> => state().b.ref,
+
+  // Unreachable: the shell sets serverReadOnly, so isReadOnly() hides every
+  // write control. These are a backstop, not a code path. Declared with a
+  // rest parameter (rather than the brief's zero-arg draft) because the real
+  // call sites pass their full argument lists regardless — e.g.
+  // RightPanel.tsx:162 calls updateFact(repo, branch, path, raw) — and a
+  // concrete zero-arg signature here would fail `npm run check` with
+  // "Expected 0 arguments, but got 4" at every such call site.
+  updateFact: readOnly<Fact>('updateFact'),
+  retractFact: readOnly<void>('retractFact'),
+
+  // Unreachable: /explore browses one repo and never enters a lens context.
+  // Same rest-parameter fix as above — e.g. Library.tsx:440 calls
+  // lensBrowse(lensName, path, ontologyRoot, repos), 4 arguments.
+  listLensFacts: noLens<{ facts: LensFactEntry[]; total: number }>('listLensFacts'),
+  lensSearch: noLens<(SearchResult & { source: LensSource })[]>('lensSearch'),
+  getLensFact: noLens<Fact & { source: LensSource }>('getLensFact'),
+  getLensStats: noLens<LensStats>('getLensStats'),
+  lensBrowse: noLens<LensBrowseResponse>('lensBrowse'),
+  lensCompletions: noLens<{ values: string[] }>('lensCompletions'),
 };
