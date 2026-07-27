@@ -51,8 +51,6 @@ export default defineConfig({
   integrations: [
     react(),
     sitemap({
-      // The localhost demo iframe target must never appear; everything else is public.
-      filter: (page) => !page.includes('/explore'),
       changefreq: 'weekly',
       priority: 0.7,
     }),
