@@ -216,6 +216,7 @@ import { GITHUB_URL } from '../lib/site';
      the library ended, which made it look like commentary on the fact panel
      alone even when the step was about the library. */
   .explore-frame {
+    position: relative;   /* containing block for the simulated pointer */
     display: flex;
     flex-direction: column;
     height: 100%;
@@ -397,7 +398,37 @@ import { GITHUB_URL } from '../lib/site';
     70%  { box-shadow: 0 0 0 10px color-mix(in srgb, var(--k-brand) 0%, transparent); }
     100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--k-brand) 0%, transparent); }
   }
+  /* Simulated pointer. Decorative only: it never receives events, and the
+     tour skips the whole animation under prefers-reduced-motion rather than
+     easing it, since the point is motion. */
+  .explore-tour-cursor {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 30;
+    pointer-events: none;
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6));
+    transition: transform 900ms cubic-bezier(0.33, 0.9, 0.35, 1);
+  }
+  .explore-tour-cursor::after {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+    border: 2px solid var(--k-brand);
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  .explore-tour-cursor.is-clicking::after {
+    animation: explore-tour-click 320ms ease-out;
+  }
+  @keyframes explore-tour-click {
+    0%   { opacity: 0.9; transform: scale(0.4); }
+    100% { opacity: 0;   transform: scale(1.8); }
+  }
+
   @media (prefers-reduced-motion: reduce) {
+    .explore-tour-cursor { transition: none; }
     .explore-frame[data-tour-highlight] :is([data-testid='library-header'],
       [data-testid='fact-title'], [data-testid='edges-rail-slot'], #filter-input) {
       animation: none;

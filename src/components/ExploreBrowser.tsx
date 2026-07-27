@@ -13,7 +13,7 @@ import { FilterBar } from '../generated/kb-ui/FilterBar';
 import { ErrorBoundary } from '../generated/kb-ui/ErrorBoundary';
 import { useNavigationManager } from '../generated/kb-ui/useNavigationManager';
 import { useTimeTravel } from '../generated/kb-ui/useTimeTravel';
-import { useTour, TourBar, TourInvite, TourLauncher } from './ExploreTour';
+import { useTour, TourBar, TourInvite, TourLauncher, TourCursor } from './ExploreTour';
 
 // Library | content splitter. Mirrors upstream App.tsx's own constants (see
 // its LEFT_PANEL_MIN/MAX_FRACTION/DEFAULT_FRACTION) so the drag feels like the
@@ -287,7 +287,7 @@ function Browser({ bundle }: { bundle: Bundle }) {
       : null),
     [bundle.tour, bundle.head, dispatch, navigate, tt, getState],
   );
-  const tour = useTour(tourDeps);
+  const tour = useTour(tourDeps, frameRef);
 
   // Retarget the highlight ring each step. The ring itself is CSS keyed off
   // `data-tour-highlight` on the frame (see explore.astro) rather than a class
@@ -358,6 +358,7 @@ function Browser({ bundle }: { bundle: Bundle }) {
           commits={bundle.commits.length}
         />
       )}
+      <TourCursor cursor={tour.cursor} />
       <div className="explore-frame__row">
       <div className="explore-frame__left" style={{ width: leftPanelWidth }}>
         <ErrorBoundary variant="inline" label="The library hit an error">

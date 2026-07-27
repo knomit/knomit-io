@@ -238,6 +238,55 @@ test.describe('/explore guided tour', () => {
     await expect(page.getByTestId('left-panel')).toHaveAttribute('data-sort', 'path');
   });
 
+  test('animates a pointer to the control before performing each step', async ({ page }) => {
+    await page.goto('/explore');
+    await page.getByTestId('tour-start').click();
+    await expect(page.getByTestId('tour-bar')).toContainText('1/8');
+
+    // No pointer until a transition is requested.
+    await expect(page.getByTestId('tour-cursor')).toHaveCount(0);
+
+    await page.getByTestId('tour-next').click();
+    // It travels to the control that causes step 2 — the Path sort toggle —
+    // and the step has NOT run yet while it is in flight.
+    const cursor = page.getByTestId('tour-cursor');
+    await expect(cursor).toBeVisible();
+    // Assert the DESTINATION, read from the inline transform, not a measured
+    // box: the transform is set to the endpoint immediately and the CSS
+    // transition animates toward it, so this is deterministic — whereas
+    // boundingBox() samples wherever the pointer happens to be in flight.
+    // Both the transform and the computed target are frame-relative.
+    const transform = await cursor.evaluate(el => (el as HTMLElement).style.transform);
+    const [, tx, ty] = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(transform)!;
+    const target = (await page.getByTestId('sort-path').boundingBox())!;
+    const frame = (await page.locator('.explore-frame').boundingBox())!;
+    expect(Math.abs(Number(ty) - (target.y - frame.y + target.height / 2))).toBeLessThan(12);
+    expect(Math.abs(Number(tx) - (target.x - frame.x + Math.min(target.width / 2, 40))))
+      .toBeLessThan(12);
+
+    // Then the action lands and the pointer is removed.
+    await expect(page.getByTestId('left-panel')).toHaveAttribute('data-sort', 'path');
+    await expect(page.getByTestId('tour-cursor')).toHaveCount(0);
+    await expect(page.getByTestId('tour-next')).toBeEnabled();
+  });
+
+  test('impatient clicking during the animation cannot skip a step', async ({ page }) => {
+    await page.goto('/explore');
+    await page.getByTestId('tour-start').click();
+    await expect(page.getByTestId('tour-bar')).toContainText('1/8');
+
+    // dispatchEvent, not click(): click() waits for the button to become
+    // enabled, which would defeat the point. These fire while it is disabled.
+    const next = page.getByTestId('tour-next');
+    await next.click();
+    for (let i = 0; i < 4; i++) await next.dispatchEvent('click');
+
+    await expect(page.getByTestId('left-panel')).toHaveAttribute('data-sort', 'path');
+    // One step, not five — the busy guard swallowed the extra clicks rather
+    // than queueing them, which would have raced several steps' dispatches.
+    await expect(page.getByTestId('tour-bar')).toContainText('2/8');
+  });
+
   test('the launcher names the real repo and links to it', async ({ page }) => {
     await page.goto('/explore');
     await page.getByTestId('tour-dismiss').click();
