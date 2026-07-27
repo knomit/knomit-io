@@ -232,32 +232,39 @@ function refGroup(b: Bundle, path: string, anchorIdx: number): RefGroup {
     title: latest?.title ?? path.split('/').pop() ?? path,
     kind: latest?.kind, type: latest?.type,
     versions,
-    deleted: !atAnchorSha,
+    // Absent-at-anchor means "retracted" only if `path` existed at some
+    // point at or before the anchor (versions non-empty). A path with NO
+    // versions yet at this anchor hasn't been WRITTEN yet — a forward
+    // reference to a fact created later — which is a different situation
+    // from a retraction and must not render with the same hatched,
+    // struck-through, unversioned "gone" treatment (EdgesRail.tsx:199/220
+    // key every row on `versions[0]`, which doesn't exist for this case).
+    deleted: !atAnchorSha && versions.length > 0,
   };
 }
 
-/** Whether `sourcePath`'s state AT `anchorSha` (not at HEAD, not "ever")
- *  currently references `targetPath`. The gate for whether a candidate from
- *  `KbIndex.allBacklinks` (an all-time superset) belongs in `targetPath`'s
- *  incoming list at this anchor at all — a source whose ref to the target was
- *  since removed (at or before the anchor) must not surface just because an
- *  OLDER revision of it once asserted the edge; nor should a source that
- *  doesn't exist yet, or was itself retracted by the anchor. Trees are full
- *  snapshots, so this is a direct lookup, not a walk through history. */
-function currentlyAsserts(b: Bundle, sourcePath: string, targetPath: string, anchorSha: string): boolean {
-  const sha = treeAt(b, anchorSha)[sourcePath];
-  const blob = sha ? b.blobs[sha] : undefined;
-  return blob?.refs.includes(targetPath) ?? false;
-}
-
-/** The source's own revisions (at or before the anchor) whose refs actually
- *  included `targetPath` at that revision — upstream's groupRefs semantics
- *  for incoming edges ("different source_commits = different versions of the
- *  source asserting the same target", upstreamApi.ts:940-944), not every
- *  commit that touched the source regardless of what its refs said then
- *  (which is what the source's own unfiltered change history gives). Only
- *  called after `currentlyAsserts` has confirmed the newest such revision
- *  qualifies, so the result is never empty when it's used. */
+/** The source's own revisions whose refs actually included `targetPath` at
+ *  that revision — upstream's groupRefs semantics for incoming edges
+ *  ("different source_commits = different versions of the source asserting
+ *  the same target", upstreamApi.ts:940-944), not every commit that touched
+ *  the source regardless of what its refs said then (which is what the
+ *  source's own unfiltered change history gives).
+ *
+ *  `explain` (the only caller) always passes `anchorIdx = 0` here, for
+ *  INCOMING refs specifically, deliberately unbounded (every commit index is
+ *  >= 0, so nothing is filtered by time): per IncomingAtCommit's own comment
+ *  (search_graph_query.go:19-32), referrers are by nature written AFTER the
+ *  version of the target they point at, so bounding them by "at or before
+ *  the anchor" would drop every legitimate referrer whenever the anchor
+ *  predates them. OUTGOING refs don't go through this function at all —
+ *  `refGroup` computes their (anchor-bound) versions directly, since a
+ *  fact's own refs at a given version genuinely are a property of that
+ *  version (OutgoingAtCommit resolves the SOURCE's own effective commit
+ *  at-or-before the anchor and reads straight off it — no separate filter
+ *  needed since the version itself already is the bound). The `anchorIdx`
+ *  parameter stays general rather than hardcoding `0` internally so the
+ *  "which revisions assert this edge" logic itself doesn't bake in an
+ *  incoming-only assumption. */
 function assertingVersions(
   b: Bundle, sourcePath: string, targetPath: string, anchorIdx: number,
 ): RefVersion[] {
@@ -469,29 +476,39 @@ export const api = {
         }
       }
     }
-    // Bogus/unresolvable anchors behave like HEAD (index 0 — no filtering),
-    // rather than throwing: explain has never rejected an unrecognised commit.
+    // Bogus/unresolvable anchors behave like HEAD (no filtering) rather than
+    // throwing — explain has never rejected an unrecognised commit. Nothing
+    // reads the raw `anchorSha` string past this point any more (incoming,
+    // below, is deliberately anchor-independent; outgoing only consumes
+    // `anchorIdx`, already clamped) — but re-deriving it from the clamped
+    // index anyway keeps the two in sync defensively, so a future change that
+    // adds a new consumer of `anchorSha` doesn't silently reintroduce reading
+    // an empty tree off an unresolvable commit, the way `currentlyAsserts`
+    // used to (see report round 4, finding 4).
     const anchorIdx = Math.max(commitIndex(b, anchorSha), 0);
+    anchorSha = b.commits[anchorIdx]?.sha ?? b.head;
     const fact = sha ? b.blobs[sha] : undefined;
 
     const outgoingPaths = dedupePaths((fact?.refs ?? []).filter(r => r.startsWith('kb/')));
     const outgoing = outgoingPaths.map(p => refGroup(b, p, anchorIdx));
 
-    // Incoming can't start from the HEAD-only `backlinks` map the way it used
-    // to: a historical anchor needs sources whose refs later changed to drop
-    // `path`, or that cited it before being retracted themselves, neither of
-    // which HEAD's current refs would show. `allBacklinks` is the all-time
-    // superset; `currentlyAsserts` re-resolves each candidate against THIS
-    // anchor specifically (so a source whose ref was removed by the anchor
-    // correctly drops out), and `assertingVersions` replaces the generic
-    // "every commit that touched the source" version list with only the
-    // revisions that actually asserted this particular edge.
-    const incomingCandidates = [...(ix.allBacklinks.get(path) ?? [])]
-      .filter(p => currentlyAsserts(b, p, path, anchorSha));
-    const incoming = incomingCandidates.map(p => ({
-      ...refGroup(b, p, anchorIdx),
-      versions: assertingVersions(b, p, path, anchorIdx),
-    }));
+    // Incoming is NOT anchor-bounded — search_graph_query.go's
+    // IncomingAtCommit applies no committed_at bound on the source, by
+    // design (see its own comment, lines 19-32): referrers are, by nature,
+    // written AFTER the version of the target they point at, so bounding
+    // them by "at or before the anchor" would drop every legitimate
+    // referrer whenever the anchor predates them — exactly the earlier,
+    // wrong behaviour here (a prior review round's instruction to bound
+    // incoming by the anchor was itself mistaken; this reverts that).
+    // `allBacklinks` is the all-time candidate superset; `assertingVersions`
+    // with anchorIdx `0` (every commit index is >= 0, so nothing is
+    // filtered by time) finds every revision, past OR future relative to
+    // the anchor, where that candidate's refs actually included `path` —
+    // a candidate with none is dropped, not a legitimate referrer at all.
+    const incoming = [...(ix.allBacklinks.get(path) ?? [])]
+      .map(p => ({ path: p, versions: assertingVersions(b, p, path, 0) }))
+      .filter(({ versions }) => versions.length > 0)
+      .map(({ path: p, versions }) => ({ ...refGroup(b, p, 0), versions }));
 
     return { incoming, outgoing };
   },

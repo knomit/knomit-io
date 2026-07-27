@@ -8,10 +8,16 @@ const R = 'fixture', B = 'main';
 beforeEach(() => setBundle(FIXTURE));
 
 describe('buildIndex', () => {
-  it('inverts refs into backlinks, ignoring external URLs', () => {
+  // Was `ix.backlinks` (a HEAD-only Map<string, string[]>) before bundleApi's
+  // `explain` moved entirely onto `allBacklinks` (a Set per target, scanning
+  // every commit, not just HEAD — incoming edges are not anchor-bound, so
+  // there's no cheaper HEAD-only path left for anything to read); rewritten
+  // to pin the same "inverts refs, ignoring external URLs" contract against
+  // the field that's actually live.
+  it('inverts refs into allBacklinks, ignoring external URLs', () => {
     const ix = buildIndex(FIXTURE);
-    expect(ix.backlinks.get('kb/architecture/core/a1.md')).toEqual(['kb/gotchas/g1.md']);
-    expect(ix.backlinks.has('https://example.com/paper')).toBe(false);
+    expect([...(ix.allBacklinks.get('kb/architecture/core/a1.md') ?? [])]).toEqual(['kb/gotchas/g1.md']);
+    expect(ix.allBacklinks.has('https://example.com/paper')).toBe(false);
   });
 
   it('lists only HEAD paths', () => {

@@ -232,7 +232,14 @@ describe('api.explain', () => {
       trees: { ...FIXTURE.trees, c2: { ...FIXTURE.trees.c2, 'kb/gotchas/temp.md': 'btemp' } },
       blobs: {
         ...FIXTURE.blobs,
-        btemp: { title: 'Temp', body: '', domain: [], entities: [], refs: [A1], confidence: 0.5, sources: 1 },
+        // Refs both r1 (alive at c2, retracted at c3) and a1 — r1 is the
+        // discriminator: its group only renders correctly (alive, not
+        // retracted) if the EFFECTIVE anchor genuinely moved to c2, not just
+        // the fact lookup itself. Order matters too: r1 first means
+        // `outgoing[0]` below is the discriminating group, not the
+        // unaffected a1 one (a1 doesn't change between c2 and c3, so it
+        // wouldn't catch a bug in the anchor move on its own).
+        btemp: { title: 'Temp', body: '', domain: [], entities: [], refs: [R1, A1], confidence: 0.5, sources: 1 },
       },
     });
     // temp.md never existed at c3 in this override, so it reads like a fact
@@ -241,7 +248,16 @@ describe('api.explain', () => {
     expect(withoutFallback.outgoing).toEqual([]);
 
     const withFallback = await api.explain(R, B, 'kb/gotchas/temp.md', 'c3', { fallback: 'before' });
-    expect(withFallback.outgoing.map(g => g.path)).toEqual([A1]);
+    expect(withFallback.outgoing.map(g => g.path)).toEqual([R1, A1]);
+
+    // The walked-back commit (c2) becomes the EFFECTIVE anchor for
+    // everything else explain computes, not just the initial fact lookup —
+    // r1 was still alive at c2, so it must render live here, not retracted
+    // (which is what it would be if the outgoing refs were resolved at the
+    // requested c3 instead of the walked-back c2).
+    expect(withFallback.outgoing[0].deleted).toBe(false);
+    expect(withFallback.outgoing[0].title).toBe('Retracted');   // b4's literal title field
+    expect(withFallback.outgoing[0].versions.map(v => v.commit)).toEqual(['c2']);
   });
 });
 
@@ -291,44 +307,60 @@ describe('api.explain anchored at a historical commit', () => {
     expect(a1AtHead.title).toBe('Alpha revised');
   });
 
-  // beta's own refs grew between c1 and c2 (a1 only -> a1 and r1). The edge
-  // beta->r1 must appear/disappear across anchors in BOTH directions: from
-  // beta's own outgoing list, and from r1's incoming list (which — unlike
-  // HEAD's backlinks index — has to notice a source whose ref didn't exist
-  // yet at an older anchor).
-  it('reflects a source\'s changing refs on both the outgoing and incoming sides', async () => {
+  // beta's own refs grew between c1 and c2 (a1 only -> a1 and r1) — outgoing
+  // DOES track that, since a fact's own refs at a given version genuinely are
+  // a property of that version.
+  it('bounds outgoing (but not incoming) refs to the anchor', async () => {
     const outAtC1 = await api.explain(R, B, BETA, 'c1');
     expect(outAtC1.outgoing.map(g => g.path)).toEqual([A1]);   // r1 ref doesn't exist yet
 
     const outAtC2 = await api.explain(R, B, BETA, 'c2');
     expect(outAtC2.outgoing.map(g => g.path).sort()).toEqual([A1, R1].sort());
+  });
 
+  // Finding 1 (round 4): a prior review round instructed bounding INCOMING
+  // by the anchor too, matching outgoing. That instruction was wrong — the
+  // reviewer's own re-check of search_graph_query.go's IncomingAtCommit
+  // (lines 19-32) found it applies NO committed_at bound on the source,
+  // deliberately: "incoming referrers are, by nature, written AFTER the
+  // target version they point at, so bounding sources by committed_at ≤
+  // anchor would drop every legitimate referrer." beta's ref to r1 is
+  // written at c2 — strictly AFTER c1 — so explaining r1 anchored at c1
+  // must still surface beta as an incoming referrer, not hide it.
+  it('surfaces an incoming referrer written AFTER the anchor (not time-bounded)', async () => {
     const inAtC1 = await api.explain(R, B, R1, 'c1');
-    expect(inAtC1.incoming).toEqual([]);   // beta doesn't cite r1 yet
+    expect(inAtC1.incoming.map(g => g.path)).toEqual([BETA]);
 
+    // Same result at c2 and at HEAD: incoming doesn't depend on the anchor
+    // at all (upstream's IncomingAtCommit has no time bound to vary by).
     const inAtC2 = await api.explain(R, B, R1, 'c2');
+    const inAtHead = await api.explain(R, B, R1);
     expect(inAtC2.incoming.map(g => g.path)).toEqual([BETA]);
+    expect(inAtHead.incoming.map(g => g.path)).toEqual([BETA]);
   });
 
   // Upstream's groupRefs distinguishes "the source's commits that asserted
   // this edge" from "every commit that touched the source" (upstreamApi.ts:
   // 940-944). beta itself has two revisions (c1, c2) but only the c2 one
   // asserts the edge to r1, so r1's incoming versions for beta must list
-  // only c2 — not c1, which changed beta but didn't cite r1.
+  // only c2 — not c1, which changed beta but didn't cite r1. (The anchor
+  // argument here is arbitrary — incoming ignores it — kept as 'c2' only to
+  // read naturally alongside the fact that beta's asserting commit IS c2.)
   it('lists only the source revisions that actually asserted the edge, for incoming versions', async () => {
     const e = await api.explain(R, B, R1, 'c2');
     const betaGroup = e.incoming.find(g => g.path === BETA)!;
     expect(betaGroup.versions.map(v => v.commit)).toEqual(['c2']);
   });
 
-  // beta only ever GAINS a ref to r1 (a1-only -> a1-and-r1, unchanged since).
-  // That alone doesn't require scanning history for incoming candidates: r1
-  // is still in beta's HEAD refs, so even a HEAD-only backlinks index would
-  // still find beta. This test uses a source whose ref to r1 is later
-  // REMOVED — present at c2, gone again by c3/HEAD — so a HEAD-only index
-  // would never have listed it as a candidate for r1 at all, and only
-  // KbIndex.allBacklinks's all-commit scan lets the c2-anchored query find it.
-  it('finds a source whose ref to the target was removed again by HEAD, when scrubbed to before the removal', async () => {
+  // A source's ref to the target can also be removed again later — citer
+  // cites r1 at c2, then drops the ref at c3/HEAD. Because incoming has no
+  // time bound, that past assertion keeps surfacing citer as an incoming
+  // referrer even now, at HEAD — the same "no time bound" rule that makes
+  // beta show up EARLY (above) also keeps citer showing up LATE. This also
+  // requires the all-commit `KbIndex.allBacklinks` scan on its own terms:
+  // citer's HEAD refs are empty, so a HEAD-only backlinks index would never
+  // have listed it as a candidate for r1 at all, at any anchor including HEAD.
+  it('keeps a source\'s past assertion in incoming even after the source later drops the ref', async () => {
     const CITER = 'kb/architecture/citer.md';
     setBundle({
       ...FIXTURE,
@@ -351,10 +383,73 @@ describe('api.explain anchored at a historical commit', () => {
     });
 
     const atC2 = await api.explain(R, B, R1, 'c2');
-    expect(atC2.incoming.map(g => g.path)).toEqual([CITER]);
-
     const atHead = await api.explain(R, B, R1);
-    expect(atHead.incoming).toEqual([]);
+    for (const e of [atC2, atHead]) {
+      expect(e.incoming.map(g => g.path)).toEqual([CITER]);
+      expect(e.incoming[0].versions.map(v => v.commit)).toEqual(['c2']);
+    }
+  });
+
+  // Finding 3 (round 4, Minor): refGroup's `deleted` used to be `!atAnchorSha`
+  // alone, which is true both for "retracted" (existed before, gone now) and
+  // "not yet created" (never existed up to this anchor) — EdgesRail.tsx:199/
+  // 220 would hatch and strike through a forward reference to a fact that
+  // simply hasn't been written yet, and an empty `versions` array makes the
+  // row un-clickable on top of being wrong. `forward.md` (c1) references
+  // `newthing.md`, which isn't created until c2.
+  it('does not render a forward reference to a not-yet-created fact as retracted', async () => {
+    const FORWARD = 'kb/architecture/forward.md';
+    const NEWTHING = 'kb/architecture/newthing.md';
+    setBundle({
+      ...FIXTURE,
+      trees: {
+        ...FIXTURE.trees,
+        c1: { ...FIXTURE.trees.c1, [FORWARD]: 'bf1' },
+        c2: { ...FIXTURE.trees.c2, [FORWARD]: 'bf1', [NEWTHING]: 'bn1' },
+        c3: { ...FIXTURE.trees.c3, [FORWARD]: 'bf1', [NEWTHING]: 'bn1' },
+      },
+      blobs: {
+        ...FIXTURE.blobs,
+        bf1: {
+          title: 'Forward', body: '', type: 'pattern',
+          domain: [], entities: [], refs: [NEWTHING], confidence: 0.5, sources: 1,
+        },
+        bn1: {
+          title: 'New Thing', body: '', type: 'pattern',
+          domain: [], entities: [], refs: [], confidence: 0.5, sources: 1,
+        },
+      },
+    });
+
+    const atC1 = await api.explain(R, B, FORWARD, 'c1');
+    const newAtC1 = atC1.outgoing.find(g => g.path === NEWTHING)!;
+    expect(newAtC1.deleted).toBe(false);   // not created yet, NOT retracted
+    expect(newAtC1.versions).toEqual([]);
+
+    const atHead = await api.explain(R, B, FORWARD);
+    const newAtHead = atHead.outgoing.find(g => g.path === NEWTHING)!;
+    expect(newAtHead.deleted).toBe(false);
+    expect(newAtHead.title).toBe('New Thing');
+  });
+
+  // Finding 4 (round 4, Minor): a bogus or empty commit string used to reach
+  // `currentlyAsserts` with the raw, unresolvable anchor, reading an empty
+  // tree and silently emptying `incoming` — where the OLD (pre-anchor-aware)
+  // code ignored the commit argument for incoming entirely and always
+  // returned the HEAD group. `edgeAnchorCommit` (state.ts:490) can pass ''
+  // in a lens context, and any client could pass an unrecognised sha.
+  // Post-Finding-1 fix, incoming no longer consults the anchor at all, so
+  // this now holds unconditionally; the assertion pins it so it stays true.
+  it('treats a bogus or empty anchor commit like HEAD for incoming edges', async () => {
+    const atHead = await api.explain(R, B, A1);
+    const atBogus = await api.explain(R, B, A1, 'deadbeef');
+    const atEmpty = await api.explain(R, B, A1, '');
+    expect(atBogus.incoming).toEqual(atHead.incoming);
+    expect(atEmpty.incoming).toEqual(atHead.incoming);
+    // Outgoing still requires the fact to resolve at the literal requested
+    // commit — unaffected by this fix either way, since a1 has no outgoing
+    // refs of its own regardless of anchor.
+    expect(atBogus.outgoing).toEqual([]);
   });
 });
 
