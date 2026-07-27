@@ -118,6 +118,49 @@ function lastTouched(b: Bundle, path: string): number {
   return change ? (b.commits.find(c => c.sha === change.sha)?.ts ?? 0) : 0;
 }
 
+/** Count of commits with at least one file change under `dirPath`'s subtree —
+ *  the real basis for `activity.total` (git/commitlog.go's CommitLogActivity:
+ *  `COUNT(DISTINCT cl.commit_hash)` scoped by path), not a fact count.
+ *  RightPanel.tsx:617/637 assigns `activity.total` to `totalCommits` and
+ *  labels it "Commits" next to the "Facts" tile — reusing `scopedFacts(...)
+ *  .length` there visibly duplicated the facts count instead of counting
+ *  commits. */
+function commitsTouching(b: Bundle, dirPath: string): number {
+  const prefix = dirPath ? `${dirPath}/` : '';
+  let count = 0;
+  for (const c of b.commits) {
+    const here = b.trees[c.sha] ?? {};
+    const parent = parentOf(b, c.sha);
+    const there = parent ? (b.trees[parent] ?? {}) : {};
+    for (const p of new Set([...Object.keys(here), ...Object.keys(there)])) {
+      if (prefix && !p.startsWith(prefix)) continue;
+      if (here[p] !== there[p]) { count++; break; }
+    }
+  }
+  return count;
+}
+
+/** Path completions return the next directory SEGMENT beneath `prefix`, as a
+ *  full accumulated path (e.g. prefix 'kb/' -> 'kb/architecture') — matching
+ *  the server's completions handler (internal/store/index.go's "path" case:
+ *  group rows by the slice up to the next '/' after the prefix) and
+ *  FilterBar's drill-down, which displays only the last segment
+ *  (`v.split('/').pop()`, FilterBar.tsx:432) but drills using the full value
+ *  (`drillIntoPath(v)`, FilterBar.tsx:449). A fact that's a direct leaf of
+ *  `prefix` (no further '/') contributes nothing — path completions name
+ *  directories, not facts. */
+function nextPathSegments(tree: Record<string, string>, prefix: string): string[] {
+  const dirs = new Set<string>();
+  for (const path of Object.keys(tree)) {
+    if (!path.startsWith(prefix)) continue;
+    const rest = path.slice(prefix.length);
+    const slash = rest.indexOf('/');
+    if (slash === -1) continue;
+    dirs.add(path.slice(0, prefix.length + slash));
+  }
+  return [...dirs].sort();
+}
+
 /** Title-weighted token overlap. The UI only reads `score`, never its provenance. */
 function scoreFact(fact: BundleFact, terms: string[]): number {
   const title = new Set(tokenize(fact.title));
@@ -307,6 +350,14 @@ export const api = {
              origins?: string[]; eps?: string[]; domains?: string[]; entities?: string[] },
   ): Promise<{ results: SearchResult[] }> => {
     const { b } = state();
+    // eps (operation tags: learn/update/retract/subsume/synthesize/sync) has
+    // no equivalent in the bundle — BundleFact carries only the CURRENT
+    // frontmatter, not a per-commit operation tag, and guessing a mapping
+    // (e.g. "modified" -> "update") would fabricate data for tags Op can't
+    // express at all (subsume/synthesize/sync). Returning nothing is honest
+    // about that gap; the previous silent-ignore behavior matched everything,
+    // which looked like a real filter and wasn't (see report Finding 6).
+    if (opts?.eps?.length) return { results: [] };
     const { text, domains, entities } = parseSearchQuery(q);
     const terms = tokenize(text);
     const wantDomains = [...domains, ...(opts?.domains ?? [])];
@@ -369,6 +420,10 @@ export const api = {
              origins?: string[]; domains?: string[]; entities?: string[]; eps?: string[] },
   ): Promise<RecentResponse> => {
     const { b } = state();
+    // Same eps decision as search: the bundle has no episode data, so an
+    // eps-filtered query returns nothing rather than silently matching
+    // everything. See report Finding 6.
+    if (opts?.eps?.length) return { facts: [], total: 0 };
     const q = query.trim().toLowerCase();
     const all = scopedFacts(b, path)
       .filter(({ fact }) => !q || fact.title.toLowerCase().includes(q))
@@ -410,8 +465,13 @@ export const api = {
     const since = (days: number) =>
       b.commits.filter(c => now - c.ts <= days * 86400).length;
     return {
-      last_commit: b.head,
-      total: scopedFacts(b, path).length,
+      // openapi.yaml types last_commit as date-time and RightPanel.tsx:627-628
+      // feeds it straight into `new Date(...)`/`relativeTime(...)` — a bare
+      // SHA parses to Invalid Date there. changes_7d/30d/90d intentionally
+      // stay path-unscoped and anchored to the bundle's newest commit rather
+      // than wall-clock "now" (deferred — logged, not fixed here).
+      last_commit: new Date(commitTs(b, b.head) * 1000).toISOString(),
+      total: commitsTouching(b, path),
       changes_7d: since(7), changes_30d: since(30), changes_90d: since(90),
     };
   },
@@ -420,6 +480,9 @@ export const api = {
     _repo: string, _branch: string, category: string, prefix = '',
   ): Promise<{ values: string[] }> => {
     const { b } = state();
+    if (category === 'path') {
+      return { values: nextPathSegments(treeAt(b), prefix) };
+    }
     const seen = new Set<string>();
     for (const { fact } of headFacts(b)) {
       const source =

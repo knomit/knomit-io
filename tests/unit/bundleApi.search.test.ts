@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { setBundle, api } from '../../src/lib/bundleApi';
+import type { Bundle } from '../../src/lib/bundleTypes';
 import { FIXTURE } from './fixtures/bundle';
 
 const R = 'fixture', B = 'main';
@@ -7,6 +8,32 @@ const A1 = 'kb/architecture/core/a1.md';
 const ADR = 'kb/architecture/adr.md';
 const G1 = 'kb/gotchas/g1.md';
 const R1 = 'kb/gotchas/r1.md';
+
+// The shared FIXTURE's three facts don't vary in kind/origin at all (none of
+// a1/adr/g1 sets either), so a filter on those fields couldn't discriminate a
+// broken implementation from a correct one there. This small bundle exists
+// solely to exercise every opts field search/recent accept, each field
+// splitting the three facts differently.
+const P1 = 'kb/t/p1.md', P2 = 'kb/t/p2.md', P3 = 'kb/t/p3.md';
+const OPTS_BUNDLE: Bundle = {
+  schemaVersion: FIXTURE.schemaVersion, repo: FIXTURE.repo, ref: FIXTURE.ref, head: 'o1',
+  commits: [{ sha: 'o1', ts: 5000, author: 'Ada', subject: 'seed opts fixture' }],
+  trees: { o1: { [P1]: 'op1', [P2]: 'op2', [P3]: 'op3' } },
+  blobs: {
+    op1: {
+      title: 'P1', body: 'alpha', type: 'pattern', kind: 'epistemic', origin: 'authored',
+      domain: ['core'], entities: ['Widget'], refs: [], confidence: 0.9, sources: 1,
+    },
+    op2: {
+      title: 'P2', body: 'beta', type: 'gotcha', kind: 'pragmatic', origin: 'discovered',
+      domain: ['edge'], entities: ['Gadget'], refs: [], confidence: 0.3, sources: 1,
+    },
+    op3: {
+      title: 'P3', body: 'gamma', type: 'decision', kind: 'epistemic', origin: 'distilled',
+      domain: ['core', 'edge'], entities: [], refs: [], confidence: 0.6, sources: 1,
+    },
+  },
+};
 
 beforeEach(() => setBundle(FIXTURE));
 
@@ -21,6 +48,15 @@ describe('api.search', () => {
     const { results } = await api.search(R, B, 'alpha');
     expect(results[0].path).toBe(A1);          // title "Alpha revised"
     expect(results.map(r => r.path)).toContain(G1);   // body "gamma cites alpha"
+    // results[0].path === A1 alone doesn't prove title weighting: with the
+    // title bonus zeroed out, a1 (body "alpha mentions widgets") and g1
+    // (body "gamma cites alpha") both score 1 on the body-only term match,
+    // tie, and the path tiebreak puts a1 first anyway ('kb/architecture...'
+    // < 'kb/gotchas...'). Asserting the scores themselves differ is what
+    // actually pins the title bonus.
+    const a1Result = results.find(r => r.path === A1)!;
+    const g1Result = results.find(r => r.path === G1)!;
+    expect(a1Result.score).toBeGreaterThan(g1Result.score);
   });
 
   it('returns an empty list rather than throwing for no match', async () => {
@@ -40,6 +76,38 @@ describe('api.search', () => {
   it('scopes results to the requested directory subtree', async () => {
     const { results } = await api.search(R, B, 'alpha', 'kb/gotchas');
     expect(results.map(r => r.path)).toEqual([G1]);
+  });
+
+  // Table-driven coverage for every opts field besides `types` (already
+  // covered above). The reviewer deleted all seven `opts` filter lines from
+  // `recent` and 42/42 tests still passed — search's non-`types` fields had
+  // the same gap (only `types` was exercised). Each row below uses a field
+  // that actually varies across OPTS_BUNDLE's three facts, so a broken or
+  // deleted filter changes the result set, not just its order.
+  type SearchOpts = NonNullable<Parameters<typeof api.search>[5]>;
+  const SEARCH_OPTS_CASES: Array<[string, number, SearchOpts, string[]]> = [
+    ['minConfidence keeps only facts at or above the threshold', 0.5, {}, [P1, P3]],
+    ['kinds narrows to the listed kind', 0, { kinds: ['pragmatic'] }, [P2]],
+    ['excludeKinds drops the listed kind', 0, { excludeKinds: ['pragmatic'] }, [P1, P3]],
+    ['origins narrows to the listed origin', 0, { origins: ['distilled'] }, [P3]],
+    ['domains requires every listed domain to be present', 0, { domains: ['edge'] }, [P2, P3]],
+    ['entities requires every listed entity to be present', 0, { entities: ['Gadget'] }, [P2]],
+  ];
+
+  describe('opts filters', () => {
+    beforeEach(() => setBundle(OPTS_BUNDLE));
+
+    it.each(SEARCH_OPTS_CASES)('%s', async (_label, minConfidence, opts, expected) => {
+      const { results } = await api.search(R, B, '', '', minConfidence, opts);
+      expect(results.map(r => r.path).sort()).toEqual([...expected].sort());
+    });
+
+    // The bundle has no episode data (Finding 6): an eps filter matches
+    // nothing rather than silently matching everything.
+    it('eps matches nothing (no episode data in the bundle)', async () => {
+      const { results } = await api.search(R, B, '', '', 0, { eps: ['learn'] });
+      expect(results).toEqual([]);
+    });
   });
 });
 
@@ -181,41 +249,108 @@ describe('api.recent / stats / activity / completions', () => {
 
   // total=3 (a1, adr, g1); domains: core appears on a1 and adr => 2;
   // entities: Widget only on a1 => 1; avg_confidence = (0.9 + 0.5 + 0.5) / 3.
+  // Written as a literal (not the same `(0.9+0.5+0.5)/3` expression the
+  // implementation itself uses) so the expectation doesn't just restate the
+  // production arithmetic back at it: 1.9 / 3 = 0.6333333... independently.
   it('stats counts facts, domains and entities at HEAD', async () => {
     const s = await api.stats(R, B, 'kb');
     expect(s.total).toBe(3);
     expect(s.domains).toMatchObject({ core: 2 });
     expect(s.entities).toMatchObject({ Widget: 1 });
-    expect(s.avg_confidence).toBeCloseTo((0.9 + 0.5 + 0.5) / 3, 5);
+    expect(s.avg_confidence).toBeCloseTo(0.633333, 5);
   });
 
-  it('activity reports the head commit and total', async () => {
+  // openapi.yaml types last_commit as date-time; RightPanel.tsx:627-628 feeds
+  // it to `new Date(...)`/`relativeTime(...)`, which renders "Invalid Date"
+  // for a bare SHA. c3's timestamp is 3000 (unix seconds).
+  //
+  // activity.total counts COMMITS touching the scope, not facts (matching
+  // git/commitlog.go's CommitLogActivity: COUNT(DISTINCT commit_hash)) — see
+  // the directory-scoped case below, where it legitimately differs from
+  // stats.total for the same path.
+  it('activity reports the head commit as an ISO date, and total as a commit count', async () => {
     const a = await api.activity(R, B, 'kb');
-    expect(a.last_commit).toBe('c3');
-    expect(a.total).toBe(3);
+    expect(a.last_commit).toBe(new Date(3000 * 1000).toISOString());
+    expect(a.total).toBe(3);   // all three fixture commits touch something under kb/
   });
 
-  // A third type (adr's "decision") joined pattern/gotcha in the Task 3 fixture.
-  it('completions returns distinct prefix-filtered frontmatter values', async () => {
-    expect((await api.completions(R, B, 'type')).values.sort()).toEqual(['decision', 'gotcha', 'pattern']);
+  // A third type (adr's "decision") joined pattern/gotcha in the Task 3
+  // fixture. No `.sort()` on the actual result here — completions already
+  // returns them sorted; re-sorting the actual value in the assertion (as the
+  // brief's original test did) would hide an unsorted implementation.
+  it('completions returns distinct prefix-filtered frontmatter values, in order', async () => {
+    expect((await api.completions(R, B, 'type')).values).toEqual(['decision', 'gotcha', 'pattern']);
     expect((await api.completions(R, B, 'type', 'pat')).values).toEqual(['pattern']);
     expect((await api.completions(R, B, 'entity')).values).toEqual(['Widget']);
+  });
+
+  // FilterBar.tsx's Path facet (FilterBar.tsx:20/205-224) has no equivalent
+  // in domain/entity/type/kind/origin: it drills through directory segments
+  // rather than frontmatter values. adr.md sits alongside the core/
+  // subdirectory directly under kb/architecture (the fixture's own comment
+  // calls this out), so this also proves a leaf at the queried level
+  // contributes nothing while a subdirectory does.
+  it('completions returns next-segment directory prefixes for the path category', async () => {
+    expect((await api.completions(R, B, 'path', '')).values).toEqual(['kb']);
+    expect((await api.completions(R, B, 'path', 'kb/')).values).toEqual(['kb/architecture', 'kb/gotchas']);
+    // adr.md is a direct leaf of kb/architecture/ — no further segment — so
+    // only core/ (which holds a1.md) shows up one level deeper.
+    expect((await api.completions(R, B, 'path', 'kb/architecture/')).values).toEqual(['kb/architecture/core']);
   });
 
   // RightPanel.tsx:526-527 and Library.tsx:300/511 all pass the currently
   // browsed directory (state.ontologyRoot or a deeper "path" filter chip) as
   // the path argument, expecting the same subtree scoping browse() already
   // gives directory listings. Scoping to kb/architecture must exclude g1.
-  it('scopes recent and activity to the requested directory subtree', async () => {
+  it('scopes recent and stats to the requested directory subtree', async () => {
     const r = await api.recent(R, B, 'kb/architecture');
     expect(r.facts.map(f => f.path).sort()).toEqual([A1, ADR].sort());
     expect(r.total).toBe(2);
 
     const s = await api.stats(R, B, 'kb/gotchas');
     expect(s.total).toBe(1);
+  });
 
+  // activity.total is a commit count, not a fact count (see above), so it can
+  // legitimately diverge from stats.total for the very same scope: only 2
+  // facts live under kb/architecture at HEAD, but all 3 fixture commits
+  // touched something there at some point (c1 added a1, c2 revised it, c3
+  // added adr) — so scoping doesn't shrink it the way it shrinks stats.total.
+  it('scopes activity.total to commits touching the subtree, independent of fact count', async () => {
     const a = await api.activity(R, B, 'kb/architecture');
-    expect(a.total).toBe(2);
+    expect(a.total).toBe(3);
+  });
+
+  // Table-driven coverage for every `recent` opts field. The reviewer deleted
+  // all seven `.filter(({fact}) => !opts?.…)` lines and 42/42 bundleApi tests
+  // still passed — Library.tsx:300 passes typeFilter/kinds/origins/domains/
+  // entities/eps on every recent-mode load, so this was live, untested code.
+  describe('recent opts filters', () => {
+    beforeEach(() => setBundle(OPTS_BUNDLE));
+
+    type RecentOpts = NonNullable<Parameters<typeof api.recent>[6]>;
+    const RECENT_OPTS_CASES: Array<[string, RecentOpts, string[]]> = [
+      ['typeFilter narrows to the listed type', { typeFilter: 'gotcha' }, [P2]],
+      ['excludeType drops the listed type', { excludeType: 'gotcha' }, [P1, P3]],
+      ['kinds narrows to the listed kind', { kinds: ['epistemic'] }, [P1, P3]],
+      ['excludeKinds drops the listed kind', { excludeKinds: ['epistemic'] }, [P2]],
+      ['origins narrows to the listed origin', { origins: ['authored'] }, [P1]],
+      ['domains requires every listed domain to be present', { domains: ['core'] }, [P1, P3]],
+      ['entities requires every listed entity to be present', { entities: ['Widget'] }, [P1]],
+    ];
+
+    it.each(RECENT_OPTS_CASES)('%s', async (_label, opts, expected) => {
+      const r = await api.recent(R, B, '', '', 50, 0, opts);
+      expect(r.facts.map(f => f.path).sort()).toEqual([...expected].sort());
+      expect(r.total).toBe(expected.length);
+    });
+
+    // Same eps decision as search (Finding 6): matches nothing, not everything.
+    it('eps matches nothing (no episode data in the bundle)', async () => {
+      const r = await api.recent(R, B, '', '', 50, 0, { eps: ['learn'] });
+      expect(r.facts).toEqual([]);
+      expect(r.total).toBe(0);
+    });
   });
 });
 
