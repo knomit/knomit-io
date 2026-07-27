@@ -22,6 +22,8 @@ export interface TourDeps {
   tour: BundleTour;
   headCommit: string;
   dispatch: Dispatch<Action>;
+  /** Current app state, read at call time — steps must not close over it. */
+  getState: () => AppState;
   navigate: (req: { view: 'library'; factPath: string | null }) => void;
   tt: {
     scrub: (commit: string) => void;
@@ -53,9 +55,19 @@ export function buildSteps(t: BundleTour): TourStep[] {
       label: 'Chronological',
       body: 'The library opens in chronological order — most recently committed first. This is the view you want when you are asking what the knowledge base has learned lately.',
       highlight: 'library',
-      // Assert the default rather than assume it: the tour can be restarted
-      // from the launcher long after the visitor has changed the sort.
-      run: ({ dispatch }) => dispatch({ type: 'SET_LIBRARY_SORT', sort: 'recent' }),
+      // Only dispatch when the sort actually differs. SET_LIBRARY_SORT nulls
+      // factPath by design — upstream clears the selection so the right panel
+      // can't strand it in a view it doesn't belong to — so firing it as a
+      // no-op "assert the default" closed whichever fact was open and dropped
+      // the visitor onto the repo stats view the moment they started the tour.
+      // The tour is restartable, so the sort still has to be corrected when it
+      // genuinely isn't chronological; losing the selection is acceptable then,
+      // because the view really is changing.
+      run: ({ dispatch, getState }) => {
+        if (getState().librarySort !== 'recent') {
+          dispatch({ type: 'SET_LIBRARY_SORT', sort: 'recent' });
+        }
+      },
     },
     {
       label: 'Ontological',

@@ -217,6 +217,27 @@ test.describe('/explore guided tour', () => {
     await expect(page.getByTestId('tour-launcher')).toBeVisible();
   });
 
+  test('starting the tour keeps the open fact until the view actually changes', async ({ page }) => {
+    await page.goto('/explore');
+    // Library auto-opens the first fact in chronological mode.
+    await expect(page.getByTestId('fact-title')).toBeVisible();
+    const opened = await page.getByTestId('fact-title').textContent();
+
+    await page.getByTestId('tour-start').click();
+
+    // Step 1 only describes the chronological view — it must not disturb it.
+    // SET_LIBRARY_SORT nulls factPath by design, so dispatching it as a no-op
+    // "assert the default" used to close the fact and drop the visitor onto
+    // the repo stats view the instant they started the tour.
+    await expect(page.getByTestId('tour-bar')).toContainText('1/8');
+    await expect(page.getByTestId('fact-title')).toHaveText(opened!);
+    await expect(page.getByTestId('stats-view')).toHaveCount(0);
+
+    // Step 2 genuinely switches views, and losing the selection is correct.
+    await page.getByTestId('tour-next').click();
+    await expect(page.getByTestId('left-panel')).toHaveAttribute('data-sort', 'path');
+  });
+
   test('the launcher names the real repo and links to it', async ({ page }) => {
     await page.goto('/explore');
     await page.getByTestId('tour-dismiss').click();

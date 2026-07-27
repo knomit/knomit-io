@@ -280,11 +280,12 @@ function Browser({ bundle }: { bundle: Bundle }) {
   // Driven entirely through the same dispatch/navigate/tt the panels use, so
   // it can't drift from what a real click does. `bundle.tour` is resolved at
   // build time and may be absent, in which case nothing here renders.
+  const getState = useCallback(() => stateRef.current, []);
   const tourDeps = useMemo(
     () => (bundle.tour
-      ? { tour: bundle.tour, headCommit: bundle.head, dispatch, navigate, tt }
+      ? { tour: bundle.tour, headCommit: bundle.head, dispatch, navigate, tt, getState }
       : null),
-    [bundle.tour, bundle.head, dispatch, navigate, tt],
+    [bundle.tour, bundle.head, dispatch, navigate, tt, getState],
   );
   const tour = useTour(tourDeps);
 
