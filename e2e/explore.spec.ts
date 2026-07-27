@@ -139,3 +139,74 @@ test.describe('/explore live KB browser', () => {
     await expect(page.getByTestId('explore-browser')).toHaveCount(0);
   });
 });
+
+// ── Guided tour ─────────────────────────────────────────────────────────────
+// The tour drives the real reducer, so these assertions double as coverage of
+// the underlying operations: filtering, opening a fact, hopping an edge in
+// both directions, and time-travel. A step that silently stopped working
+// (which is how the last two tour bugs presented — the narration advanced
+// while nothing happened behind it) fails here.
+test.describe('/explore guided tour', () => {
+  test('invites on a first visit, and only once', async ({ page }) => {
+    await page.goto('/explore');
+    await expect(page.getByTestId('tour-invite')).toBeVisible();
+    await page.getByTestId('tour-dismiss').click();
+    await expect(page.getByTestId('tour-invite')).toHaveCount(0);
+    // Dismissing must not make it unreachable — the launcher is the way back.
+    await expect(page.getByTestId('tour-launcher')).toBeVisible();
+
+    await page.reload();
+    await expect(page.getByTestId('tour-invite')).toHaveCount(0);
+    await expect(page.getByTestId('tour-launcher')).toBeVisible();
+  });
+
+  test('walks every step, driving the real UI', async ({ page }) => {
+    await page.goto('/explore');
+    await page.getByTestId('tour-start').click();
+
+    const bar = page.getByTestId('tour-bar');
+    const frame = page.locator('.explore-frame');
+
+    // 1 — ontological view.
+    await expect(bar).toContainText('1/7');
+    await expect(page.getByTestId('left-panel')).toHaveAttribute('data-sort', 'path');
+    await expect(frame).toHaveAttribute('data-tour-highlight', 'library');
+
+    // 2 — a real filter chip lands, and the sort flips to relevance.
+    await page.getByTestId('tour-next').click();
+    await expect(bar).toContainText('2/7');
+    await expect(page.getByTestId('left-panel')).toHaveAttribute('data-sort', 'relevance');
+
+    // 3 — a fact is open.
+    await page.getByTestId('tour-next').click();
+    await expect(page.getByTestId('fact-title')).toBeVisible();
+    await expect(frame).toHaveAttribute('data-tour-highlight', 'fact');
+
+    // 4 — hopped down an edge; the rail is the highlight.
+    await page.getByTestId('tour-next').click();
+    await expect(frame).toHaveAttribute('data-tour-highlight', 'edges');
+    await expect(page.getByTestId('edges-rail-slot')).toBeVisible();
+
+    // 5 — time-travel: the filter input is replaced by the trail breadcrumb,
+    // which is how we know the anchor really left live.
+    await page.getByTestId('tour-next').click();
+    await expect(bar).toContainText('5/7');
+    await expect(page.locator('#filter-input')).toHaveCount(0);
+
+    // 6 — back up the edge AND back to live. Regression guard: a stale-ref
+    // race used to leave this pinned in history, which stranded step 7.
+    await page.getByTestId('tour-next').click();
+    await expect(page.locator('#filter-input')).toHaveCount(1);
+
+    // 7 — the entity filter stacks on the type filter from step 2.
+    await page.getByTestId('tour-next').click();
+    await expect(bar).toContainText('7/7');
+    await expect(frame).toHaveAttribute('data-tour-highlight', 'filter');
+    await expect(page.locator('.explore-frame')).toContainText('entity:');
+
+    // Done clears up after itself.
+    await page.getByTestId('tour-next').click();
+    await expect(bar).toHaveCount(0);
+    await expect(page.getByTestId('tour-launcher')).toBeVisible();
+  });
+});

@@ -1,4 +1,4 @@
-import { useReducer, useEffect, useLayoutEffect, useState, useRef, useCallback } from 'react';
+import { useReducer, useEffect, useLayoutEffect, useMemo, useState, useRef, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { BUNDLE_URL } from '../generated/kb-bundle-url';
 import { setBundle, assertSchema } from '../lib/bundleApi';
@@ -13,6 +13,7 @@ import { FilterBar } from '../generated/kb-ui/FilterBar';
 import { ErrorBoundary } from '../generated/kb-ui/ErrorBoundary';
 import { useNavigationManager } from '../generated/kb-ui/useNavigationManager';
 import { useTimeTravel } from '../generated/kb-ui/useTimeTravel';
+import { useTour, TourBar, TourInvite, TourLauncher } from './ExploreTour';
 
 // Library | content splitter. Mirrors upstream App.tsx's own constants (see
 // its LEFT_PANEL_MIN/MAX_FRACTION/DEFAULT_FRACTION) so the drag feels like the
@@ -40,6 +41,14 @@ const RAIL_MIN = 220;
 const RAIL_MAX_FRACTION = 0.4;
 const RAIL_DEFAULT = 320;
 const RAIL_STORAGE_KEY = 'knomit.explore.railWidth';
+
+/** Scroll targets for the tour's highlight keys. The ring is drawn in CSS. */
+const HIGHLIGHT_SELECTOR: Record<string, string> = {
+  library: '[data-testid="library-header"]',
+  fact: '[data-testid="fact-title"]',
+  edges: '[data-testid="edges-rail-slot"]',
+  filter: '#filter-input',
+};
 
 const prefersReducedMotion =
   typeof window !== 'undefined' &&
@@ -267,6 +276,39 @@ function Browser({ bundle }: { bundle: Bundle }) {
     document.addEventListener('mouseup', onUp);
   };
 
+  // ── Guided tour ────────────────────────────────────────────────────────
+  // Driven entirely through the same dispatch/navigate/tt the panels use, so
+  // it can't drift from what a real click does. `bundle.tour` is resolved at
+  // build time and may be absent, in which case nothing here renders.
+  const tourDeps = useMemo(
+    () => (bundle.tour
+      ? { tour: bundle.tour, headCommit: bundle.head, dispatch, navigate, tt }
+      : null),
+    [bundle.tour, bundle.head, dispatch, navigate, tt],
+  );
+  const tour = useTour(tourDeps);
+
+  // Retarget the highlight ring each step. The ring itself is CSS keyed off
+  // `data-tour-highlight` on the frame (see explore.astro) rather than a class
+  // on the target: a step that dispatches a filter re-renders FilterBar, and a
+  // class applied to its DOM node is wiped by that re-render — which silently
+  // cost the last step its highlight. An attribute on the ancestor cannot be.
+  // The only imperative part left is scrolling the target into view, which the
+  // stacked mobile layout needs.
+  useEffect(() => {
+    const key = tour.step?.highlight;
+    if (!key) return;
+    const sel = HIGHLIGHT_SELECTOR[key];
+    // Let the step's own dispatch land — the rail only exists once a fact is
+    // open, and the filter input only while the anchor is live.
+    const id = window.setTimeout(() => {
+      frameRef.current?.querySelector(sel)?.scrollIntoView({
+        block: 'nearest', behavior: prefersReducedMotion ? 'auto' : 'smooth',
+      });
+    }, 80);
+    return () => window.clearTimeout(id);
+  }, [tour.step]);
+
   // On a narrow viewport the library and the fact panel stack (see
   // explore.astro's @media rule); scroll the fact panel into view when a fact
   // opens so tapping a row deep in a long list doesn't strand the visitor
@@ -291,6 +333,7 @@ function Browser({ bundle }: { bundle: Bundle }) {
       ref={frameRef}
       tabIndex={-1}
       data-testid="explore-browser"
+      data-tour-highlight={tour.step?.highlight ?? undefined}
       className="explore-frame"
     >
       <div className="explore-frame__left" style={{ width: leftPanelWidth }}>
@@ -310,6 +353,18 @@ function Browser({ bundle }: { bundle: Bundle }) {
         title="Drag to resize"
       />
       <div className="explore-frame__main" ref={mainRef}>
+        {tour.active && tour.step && (
+          <TourBar
+            step={tour.step} index={tour.index!} total={tour.steps.length}
+            onNext={tour.next} onStop={tour.stop}
+          />
+        )}
+        {!tour.active && tour.invite && (
+          <TourInvite onStart={tour.start} onDismiss={tour.dismissInvite} />
+        )}
+        {!tour.active && !tour.invite && tourDeps && (
+          <TourLauncher onStart={tour.start} />
+        )}
         <ErrorBoundary variant="inline" label="The filter bar hit an error">
           <FilterBar state={state} dispatch={dispatch} onJumpTrail={jumpTrail} />
         </ErrorBoundary>

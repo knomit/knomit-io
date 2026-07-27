@@ -144,12 +144,61 @@ export async function buildBundle(repoDir, ref) {
     off = start + size + 1;                                     // trailing newline
   }
 
+  const tour = resolveTour(commits, trees, blobs);
+
   return {
     schemaVersion: SCHEMA_VERSION,
     repo: REPO, ref,
     head: commits[0].sha,
     commits, trees, blobs,
+    ...(tour ? { tour } : {}),
   };
+}
+
+/**
+ * Pick the guided tour's spine from the corpus.
+ *
+ * The tour needs a synthesis fact that (a) carries at least one entity, so the
+ * click-to-filter step has something to click, and (b) cites another fact that
+ * has been revised, so the time-travel step has a real change to show. Neither
+ * is guaranteed: at the time of writing all 11 synthesis facts are
+ * single-version, which is exactly why time-travel targets the CITED fact
+ * rather than the synthesis itself.
+ *
+ * Returns undefined when nothing qualifies, and the UI then omits the tour
+ * entirely. Selection is deterministic (most versions wins, path breaks ties)
+ * so a rebuild of an unchanged KB produces an identical bundle — the filename
+ * is a content hash, and a wobbling tour choice would defeat that.
+ */
+export function resolveTour(commits, trees, blobs) {
+  const head = trees[commits[0].sha] ?? {};
+  const fact = (p) => blobs[head[p]];
+
+  // Oldest-first commits in which `path`'s blob changed.
+  const versionsOf = (path) => {
+    const out = [];
+    let seen;
+    for (let i = commits.length - 1; i >= 0; i--) {
+      const cur = trees[commits[i].sha]?.[path];
+      if (cur && cur !== seen) { out.push(commits[i].sha); seen = cur; }
+    }
+    return out;
+  };
+
+  let best;
+  for (const synthesis of Object.keys(head).sort()) {
+    const s = fact(synthesis);
+    if (!s || s.type !== 'synthesis' || !s.entities.length) continue;
+    for (const target of s.refs) {
+      if (!target.startsWith('kb/') || !head[target]) continue;
+      const targetVersions = versionsOf(target);
+      if (targetVersions.length < 2) continue;
+      if (!best || targetVersions.length > best.targetVersions.length) {
+        best = { synthesis, target, targetVersions, entity: s.entities[0] };
+      }
+    }
+  }
+  return best;
 }
 
 async function isDirectory(p) {

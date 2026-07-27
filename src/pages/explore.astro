@@ -285,6 +285,98 @@ import { GITHUB_URL } from '../lib/site';
     display: none !important;
   }
 
+  /* ── Guided tour ─────────────────────────────────────────────────────────
+     The narration bar sits above the filter bar, in the flow rather than
+     floating: an anchored callout would have to chase its target through
+     splitter drags, panel scrolls and the 860px reflow, and would be wrong
+     at exactly the moments it is trying to draw attention. */
+  .explore-tour {
+    flex-shrink: 0;
+    display: grid;
+    gap: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--k-hairline);
+    background: color-mix(in srgb, var(--k-brand) 8%, #0b0b0b);
+  }
+  .explore-tour__meta {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-family: var(--k-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .explore-tour__count { color: var(--k-brand); }
+  .explore-tour__label { color: var(--k-text-2); }
+  .explore-tour__body {
+    margin: 0;
+    max-width: 70ch;
+    font-size: 0.94rem;
+    line-height: 1.5;
+    color: var(--k-text-1);
+  }
+  .explore-tour__actions {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+  }
+  .explore-tour__skip,
+  .explore-tour__next {
+    font: inherit;
+    font-size: 0.85rem;
+    padding: 0.3rem 0.85rem;
+    border-radius: var(--k-radius);
+    cursor: pointer;
+    border: 1px solid var(--k-hairline);
+    background: transparent;
+    color: var(--k-text-2);
+  }
+  .explore-tour__next {
+    border-color: color-mix(in srgb, var(--k-brand) 45%, transparent);
+    background: color-mix(in srgb, var(--k-brand) 18%, transparent);
+    color: var(--k-text-1);
+  }
+  .explore-tour__skip:hover { color: var(--k-text-1); }
+  .explore-tour__next:hover { background: color-mix(in srgb, var(--k-brand) 28%, transparent); }
+  .explore-tour--invite .explore-tour__body { color: var(--k-text-2); }
+  /* Collapsed to a single row once the invitation has been answered, so the
+     tour stays reachable without permanently spending a paragraph of height. */
+  .explore-tour--launcher {
+    padding: 0.4rem 1rem;
+    background: transparent;
+  }
+  .explore-tour--launcher .explore-tour__next {
+    font-size: 0.8rem;
+    padding: 0.2rem 0.7rem;
+  }
+
+  /* One highlight treatment, retargeted each step — the same ring wherever
+     attention needs to go, so it reads as one language rather than a series
+     of unrelated effects. Two pulses, then it settles and stays outlined for
+     as long as the step does. */
+  .explore-frame[data-tour-highlight='library'] [data-testid='library-header'],
+  .explore-frame[data-tour-highlight='fact'] [data-testid='fact-title'],
+  .explore-frame[data-tour-highlight='edges'] [data-testid='edges-rail-slot'],
+  .explore-frame[data-tour-highlight='filter'] #filter-input {
+    position: relative;
+    border-radius: var(--k-radius);
+    outline: 2px solid color-mix(in srgb, var(--k-brand) 70%, transparent);
+    outline-offset: -2px;
+    animation: explore-tour-pulse 1.1s ease-out 2;
+  }
+  @keyframes explore-tour-pulse {
+    0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--k-brand) 55%, transparent); }
+    70%  { box-shadow: 0 0 0 10px color-mix(in srgb, var(--k-brand) 0%, transparent); }
+    100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--k-brand) 0%, transparent); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .explore-frame[data-tour-highlight] :is([data-testid='library-header'],
+      [data-testid='fact-title'], [data-testid='edges-rail-slot'], #filter-input) {
+      animation: none;
+    }
+  }
+
   @media (max-width: 860px) {
     .explore-frame {
       flex-direction: column;
