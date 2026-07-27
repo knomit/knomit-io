@@ -218,12 +218,21 @@ export function TourBar({
  * first visit and then unreachable forever, which makes it useless to anyone
  * who declines it once and later wonders what this page is. One slim row.
  */
-export function TourLauncher({ onStart }: { onStart: () => void }) {
+export function TourLauncher({ onStart, facts, commits }: {
+  onStart: () => void; facts: number; commits: number;
+}) {
   return (
     <div className="explore-tour explore-tour--launcher" data-testid="tour-launcher">
-      <button type="button" className="explore-tour__next" onClick={onStart} data-testid="tour-start">
-        Take the tour
-      </button>
+      <p className="explore-tour__body">
+        You are browsing a real knomit knowledge base — {facts.toLocaleString()} facts
+        across {commits.toLocaleString()} commits of history, served from a static
+        snapshot. Nothing here is a mock-up.
+      </p>
+      <div className="explore-tour__actions">
+        <button type="button" className="explore-tour__next" onClick={onStart} data-testid="tour-start">
+          Take the tour
+        </button>
+      </div>
     </div>
   );
 }

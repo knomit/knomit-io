@@ -336,6 +336,27 @@ function Browser({ bundle }: { bundle: Bundle }) {
       data-tour-highlight={tour.step?.highlight ?? undefined}
       className="explore-frame"
     >
+      {/* Full-bleed across the browser, above the split — not tucked inside
+          the content column. The tour talks about the library as often as the
+          fact panel, so a bar that starts where the library ends reads as
+          belonging to only one of them. */}
+      {tour.active && tour.step && (
+        <TourBar
+          step={tour.step} index={tour.index!} total={tour.steps.length}
+          onNext={tour.next} onStop={tour.stop}
+        />
+      )}
+      {!tour.active && tour.invite && (
+        <TourInvite onStart={tour.start} onDismiss={tour.dismissInvite} />
+      )}
+      {!tour.active && !tour.invite && tourDeps && (
+        <TourLauncher
+          onStart={tour.start}
+          facts={Object.keys(bundle.trees[bundle.head] ?? {}).length}
+          commits={bundle.commits.length}
+        />
+      )}
+      <div className="explore-frame__row">
       <div className="explore-frame__left" style={{ width: leftPanelWidth }}>
         <ErrorBoundary variant="inline" label="The library hit an error">
           <LeftPanel
@@ -353,18 +374,6 @@ function Browser({ bundle }: { bundle: Bundle }) {
         title="Drag to resize"
       />
       <div className="explore-frame__main" ref={mainRef}>
-        {tour.active && tour.step && (
-          <TourBar
-            step={tour.step} index={tour.index!} total={tour.steps.length}
-            onNext={tour.next} onStop={tour.stop}
-          />
-        )}
-        {!tour.active && tour.invite && (
-          <TourInvite onStart={tour.start} onDismiss={tour.dismissInvite} />
-        )}
-        {!tour.active && !tour.invite && tourDeps && (
-          <TourLauncher onStart={tour.start} />
-        )}
         <ErrorBoundary variant="inline" label="The filter bar hit an error">
           <FilterBar state={state} dispatch={dispatch} onJumpTrail={jumpTrail} />
         </ErrorBoundary>
@@ -402,6 +411,7 @@ function Browser({ bundle }: { bundle: Bundle }) {
             </>
           )}
         </div>
+      </div>
       </div>
     </div>
   );

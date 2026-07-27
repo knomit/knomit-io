@@ -211,12 +211,23 @@ import { GITHUB_URL } from '../lib/site';
      panels' own `height: 100%` internals still resolve, and the frame itself
      scrolls through them. Nothing is ever unreachable; there's just more of
      it below the fold. */
+  /* Column: the tour bar spans the full browser width, the split sits below
+     it. Before this the bar lived inside the content column and started where
+     the library ended, which made it look like commentary on the fact panel
+     alone even when the step was about the library. */
   .explore-frame {
     display: flex;
+    flex-direction: column;
     height: 100%;
     min-height: 0;
     overflow: hidden;
     outline: none;
+  }
+  .explore-frame__row {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
   }
   .explore-frame__left {
     flex-shrink: 0;
@@ -290,11 +301,15 @@ import { GITHUB_URL } from '../lib/site';
      floating: an anchored callout would have to chase its target through
      splitter drags, panel scrolls and the 860px reflow, and would be wrong
      at exactly the moments it is trying to draw attention. */
+  /* One row where there's width for it: meta, prose, buttons. The stacked
+     three-row version cost ~110px of the browser's height on every step. */
   .explore-tour {
     flex-shrink: 0;
-    display: grid;
-    gap: 0.5rem;
-    padding: 0.75rem 1rem;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    padding: 0.45rem 1rem;
     border-bottom: 1px solid var(--k-hairline);
     background: color-mix(in srgb, var(--k-brand) 8%, #0b0b0b);
   }
@@ -311,16 +326,19 @@ import { GITHUB_URL } from '../lib/site';
   .explore-tour__label { color: var(--k-text-2); }
   .explore-tour__body {
     margin: 0;
-    max-width: 70ch;
-    font-size: 0.94rem;
-    line-height: 1.5;
+    flex: 1;
+    min-width: 18rem;
+    font-size: 0.9rem;
+    line-height: 1.45;
     color: var(--k-text-1);
   }
   .explore-tour__actions {
     display: flex;
     gap: 0.5rem;
-    justify-content: flex-end;
+    margin-left: auto;
+    flex-shrink: 0;
   }
+  .explore-tour__meta { flex-shrink: 0; }
   .explore-tour__skip,
   .explore-tour__next {
     font: inherit;
@@ -345,6 +363,10 @@ import { GITHUB_URL } from '../lib/site';
   .explore-tour--launcher {
     padding: 0.4rem 1rem;
     background: transparent;
+  }
+  .explore-tour--launcher .explore-tour__body {
+    font-size: 0.85rem;
+    color: var(--k-text-2);
   }
   .explore-tour--launcher .explore-tour__next {
     font-size: 0.8rem;
@@ -378,7 +400,7 @@ import { GITHUB_URL } from '../lib/site';
   }
 
   @media (max-width: 860px) {
-    .explore-frame {
+    .explore-frame__row {
       flex-direction: column;
       overflow-y: auto;
       overflow-x: hidden;
