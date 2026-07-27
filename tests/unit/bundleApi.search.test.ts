@@ -35,6 +35,37 @@ const OPTS_BUNDLE: Bundle = {
   },
 };
 
+// A local extension of FIXTURE (spread, not a change to the shared fixture
+// file) adding one fact whose refs change over time: `beta.md` exists since
+// c1 referencing only a1, then at c2 — the same commit r1.md was added —
+// beta's refs grow to also cite r1.md, and stay that way through HEAD.
+// Combined with the fixture's existing r1.md (added c2, retracted c3) and
+// a1.md (two versions, c1/c2), this is enough to exercise every anchor-aware
+// case without touching HEAD's fact count or any other test's numbers: this
+// bundle is only ever installed inside the tests below, each of which starts
+// from `FIXTURE` again via `beforeEach`.
+const BETA = 'kb/architecture/beta.md';
+const BETA_BUNDLE: Bundle = {
+  ...FIXTURE,
+  trees: {
+    ...FIXTURE.trees,
+    c1: { ...FIXTURE.trees.c1, [BETA]: 'bb1' },
+    c2: { ...FIXTURE.trees.c2, [BETA]: 'bb2' },
+    c3: { ...FIXTURE.trees.c3, [BETA]: 'bb2' },
+  },
+  blobs: {
+    ...FIXTURE.blobs,
+    bb1: {
+      title: 'Beta', body: 'beta references alpha', type: 'pattern',
+      domain: ['core'], entities: [], refs: [A1], confidence: 0.5, sources: 1,
+    },
+    bb2: {
+      title: 'Beta revised', body: 'beta now also cites a retracted note', type: 'pattern',
+      domain: ['core'], entities: [], refs: [A1, R1], confidence: 0.5, sources: 1,
+    },
+  },
+};
+
 beforeEach(() => setBundle(FIXTURE));
 
 describe('api.search', () => {
@@ -137,12 +168,12 @@ describe('api.explain', () => {
 
   // EdgesRail.tsx renders each RefGroup as `<EdgeGroup key={g.path}>` — a repeated
   // path in the source list would be a React key collision AND a doubled row for
-  // what is really one connection. buildIndex (kbIndex.ts) pushes a source path
-  // into `backlinks` once per matching ref, so a fact whose refs array repeats
-  // the same target (or refs itself twice) produces duplicate entries on both
-  // sides of explain — outgoing reads fact.refs directly, incoming reads
-  // ix.backlinks, neither naturally deduped. explain collapses both to distinct
-  // paths before building RefGroups.
+  // what is really one connection. `outgoing` reads `fact.refs` directly (a raw
+  // array — a fact whose refs array repeats the same target, or refs itself
+  // twice, would otherwise produce duplicate entries), so `explain` runs it
+  // through `dedupePaths`. `incoming`'s candidates come from `ix.allBacklinks`,
+  // a `Set` per target, so they can't hold duplicates in the first place — this
+  // also guards that side in case that ever changes.
   it('deduplicates repeated refs to the same target', async () => {
     setBundle({
       ...FIXTURE,
@@ -211,6 +242,119 @@ describe('api.explain', () => {
 
     const withFallback = await api.explain(R, B, 'kb/gotchas/temp.md', 'c3', { fallback: 'before' });
     expect(withFallback.outgoing.map(g => g.path)).toEqual([A1]);
+  });
+});
+
+// The user ruled that explain's anchor-blindness (title/type/versions/deleted
+// all resolved at HEAD regardless of the requested commit) is a bug to fix,
+// not a deferred design choice — see task-5-report.md's fix-report-round-2
+// for the ruling and consequences (EdgesRail.tsx wrongly hatching a
+// not-yet-retracted target; RightPanel.tsx:487-489 pinning in-body refs to a
+// future version; incoming versions meaning "source changed" instead of
+// upstream's "source asserted this edge"). These tests exercise the anchor
+// resolution using BETA_BUNDLE; the un-anchored (HEAD) suite above is
+// unmodified and still passes, which is the regression check for "HEAD
+// behaviour must stay exactly as it is today."
+describe('api.explain anchored at a historical commit', () => {
+  beforeEach(() => setBundle(BETA_BUNDLE));
+
+  // r1.md is alive at c2 (added there) and retracted at c3/HEAD. beta.md
+  // references it starting at c2. Scrubbed to c2, r1 must NOT render as
+  // retracted — EdgesRail.tsx:199/220 hatch and strike through `deleted`
+  // rows, so getting this wrong shows a live-at-the-time fact as already
+  // gone.
+  it('does not mark a ref target as deleted at an anchor where it was still alive', async () => {
+    const atC2 = await api.explain(R, B, BETA, 'c2');
+    const r1AtC2 = atC2.outgoing.find(g => g.path === R1)!;
+    expect(r1AtC2.deleted).toBe(false);
+    expect(r1AtC2.title).toBe('Retracted');   // b4's literal title field
+    expect(r1AtC2.type).toBe('observation');
+
+    const atHead = await api.explain(R, B, BETA);   // no commit => HEAD
+    const r1AtHead = atHead.outgoing.find(g => g.path === R1)!;
+    expect(r1AtHead.deleted).toBe(true);
+  });
+
+  // a1.md has two versions (c1, c2 — c3 leaves it unchanged). Anchored at c1,
+  // only c1 exists yet; anchored at HEAD, both do. RightPanel.tsx:487-489
+  // pins in-body ref links to `versions[0].commit` — a post-anchor entry
+  // there would send a reader to a revision they haven't reached yet.
+  it('bounds a target\'s versions to commits at or before the anchor', async () => {
+    const atC1 = await api.explain(R, B, BETA, 'c1');
+    const a1AtC1 = atC1.outgoing.find(g => g.path === A1)!;
+    expect(a1AtC1.versions.map(v => v.commit)).toEqual(['c1']);
+    expect(a1AtC1.title).toBe('Alpha');
+
+    const atHead = await api.explain(R, B, BETA);
+    const a1AtHead = atHead.outgoing.find(g => g.path === A1)!;
+    expect(a1AtHead.versions.map(v => v.commit)).toEqual(['c2', 'c1']);
+    expect(a1AtHead.title).toBe('Alpha revised');
+  });
+
+  // beta's own refs grew between c1 and c2 (a1 only -> a1 and r1). The edge
+  // beta->r1 must appear/disappear across anchors in BOTH directions: from
+  // beta's own outgoing list, and from r1's incoming list (which — unlike
+  // HEAD's backlinks index — has to notice a source whose ref didn't exist
+  // yet at an older anchor).
+  it('reflects a source\'s changing refs on both the outgoing and incoming sides', async () => {
+    const outAtC1 = await api.explain(R, B, BETA, 'c1');
+    expect(outAtC1.outgoing.map(g => g.path)).toEqual([A1]);   // r1 ref doesn't exist yet
+
+    const outAtC2 = await api.explain(R, B, BETA, 'c2');
+    expect(outAtC2.outgoing.map(g => g.path).sort()).toEqual([A1, R1].sort());
+
+    const inAtC1 = await api.explain(R, B, R1, 'c1');
+    expect(inAtC1.incoming).toEqual([]);   // beta doesn't cite r1 yet
+
+    const inAtC2 = await api.explain(R, B, R1, 'c2');
+    expect(inAtC2.incoming.map(g => g.path)).toEqual([BETA]);
+  });
+
+  // Upstream's groupRefs distinguishes "the source's commits that asserted
+  // this edge" from "every commit that touched the source" (upstreamApi.ts:
+  // 940-944). beta itself has two revisions (c1, c2) but only the c2 one
+  // asserts the edge to r1, so r1's incoming versions for beta must list
+  // only c2 — not c1, which changed beta but didn't cite r1.
+  it('lists only the source revisions that actually asserted the edge, for incoming versions', async () => {
+    const e = await api.explain(R, B, R1, 'c2');
+    const betaGroup = e.incoming.find(g => g.path === BETA)!;
+    expect(betaGroup.versions.map(v => v.commit)).toEqual(['c2']);
+  });
+
+  // beta only ever GAINS a ref to r1 (a1-only -> a1-and-r1, unchanged since).
+  // That alone doesn't require scanning history for incoming candidates: r1
+  // is still in beta's HEAD refs, so even a HEAD-only backlinks index would
+  // still find beta. This test uses a source whose ref to r1 is later
+  // REMOVED — present at c2, gone again by c3/HEAD — so a HEAD-only index
+  // would never have listed it as a candidate for r1 at all, and only
+  // KbIndex.allBacklinks's all-commit scan lets the c2-anchored query find it.
+  it('finds a source whose ref to the target was removed again by HEAD, when scrubbed to before the removal', async () => {
+    const CITER = 'kb/architecture/citer.md';
+    setBundle({
+      ...FIXTURE,
+      trees: {
+        ...FIXTURE.trees,
+        c2: { ...FIXTURE.trees.c2, [CITER]: 'bc1' },
+        c3: { ...FIXTURE.trees.c3, [CITER]: 'bc2' },
+      },
+      blobs: {
+        ...FIXTURE.blobs,
+        bc1: {
+          title: 'Citer', body: 'cites the soon-to-be-retracted note', type: 'pattern',
+          domain: [], entities: [], refs: [R1], confidence: 0.5, sources: 1,
+        },
+        bc2: {
+          title: 'Citer revised', body: 'no longer cites it', type: 'pattern',
+          domain: [], entities: [], refs: [], confidence: 0.5, sources: 1,
+        },
+      },
+    });
+
+    const atC2 = await api.explain(R, B, R1, 'c2');
+    expect(atC2.incoming.map(g => g.path)).toEqual([CITER]);
+
+    const atHead = await api.explain(R, B, R1);
+    expect(atHead.incoming).toEqual([]);
   });
 });
 

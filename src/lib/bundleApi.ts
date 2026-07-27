@@ -63,6 +63,13 @@ function parentOf(b: Bundle, sha: string): string | null {
   return i === -1 || i + 1 >= b.commits.length ? null : b.commits[i + 1].sha;
 }
 
+/** Index of `sha` in `b.commits` (newest-first) — -1 if unknown. Since the
+ *  array is newest-first, "at or before commit X" is exactly "index >=
+ *  commitIndex(b, X)"; used throughout `explain`'s anchor resolution. */
+function commitIndex(b: Bundle, sha: string): number {
+  return b.commits.findIndex(c => c.sha === sha);
+}
+
 type Op = 'added' | 'modified' | 'deleted';
 
 /** Every commit where `path`'s blob differs from its parent's, newest-first. */
@@ -176,17 +183,31 @@ function scoreFact(fact: BundleFact, terms: string[]): number {
 /** First occurrence of each path, order preserved. EdgesRail keys rows by
  *  `group.path` (`key={g.path}` in EdgeGroup), so a source pushing the same
  *  kb/ ref twice — or a self-ref — must collapse to one row, not one per
- *  occurrence. Applied at the point of use in `explain`: outgoing reads
- *  `fact.refs` directly and incoming reads `ix.backlinks`, and buildIndex
- *  does not dedupe either, so both sides need it. */
+ *  occurrence. Applied in `explain` to `outgoing`, which reads `fact.refs`
+ *  directly (buildIndex doesn't dedupe it); `incoming`'s candidates come from
+ *  `ix.allBacklinks`, a `Set` per target, so they're already deduped there. */
 function dedupePaths(paths: string[]): string[] {
   return [...new Set(paths)];
 }
 
-/** Build a RefGroup for `path`: its title/type at HEAD plus its version list. */
-function refGroup(b: Bundle, path: string): RefGroup {
+/** Build a RefGroup for `path` as of `anchorIdx` (an index into `b.commits`,
+ *  which is newest-first, so `anchorIdx` and every LARGER index is "at or
+ *  before" it) — title/kind/type/deleted/versions all resolve at or before
+ *  the anchor, never at HEAD. Passing `anchorIdx = 0` (HEAD's own index,
+ *  since HEAD is always the newest commit) reproduces the old HEAD-only
+ *  behaviour exactly: every commit index is >= 0, so nothing is filtered out,
+ *  and the "at anchor" tree lookup below is the same as the old "at HEAD" one.
+ *
+ *  Without this bound: scrubbing to an older commit would render an edge
+ *  target that's retracted LATER as already retracted (EdgesRail.tsx:199/220
+ *  hatch and strike through `deleted` rows), list versions from AFTER the
+ *  anchor (RightPanel.tsx:487-489 pins in-body ref links to `versions[0]`,
+ *  so a future version would win over the one actually cited), and would
+ *  read the wrong tree for a retracted target's fallback title. */
+function refGroup(b: Bundle, path: string, anchorIdx: number): RefGroup {
   const versions: RefVersion[] = changesFor(b, path)
     .filter(c => c.op !== 'deleted')
+    .filter(c => commitIndex(b, c.sha) >= anchorIdx)
     .map(({ sha }) => {
       const blob = b.blobs[b.trees[sha][path]];
       return {
@@ -195,22 +216,61 @@ function refGroup(b: Bundle, path: string): RefGroup {
         kind: blob?.kind, type: blob?.type,
       };
     });
-  const headSha = treeAt(b)[path];
-  const head = headSha ? b.blobs[headSha] : undefined;
-  // When the target is retracted, headSha is absent and there's no tree entry
-  // to read at the RETRACTION commit either (that commit's tree has no entry
-  // for a path it just removed) — so this must fall back to `versions[0]`,
-  // the newest commit where the path still existed, not the newest change.
+  const anchorSha = b.commits[anchorIdx]?.sha ?? b.head;
+  const atAnchorSha = treeAt(b, anchorSha)[path];
+  const atAnchor = atAnchorSha ? b.blobs[atAnchorSha] : undefined;
+  // When the target is retracted (at or before the anchor), atAnchorSha is
+  // absent and there's no tree entry to read at the RETRACTION commit either
+  // (that commit's tree has no entry for a path it just removed) — so this
+  // must fall back to `versions[0]`, the newest commit at-or-before the
+  // anchor where the path still existed, not the newest change overall.
   const latestVersion = versions[0];
   const latestSha = latestVersion ? b.trees[latestVersion.commit]?.[path] : undefined;
-  const latest = head ?? (latestSha ? b.blobs[latestSha] : undefined);
+  const latest = atAnchor ?? (latestSha ? b.blobs[latestSha] : undefined);
   return {
     path,
     title: latest?.title ?? path.split('/').pop() ?? path,
     kind: latest?.kind, type: latest?.type,
     versions,
-    deleted: !headSha,
+    deleted: !atAnchorSha,
   };
+}
+
+/** Whether `sourcePath`'s state AT `anchorSha` (not at HEAD, not "ever")
+ *  currently references `targetPath`. The gate for whether a candidate from
+ *  `KbIndex.allBacklinks` (an all-time superset) belongs in `targetPath`'s
+ *  incoming list at this anchor at all — a source whose ref to the target was
+ *  since removed (at or before the anchor) must not surface just because an
+ *  OLDER revision of it once asserted the edge; nor should a source that
+ *  doesn't exist yet, or was itself retracted by the anchor. Trees are full
+ *  snapshots, so this is a direct lookup, not a walk through history. */
+function currentlyAsserts(b: Bundle, sourcePath: string, targetPath: string, anchorSha: string): boolean {
+  const sha = treeAt(b, anchorSha)[sourcePath];
+  const blob = sha ? b.blobs[sha] : undefined;
+  return blob?.refs.includes(targetPath) ?? false;
+}
+
+/** The source's own revisions (at or before the anchor) whose refs actually
+ *  included `targetPath` at that revision — upstream's groupRefs semantics
+ *  for incoming edges ("different source_commits = different versions of the
+ *  source asserting the same target", upstreamApi.ts:940-944), not every
+ *  commit that touched the source regardless of what its refs said then
+ *  (which is what the source's own unfiltered change history gives). Only
+ *  called after `currentlyAsserts` has confirmed the newest such revision
+ *  qualifies, so the result is never empty when it's used. */
+function assertingVersions(
+  b: Bundle, sourcePath: string, targetPath: string, anchorIdx: number,
+): RefVersion[] {
+  return changesFor(b, sourcePath)
+    .filter(c => c.op !== 'deleted')
+    .filter(c => commitIndex(b, c.sha) >= anchorIdx)
+    .map(({ sha }) => ({ sha, blob: b.blobs[b.trees[sha][sourcePath]] }))
+    .filter(({ blob }) => blob?.refs.includes(targetPath))
+    .map(({ sha, blob }) => ({
+      commit: sha,
+      committed_at: b.commits.find(c => c.sha === sha)?.ts,
+      kind: blob?.kind, type: blob?.type,
+    }));
 }
 
 // Generic over T (rather than the brief's Promise<never>) so each call site's
@@ -389,29 +449,51 @@ export const api = {
     opts?: { fallback?: 'before' },
   ): Promise<{ incoming: RefGroup[]; outgoing: RefGroup[] }> => {
     const { b, ix } = state();
-    let sha = treeAt(b, commit)[path];
+    let anchorSha = commit ?? b.head;
+    let sha = treeAt(b, anchorSha)[path];
     // Mirrors `fact`'s ?fallback=before: a commit-anchored explain past a
     // retraction has no tree entry at `commit` (RightPanel.tsx:483 passes this
     // whenever the anchor isn't live), so walk back to the last commit where
     // the path still existed and read ITS refs — matching what the fact panel
-    // itself falls back to, so the rail and the body never disagree.
+    // itself falls back to, so the rail and the body never disagree. That
+    // walked-back commit becomes the EFFECTIVE anchor for everything below —
+    // the fact's own outgoing refs, and every neighbor's title/versions/
+    // deleted state — so the rail is internally consistent with what the
+    // fact panel itself is showing.
     if (!sha && commit && opts?.fallback === 'before') {
       const from = b.commits.findIndex(c => c.sha === commit);
       if (from !== -1) {
         for (const c of b.commits.slice(from)) {
           const s = treeAt(b, c.sha)[path];
-          if (s) { sha = s; break; }
+          if (s) { sha = s; anchorSha = c.sha; break; }
         }
       }
     }
+    // Bogus/unresolvable anchors behave like HEAD (index 0 — no filtering),
+    // rather than throwing: explain has never rejected an unrecognised commit.
+    const anchorIdx = Math.max(commitIndex(b, anchorSha), 0);
     const fact = sha ? b.blobs[sha] : undefined;
 
     const outgoingPaths = dedupePaths((fact?.refs ?? []).filter(r => r.startsWith('kb/')));
-    const incomingPaths = dedupePaths(ix.backlinks.get(path) ?? []);
-    return {
-      incoming: incomingPaths.map(p => refGroup(b, p)),
-      outgoing: outgoingPaths.map(p => refGroup(b, p)),
-    };
+    const outgoing = outgoingPaths.map(p => refGroup(b, p, anchorIdx));
+
+    // Incoming can't start from the HEAD-only `backlinks` map the way it used
+    // to: a historical anchor needs sources whose refs later changed to drop
+    // `path`, or that cited it before being retracted themselves, neither of
+    // which HEAD's current refs would show. `allBacklinks` is the all-time
+    // superset; `currentlyAsserts` re-resolves each candidate against THIS
+    // anchor specifically (so a source whose ref was removed by the anchor
+    // correctly drops out), and `assertingVersions` replaces the generic
+    // "every commit that touched the source" version list with only the
+    // revisions that actually asserted this particular edge.
+    const incomingCandidates = [...(ix.allBacklinks.get(path) ?? [])]
+      .filter(p => currentlyAsserts(b, p, path, anchorSha));
+    const incoming = incomingCandidates.map(p => ({
+      ...refGroup(b, p, anchorIdx),
+      versions: assertingVersions(b, p, path, anchorIdx),
+    }));
+
+    return { incoming, outgoing };
   },
 
   recent: async (
