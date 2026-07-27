@@ -15,21 +15,29 @@ import { GITHUB_URL } from '../lib/site';
     </div>
   </section>
 
-  <!-- The server-rendered default: visible with no JS, to a crawler, or if
-       the island's mount fails. ExploreBrowser.tsx adds `explore-js` to
-       <body> as soon as it mounts (hiding this and revealing .explore-live),
-       then `explore-fallback` on top of that if the bundle fetch fails or
-       times out (reverting back to this). -->
+  <!-- The server-rendered default: visible with no JS, to a crawler, or for
+       the moment before the island mounts — which is most of every real
+       visit too, since the island is `client:only`. ExploreBrowser.tsx adds
+       `explore-js` to <body> as soon as it mounts (hiding this and
+       revealing .explore-live), then `explore-fallback` on top of that if
+       the bundle fetch fails or times out (reverting back to this). Because
+       this is the *default*, not just a failure state, its title and lead
+       describe the feature; `.explore-teaser__error` below is the only part
+       that reads as a failure, and it only renders under
+       body.explore-fallback. -->
   <section class="explore-teaser k-grid-bg" data-testid="explore-teaser">
     <div class="k-container explore-teaser__inner">
       <div class="explore-teaser__copy">
         <p class="k-eyebrow">Live knowledge base</p>
-        <h1 class="explore-teaser__title">The live knowledge base couldn't be loaded right now.</h1>
+        <h1 class="explore-teaser__title">Browse a live knomit knowledge base.</h1>
         <p class="k-lead explore-teaser__lead">
           /explore runs the real knomit web UI in your browser — browse,
           search, and inspect a fact's provenance and history — against a
-          public, read-only knomit knowledge base. Refresh to try again, or
-          read on: everything it shows is covered below too.
+          public, read-only knomit knowledge base.
+        </p>
+        <p class="explore-teaser__error" data-testid="explore-teaser-error">
+          The live knowledge base couldn't be loaded right now. Refresh to
+          try again, or read on: everything it shows is covered below too.
         </p>
         <div class="explore-teaser__cta">
           <a href="/docs/quick-start" class="k-btn">Run it yourself <Icon name="arrow" size={17} /></a>
@@ -65,6 +73,15 @@ import { GITHUB_URL } from '../lib/site';
   .explore-teaser__lead {
     margin-top: 1.25rem;
     max-width: 38rem;
+  }
+  /* Only true on the degraded path (see body.explore-fallback below): the
+     default teaser — seen with no JS, by a crawler, or during the moment
+     before the island mounts — describes the feature, not a failure. */
+  .explore-teaser__error {
+    display: none;
+    margin-top: 1.25rem;
+    max-width: 38rem;
+    color: var(--k-text-2);
   }
   .explore-teaser__cta {
     display: flex;
@@ -143,6 +160,12 @@ import { GITHUB_URL } from '../lib/site';
   }
   body.explore-fallback .explore-live {
     display: none;
+  }
+  /* The failure sentence only ever appears alongside explore-fallback —
+     never on a successful load, and never in what a no-JS visitor or
+     crawler sees by default. */
+  body.explore-fallback .explore-teaser__error {
+    display: block;
   }
 
   /* ── ExploreBrowser layout ──────────────────────────────────────────────
