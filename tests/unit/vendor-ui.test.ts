@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveImportGraph, renderApiBarrel } from '../../scripts/lib/vendor-ui.mjs';
+import { resolveImportGraph, renderApiBarrel, writeVendorAtomic } from '../../scripts/lib/vendor-ui.mjs';
 
 /** In-memory reader: path -> source. Returns null for a miss (404 / ENOENT). */
 function reader(files: Record<string, string>) {
@@ -109,6 +109,74 @@ describe('resolveImportGraph', () => {
     const { files, bareDeps } = await resolveImportGraph(read, ['A.tsx']);
     expect(files).toEqual(['A.tsx']);
     expect(bareDeps).toEqual(['react']);
+  });
+});
+
+describe('writeVendorAtomic', () => {
+  /**
+   * A minimal in-memory stand-in for node:fs/promises, keyed by full path
+   * (no real disk I/O). `mkdir` is a no-op since the fake has no concept of
+   * directories — only file entries. This lets the "old vendor survives a
+   * write failure" guarantee be tested without touching a real filesystem.
+   */
+  function fakeFs(initial: Record<string, string> = {}) {
+    const disk = new Map<string, string>(Object.entries(initial));
+    const under = (dir: string, p: string) => p === dir || p.startsWith(`${dir}/`);
+    return {
+      disk,
+      async mkdir() {},
+      async writeFile(p: string, content: string) { disk.set(p, content); },
+      async rm(dir: string) {
+        for (const k of [...disk.keys()]) if (under(dir, k)) disk.delete(k);
+      },
+      async rename(from: string, to: string) {
+        for (const k of [...disk.keys()]) {
+          if (under(from, k)) {
+            disk.set(to + k.slice(from.length), disk.get(k)!);
+            disk.delete(k);
+          }
+        }
+      },
+    };
+  }
+
+  it('replaces outDir with the new entries when every write succeeds', async () => {
+    const fs = fakeFs({ '/out/OldFile.tsx': 'stale' });
+    await writeVendorAtomic('/out', new Map([
+      ['A.tsx', 'new A'],
+      ['B.tsx', 'new B'],
+    ]), fs);
+    expect(Object.fromEntries(fs.disk)).toEqual({
+      '/out/A.tsx': 'new A',
+      '/out/B.tsx': 'new B',
+    });
+  });
+
+  it('leaves a pre-existing outDir intact when the write phase fails partway through', async () => {
+    // Reproduces the reviewer's finding: a transient failure mid-write must
+    // not strand outDir with only some of the new files (and none of a
+    // barrel written last) instead of either the complete old set or the
+    // complete new one.
+    const fs = fakeFs({ '/out/OldFile.tsx': 'stale-but-complete' });
+    let writes = 0;
+    const failingFs = {
+      ...fs,
+      async writeFile(p: string, content: string) {
+        writes++;
+        if (writes === 2) throw new Error('simulated disk failure');
+        return fs.writeFile(p, content);
+      },
+    };
+    const entries = new Map([
+      ['A.tsx', 'new A'],
+      ['B.tsx', 'new B'], // this write throws
+      ['api.ts', 'new barrel'],
+    ]);
+    await expect(writeVendorAtomic('/out', entries, failingFs))
+      .rejects.toThrow('simulated disk failure');
+
+    // The old vendor must be untouched — not partially overwritten, not gone.
+    expect(Object.fromEntries(fs.disk)).toEqual({ '/out/OldFile.tsx': 'stale-but-complete' });
   });
 });
 

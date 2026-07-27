@@ -15,12 +15,12 @@
  *
  * Outputs land in src/generated/ (gitignored) and are consumed by the docs.
  */
-import { mkdir, readFile, writeFile, access, rm } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, access } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { accessSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveImportGraph, renderApiBarrel, SEEDS } from './lib/vendor-ui.mjs';
+import { resolveImportGraph, renderApiBarrel, writeVendorAtomic, SEEDS } from './lib/vendor-ui.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -149,23 +149,24 @@ async function syncUI() {
   };
 
   const origin = useLocal ? `local:${LOCAL}` : `github:${REPO}@${REF}`;
-  const { files, bareDeps } = await resolveImportGraph(read, SEEDS);
+  const { files, bareDeps, sources } = await resolveImportGraph(read, SEEDS);
 
-  // Clear any previous vendor before writing the newly resolved set. The
-  // resolved file set is ref-dependent (see module docstring above), so
-  // switching refs — or toggling KNOMIT_UI_LOCAL — must never leave files
-  // from the PRIOR ref sitting alongside the new ones (e.g. a dev-only
-  // markdown.tsx surviving a subsequent master sync).
-  await rm(UI_OUT_DIR, { recursive: true, force: true });
-  await mkdir(UI_OUT_DIR, { recursive: true });
+  // Build the destination -> content map entirely from what resolveImportGraph
+  // already read (no second read — sources.get never touches the network or
+  // disk again), then hand it to writeVendorAtomic, which only replaces
+  // UI_OUT_DIR once every entry including the barrel is written. That keeps a
+  // write-phase failure (disk full, permissions, ...) from ever leaving the
+  // previous good vendor half-overwritten — matching the "keep the old copy,
+  // warn, don't break the build" philosophy the other artifacts in this file
+  // already follow (see the module docstring above).
+  const entries = new Map();
   for (const rel of files) {
     // api.ts is vendored under a different name; the barrel below takes its slot.
     const out = rel === 'api.ts' ? 'upstreamApi.ts' : rel;
-    const dest = path.join(UI_OUT_DIR, out);
-    await mkdir(path.dirname(dest), { recursive: true });
-    await writeFile(dest, await read(rel), 'utf8');
+    entries.set(out, sources.get(rel));
   }
-  await writeFile(path.join(UI_OUT_DIR, 'api.ts'), renderApiBarrel(), 'utf8');
+  entries.set('api.ts', renderApiBarrel());
+  await writeVendorAtomic(UI_OUT_DIR, entries);
 
   console.log(`  ✓ kb-ui/  (${origin}, ${files.length} files)`);
 

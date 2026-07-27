@@ -1,11 +1,16 @@
 /**
- * Resolve the knomit web UI source set by walking its import graph.
+ * Resolve the knomit web UI source set by walking its import graph, and
+ * write the resolved set to disk atomically.
  *
  * The set is REF-DEPENDENT: at master it is 24 files importing only react,
  * react-dom and react-markdown; at dev, FactBody additionally pulls ./markdown
  * (markdown.tsx + markdown.css + remark-gfm). A hardcoded manifest would break
  * silently whenever KNOMIT_REF moves, so we discover it instead.
  */
+import { mkdir as fsMkdir, writeFile as fsWriteFile, rm as fsRm, rename as fsRename } from 'node:fs/promises';
+import path from 'node:path';
+
+const DEFAULT_FS = { mkdir: fsMkdir, writeFile: fsWriteFile, rm: fsRm, rename: fsRename };
 
 /** Seed components: the four /explore surfaces plus the shell's time-travel hook. */
 export const SEEDS = [
@@ -98,7 +103,12 @@ function stripNoise(src) {
 /**
  * @param read  (path) => Promise<string|null> — null means "not found".
  * @param seeds entry filenames, relative to the UI source root.
- * @returns {Promise<{files: string[], bareDeps: string[]}>}
+ * @returns {Promise<{files: string[], bareDeps: string[], sources: Map<string, string>}>}
+ *   `sources` holds every resolved file's content already read during the
+ *   walk, keyed by the same paths as `files` — callers that need the
+ *   content (e.g. to write it out) should use this instead of re-reading,
+ *   both to avoid a second network round-trip per file and so a transient
+ *   failure can't happen mid-write after the graph has already been trusted.
  */
 export async function resolveImportGraph(read, seeds = SEEDS) {
   const sources = new Map();   // path -> source text
@@ -133,7 +143,44 @@ export async function resolveImportGraph(read, seeds = SEEDS) {
     }
   }
 
-  return { files: [...sources.keys()], bareDeps: [...bare] };
+  return { files: [...sources.keys()], bareDeps: [...bare], sources };
+}
+
+/**
+ * Write a resolved set of {destination path -> content} entries into `outDir`
+ * atomically: the whole tree is built in a sibling `<outDir>.tmp` directory
+ * first, and `outDir` is only touched — via a single rename — once every
+ * entry has been written successfully. If anything throws before that swap
+ * (a write failure, a full disk, ...), `outDir` is left exactly as it was;
+ * the temp directory is cleaned up either way.
+ *
+ * This is what lets a caller resolve the whole graph and hold everything in
+ * memory (see `resolveImportGraph`'s `sources`) and still guarantee that a
+ * bad write can never leave a PARTIAL vendor behind — replacing a stale-but-
+ * complete directory with a half-written broken one would be strictly worse.
+ *
+ * @param {string} outDir
+ * @param {Map<string, string>} entries - path (relative to outDir) -> content
+ * @param {{mkdir, writeFile, rm, rename}} [fsImpl] - injectable for testing;
+ *   defaults to the real node:fs/promises.
+ */
+export async function writeVendorAtomic(outDir, entries, fsImpl = DEFAULT_FS) {
+  const { mkdir, writeFile, rm, rename } = fsImpl;
+  const tmpDir = `${outDir}.tmp`;
+  await rm(tmpDir, { recursive: true, force: true });
+  try {
+    await mkdir(tmpDir, { recursive: true });
+    for (const [rel, content] of entries) {
+      const dest = path.join(tmpDir, rel);
+      await mkdir(path.dirname(dest), { recursive: true });
+      await writeFile(dest, content, 'utf8');
+    }
+    await rm(outDir, { recursive: true, force: true });
+    await rename(tmpDir, outDir);
+  } catch (err) {
+    await rm(tmpDir, { recursive: true, force: true });
+    throw err;
+  }
 }
 
 function specifiers(rawSrc) {
