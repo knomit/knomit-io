@@ -19,11 +19,6 @@ describe('buildIndex', () => {
     expect([...(ix.allBacklinks.get('kb/architecture/core/a1.md') ?? [])]).toEqual(['kb/gotchas/g1.md']);
     expect(ix.allBacklinks.has('https://example.com/paper')).toBe(false);
   });
-
-  it('lists only HEAD paths', () => {
-    expect(buildIndex(FIXTURE).headPaths.sort())
-      .toEqual(['kb/architecture/adr.md', 'kb/architecture/core/a1.md', 'kb/gotchas/g1.md']);
-  });
 });
 
 describe('api.browse', () => {

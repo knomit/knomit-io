@@ -155,7 +155,7 @@ export async function resolveImportGraph(read, seeds = SEEDS) {
  * destination — so a process killed between the `rm` and the `rename` leaves
  * `outDir` absent until the next successful sync: recoverable (generated,
  * gitignored), but a build in that window fails rather than falling back to
- * a stale vendor. Narrower than round 2's window, not zero.
+ * a stale vendor. That window is narrow, not zero.
  *
  * @param {string} outDir
  * @param {Map<string, string>} entries - path (relative to outDir) -> content

@@ -477,16 +477,8 @@ export const api = {
       }
     }
     // Bogus/unresolvable anchors behave like HEAD (no filtering) rather than
-    // throwing — explain has never rejected an unrecognised commit. Nothing
-    // reads the raw `anchorSha` string past this point any more (incoming,
-    // below, is deliberately anchor-independent; outgoing only consumes
-    // `anchorIdx`, already clamped) — but re-deriving it from the clamped
-    // index anyway keeps the two in sync defensively, so a future change that
-    // adds a new consumer of `anchorSha` doesn't silently reintroduce reading
-    // an empty tree off an unresolvable commit, the way `currentlyAsserts`
-    // used to (see report round 4, finding 4).
+    // throwing — explain has never rejected an unrecognised commit.
     const anchorIdx = Math.max(commitIndex(b, anchorSha), 0);
-    anchorSha = b.commits[anchorIdx]?.sha ?? b.head;
     const fact = sha ? b.blobs[sha] : undefined;
 
     const outgoingPaths = dedupePaths((fact?.refs ?? []).filter(r => r.startsWith('kb/')));

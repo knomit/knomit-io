@@ -13,10 +13,6 @@ export interface KbIndex {
    *  cost: +4% index build time versus a HEAD-only equivalent, negligible
    *  for these bundle sizes. */
   allBacklinks: Map<string, Set<string>>;
-  /** lowercased token -> fact paths containing it (HEAD only). */
-  postings: Map<string, Set<string>>;
-  /** every fact path present at HEAD. */
-  headPaths: string[];
 }
 
 const TOKEN_RE = /[a-z0-9][a-z0-9'-]*/g;
@@ -26,21 +22,6 @@ export function tokenize(text: string): string[] {
 }
 
 export function buildIndex(bundle: Bundle): KbIndex {
-  const head = bundle.trees[bundle.head] ?? {};
-  const headPaths = Object.keys(head);
-
-  // postings is HEAD-only by design (search is a live-browsing concern with
-  // no anchored variant), so it stays its own loop over headPaths alone.
-  const postings = new Map<string, Set<string>>();
-  for (const path of headPaths) {
-    const fact = bundle.blobs[head[path]];
-    if (!fact) continue;
-    for (const token of tokenize(`${fact.title} ${fact.body}`)) {
-      const set = postings.get(token);
-      if (set) set.add(path); else postings.set(token, new Set([path]));
-    }
-  }
-
   // allBacklinks scans every commit's tree, not just HEAD's, since `explain`
   // needs it for every anchor including HEAD (see the field's own docstring).
   const allBacklinks = new Map<string, Set<string>>();
@@ -58,5 +39,5 @@ export function buildIndex(bundle: Bundle): KbIndex {
     }
   }
 
-  return { allBacklinks, postings, headPaths };
+  return { allBacklinks };
 }
