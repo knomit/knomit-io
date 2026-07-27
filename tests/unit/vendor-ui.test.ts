@@ -65,6 +65,51 @@ describe('resolveImportGraph', () => {
     expect(files).toEqual(['A.tsx']);
     expect(bareDeps).toEqual(['react']);
   });
+
+  it('does not false-positive on a semicolon-free stray "from" string literal', async () => {
+    // The earlier `[^;]*?`-bounded fix only worked by accident: it happened
+    // to hit a semicolon before reaching upstream's `p.set('from', from)`.
+    // Nothing stops the same shape from occurring with no semicolon in
+    // between at all — e.g. a plain object literal whose value happens to
+    // be the string 'from'. This must not be read as an import.
+    const read = reader({
+      'A.tsx': `export const cfg = {\n  tag: 'from'\n}`,
+    });
+    const { files, bareDeps } = await resolveImportGraph(read, ['A.tsx']);
+    expect(files).toEqual(['A.tsx']);
+    expect(bareDeps).toEqual([]);
+  });
+
+  it('still resolves a real import that follows a semicolon-free stray "from" string', async () => {
+    // The dangerous failure mode: the bogus `'from` match consumes
+    // characters up to the NEXT quote in the file, which can be the opening
+    // quote of a genuine, later import — silently dropping it from the
+    // graph instead of erroring.
+    const read = reader({
+      'A.tsx': `export const cfg = {\n  tag: 'from'\n}\nimport Sibling from './Sibling'`,
+      'Sibling.tsx': `export const Sibling = () => null;`,
+    });
+    const { files } = await resolveImportGraph(read, ['A.tsx']);
+    expect(files.sort()).toEqual(['A.tsx', 'Sibling.tsx']);
+  });
+
+  it('ignores a "from" clause hidden inside a comment', async () => {
+    const read = reader({
+      'A.tsx': `// ported from './legacy'\nimport React from 'react';`,
+    });
+    const { files, bareDeps } = await resolveImportGraph(read, ['A.tsx']);
+    expect(files).toEqual(['A.tsx']);
+    expect(bareDeps).toEqual(['react']);
+  });
+
+  it('ignores a "from" clause hidden inside a template literal', async () => {
+    const read = reader({
+      'A.tsx': "export const msg = `ported from './legacy'`;\nimport React from 'react';",
+    });
+    const { files, bareDeps } = await resolveImportGraph(read, ['A.tsx']);
+    expect(files).toEqual(['A.tsx']);
+    expect(bareDeps).toEqual(['react']);
+  });
 });
 
 describe('renderApiBarrel', () => {

@@ -15,7 +15,7 @@
  *
  * Outputs land in src/generated/ (gitignored) and are consumed by the docs.
  */
-import { mkdir, readFile, writeFile, access } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, access, rm } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { accessSync } from 'node:fs';
 import path from 'node:path';
@@ -151,6 +151,12 @@ async function syncUI() {
   const origin = useLocal ? `local:${LOCAL}` : `github:${REPO}@${REF}`;
   const { files, bareDeps } = await resolveImportGraph(read, SEEDS);
 
+  // Clear any previous vendor before writing the newly resolved set. The
+  // resolved file set is ref-dependent (see module docstring above), so
+  // switching refs — or toggling KNOMIT_UI_LOCAL — must never leave files
+  // from the PRIOR ref sitting alongside the new ones (e.g. a dev-only
+  // markdown.tsx surviving a subsequent master sync).
+  await rm(UI_OUT_DIR, { recursive: true, force: true });
   await mkdir(UI_OUT_DIR, { recursive: true });
   for (const rel of files) {
     // api.ts is vendored under a different name; the barrel below takes its slot.

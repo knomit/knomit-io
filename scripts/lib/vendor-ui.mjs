@@ -15,15 +15,85 @@ export const SEEDS = [
 ];
 
 const CANDIDATE_SUFFIXES = ['', '.tsx', '.ts', '.css'];
-// The first alternative's middle excludes ";" deliberately: a real
-// `import/export ... from '...'` is always a single ES statement with no
-// semicolon before its own `from` clause. Without that bound, the original
-// `[\s\S]*?` scan runs past an `export const x = {...}` and can match an
-// unrelated later `from` — e.g. upstream's `api.ts` has
-// `export const api = { ...; if (from) p.set('from', from); ... }`, where the
-// literal `'from'` (a query param name) sits right after the word "from" and
-// gets misread as a module specifier's opening quote.
-const IMPORT_RE = /(?:^|\n)\s*(?:import|export)[^;]*?from\s*['"]([^'"]+)['"]|(?:^|\n)\s*import\s*['"]([^'"]+)['"]/g;
+
+// Matches `import ... from '<path>'` / `export ... from '<path>'` (including
+// `export * from`, `export type { X } from`, multi-line named-import lists).
+// The keyword must sit at a statement boundary (start of source, or after
+// whitespace / `;` / `}`) so it can't fire mid-identifier. Critically, the
+// span between the keyword and `from` excludes quote characters entirely
+// (`[^'";]`) — a real import/export-from clause never contains one (its
+// bindings are bare identifiers and braces), so a stray `from` that is
+// actually string content (e.g. `p.set('from', from)`, a query-param name)
+// can never be reached: the quote before it blocks the scan outright, and
+// the match simply fails to fire there instead of swallowing unrelated code.
+// A bound like "no semicolon in between" is NOT equivalent — it only happens
+// to work when semicolons occur before the stray `from`, and demonstrably
+// breaks (both under- and over-matching) when they don't.
+const FROM_IMPORT_RE = /(?:^|[\s;}])(?:import|export)\s(?:[^'";]*?\s)?from\s*['"]([^'"]+)['"]/g;
+
+// Bare/side-effect imports (`import './a.css'`) have no `from` clause at all;
+// matched separately so the pattern above can stay anchored to an actual
+// `from` keyword instead of trying to make it optional (which would make the
+// quote-exclusion bound above ineffective).
+const BARE_IMPORT_RE = /(?:^|[\s;}])import\s*['"]([^'"]+)['"]/g;
+
+/**
+ * Strip comments and template-literal contents before scanning for imports.
+ *
+ * Line/block comments are the common false-positive source (`// ported from
+ * './legacy'`); template literals can never legally hold a real import
+ * specifier (ES import syntax requires a plain string literal), so any
+ * `from '...'`-shaped text inside one is inert and is blanked out too.
+ * Ordinary single/double-quoted strings are kept verbatim — including their
+ * quote characters — since those are exactly where a real import specifier
+ * lives; we still track entry/exit of those strings so a "//" or "/*"
+ * embedded in one (e.g. the URL literal 'http://x') is not mistaken for a
+ * comment start.
+ */
+function stripNoise(src) {
+  let out = '';
+  let i = 0;
+  const n = src.length;
+  while (i < n) {
+    const c = src[i];
+    const c2 = src[i + 1];
+    if (c === '/' && c2 === '/') {
+      while (i < n && src[i] !== '\n') i++;
+      continue;
+    }
+    if (c === '/' && c2 === '*') {
+      i += 2;
+      while (i < n && !(src[i] === '*' && src[i + 1] === '/')) i++;
+      i += 2;
+      out += ' ';
+      continue;
+    }
+    if (c === '`') {
+      i++;
+      while (i < n && src[i] !== '`') {
+        if (src[i] === '\\') i++;
+        i++;
+      }
+      i++; // skip closing backtick
+      out += ' ';
+      continue;
+    }
+    if (c === '"' || c === "'") {
+      out += c;
+      i++;
+      while (i < n && src[i] !== c) {
+        if (src[i] === '\\' && i + 1 < n) { out += src[i] + src[i + 1]; i += 2; continue; }
+        out += src[i];
+        i++;
+      }
+      if (i < n) { out += src[i]; i++; } // closing quote
+      continue;
+    }
+    out += c;
+    i++;
+  }
+  return out;
+}
 
 /**
  * @param read  (path) => Promise<string|null> — null means "not found".
@@ -66,11 +136,14 @@ export async function resolveImportGraph(read, seeds = SEEDS) {
   return { files: [...sources.keys()], bareDeps: [...bare] };
 }
 
-function specifiers(src) {
+function specifiers(rawSrc) {
+  const src = stripNoise(rawSrc);
   const out = [];
-  IMPORT_RE.lastIndex = 0;
   let m;
-  while ((m = IMPORT_RE.exec(src)) !== null) out.push(m[1] ?? m[2]);
+  FROM_IMPORT_RE.lastIndex = 0;
+  while ((m = FROM_IMPORT_RE.exec(src)) !== null) out.push(m[1]);
+  BARE_IMPORT_RE.lastIndex = 0;
+  while ((m = BARE_IMPORT_RE.exec(src)) !== null) out.push(m[1]);
   return out.filter(Boolean);
 }
 
