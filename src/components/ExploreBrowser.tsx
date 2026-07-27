@@ -25,9 +25,21 @@ import { useTimeTravel } from '../generated/kb-ui/useTimeTravel';
 // viewport).
 const LEFT_PANEL_MIN = 180;
 const LEFT_PANEL_MAX_FRACTION = 0.6;
-const LEFT_PANEL_DEFAULT_FRACTION = 0.35;
+const LEFT_PANEL_DEFAULT_FRACTION = 0.24;
 const LEFT_PANEL_FALLBACK = 340; // used only until the frame's width is measured
 const LEFT_PANEL_STORAGE_KEY = 'knomit.explore.leftPanelWidth';
+
+// Connections rail. Upstream has no splitter here — its rail is a fixed 300px
+// column — but full-bleed makes that ratio wrong: at 1600px a fixed rail plus a
+// fractional library squeezed the fact panel to roughly the same width as both
+// neighbours, so the page read as three equal columns with the actual content
+// no better off than its chrome. The rail is now draggable on the same terms as
+// the library. The vendored root's inline `width: 300` is overridden from
+// explore.astro's stylesheet, not by editing the component.
+const RAIL_MIN = 220;
+const RAIL_MAX_FRACTION = 0.4;
+const RAIL_DEFAULT = 320;
+const RAIL_STORAGE_KEY = 'knomit.explore.railWidth';
 
 const prefersReducedMotion =
   typeof window !== 'undefined' &&
@@ -39,9 +51,14 @@ function clampLeftPanelWidth(px: number, containerWidth: number): number {
   return Math.max(LEFT_PANEL_MIN, Math.min(max, Math.round(px)));
 }
 
-function readStoredWidth(): number | null {
+function clampRailWidth(px: number, containerWidth: number): number {
+  const max = Math.max(RAIL_MIN, Math.floor(containerWidth * RAIL_MAX_FRACTION));
+  return Math.max(RAIL_MIN, Math.min(max, Math.round(px)));
+}
+
+function readStoredWidth(key: string): number | null {
   try {
-    const raw = localStorage.getItem(LEFT_PANEL_STORAGE_KEY);
+    const raw = localStorage.getItem(key);
     if (!raw) return null;
     const n = Number(raw);
     return Number.isFinite(n) ? n : null;
@@ -55,19 +72,25 @@ type Load = { phase: 'loading' } | { phase: 'ready'; bundle: Bundle } | { phase:
 export default function ExploreBrowser() {
   const [load, setLoad] = useState<Load>({ phase: 'loading' });
 
-  // Signals "the island has mounted" to explore.astro's CSS (`.explore-js` on
-  // <body>), independent of whether the bundle fetch below has resolved yet
-  // — swapping to the live frame (with its own "Loading…" placeholder) as
-  // soon as this component exists, rather than waiting for `load.phase` to
-  // reach 'ready', is what keeps the teaser from being visibly shown then
-  // hidden a moment later. A layout effect (fires before the next paint,
-  // unlike a plain effect) is as early as this can happen; the island still
-  // mounts client:only, after the teaser's initial server-rendered paint, so
-  // there is no way to remove that first paint entirely — only to not add a
-  // second one on top of it.
+  // The frame is sized `calc(100dvh - var(--k-header-h))`. The fallback in the
+  // stylesheet is today's 61px, but the header's height is intrinsic — padding
+  // plus content — so an extra nav item that wraps, or a font change, would
+  // silently leave a gap or push the footer off. Measure the real header and
+  // keep the variable honest.
   useLayoutEffect(() => {
-    document.body.classList.add('explore-js');
-    return () => { document.body.classList.remove('explore-js'); };
+    const header = document.querySelector('header');
+    if (!header) return;
+    const apply = () => {
+      document.documentElement.style.setProperty(
+        '--k-header-h', `${Math.round(header.getBoundingClientRect().height)}px`);
+    };
+    apply();
+    const ro = new ResizeObserver(apply);
+    ro.observe(header);
+    return () => {
+      ro.disconnect();
+      document.documentElement.style.removeProperty('--k-header-h');
+    };
   }, []);
 
   useEffect(() => {
@@ -165,15 +188,15 @@ function Browser({ bundle }: { bundle: Bundle }) {
   // breakpoint via CSS; see explore.astro). Measured against the FRAME's own
   // width, not the window's — see the constants comment above.
   const [leftPanelWidth, setLeftPanelWidth] = useState<number>(LEFT_PANEL_FALLBACK);
+  const [railWidth, setRailWidth] = useState<number>(RAIL_DEFAULT);
   useEffect(() => {
     const el = frameRef.current;
     if (!el) return;
     const containerWidth = el.clientWidth;
-    const stored = readStoredWidth();
-    const initial = stored != null
-      ? stored
-      : Math.round(containerWidth * LEFT_PANEL_DEFAULT_FRACTION);
-    setLeftPanelWidth(clampLeftPanelWidth(initial, containerWidth));
+    const storedLeft = readStoredWidth(LEFT_PANEL_STORAGE_KEY);
+    setLeftPanelWidth(clampLeftPanelWidth(
+      storedLeft ?? Math.round(containerWidth * LEFT_PANEL_DEFAULT_FRACTION), containerWidth));
+    setRailWidth(clampRailWidth(readStoredWidth(RAIL_STORAGE_KEY) ?? RAIL_DEFAULT, containerWidth));
     // Run once on mount, after the frame has its real layout width.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -182,10 +205,34 @@ function Browser({ bundle }: { bundle: Bundle }) {
       const el = frameRef.current;
       if (!el) return;
       setLeftPanelWidth(w => clampLeftPanelWidth(w, el.clientWidth));
+      setRailWidth(w => clampRailWidth(w, el.clientWidth));
     };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
+  // Dragging the rail's splitter moves its LEFT edge, so a rightward drag
+  // shrinks it — the opposite sign to the library's.
+  const startRailDrag = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const el = frameRef.current;
+    if (!el) return;
+    const containerWidth = el.clientWidth;
+    const startX = e.clientX;
+    const startWidth = railWidth;
+    const onMove = (ev: MouseEvent) => {
+      setRailWidth(clampRailWidth(startWidth - (ev.clientX - startX), containerWidth));
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      setRailWidth(w => {
+        try { localStorage.setItem(RAIL_STORAGE_KEY, String(w)); } catch { /* quota / disabled */ }
+        return w;
+      });
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
   const startSplitterDrag = (e: React.MouseEvent) => {
     e.preventDefault();
     const el = frameRef.current;
@@ -261,17 +308,31 @@ function Browser({ bundle }: { bundle: Bundle }) {
             </ErrorBoundary>
           </div>
           {state.factPath && (
-            /* Our own wrapper, so the E2E spec has a stable hook without
-               adding a test id to a vendored component. */
-            <div className="explore-frame__rail" data-testid="edges-rail-slot">
-              <ErrorBoundary variant="inline" label="Connections could not be displayed">
-                <EdgesRail
-                  repo={edge.repo} branch={edge.branch} factPath={edge.path}
-                  anchorCommit={edgeAnchorCommit(state)} history={!isLive(state)}
-                  onHop={tt.hopEdge}
-                />
-              </ErrorBoundary>
-            </div>
+            <>
+              <div
+                className="explore-frame__splitter explore-frame__splitter--rail"
+                data-testid="rail-splitter"
+                onMouseDown={startRailDrag}
+                title="Drag to resize"
+              />
+              {/* Our own wrapper, so the E2E spec has a stable hook without
+                  adding a test id to a vendored component. Its width also
+                  drives the vendored rail, via the `> *` override in
+                  explore.astro. */}
+              <div
+                className="explore-frame__rail"
+                data-testid="edges-rail-slot"
+                style={{ width: railWidth }}
+              >
+                <ErrorBoundary variant="inline" label="Connections could not be displayed">
+                  <EdgesRail
+                    repo={edge.repo} branch={edge.branch} factPath={edge.path}
+                    anchorCommit={edgeAnchorCommit(state)} history={!isLive(state)}
+                    onHop={tt.hopEdge}
+                  />
+                </ErrorBoundary>
+              </div>
+            </>
           )}
         </div>
       </div>

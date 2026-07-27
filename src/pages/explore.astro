@@ -7,11 +7,26 @@ import { GITHUB_URL } from '../lib/site';
 ---
 
 <BaseLayout title="Explore — knomit" description="Browse a live knomit knowledge base: typed facts, provenance, and full history.">
+  <!-- Without JS the island never mounts, so the frame would be an empty box.
+       Swap to the teaser for exactly that audience — no-JS visitors and the
+       non-JS-executing crawlers robots.txt welcomes — without making anyone
+       with JS watch a flash. The teaser's markup is in the document either
+       way, so its text is indexable regardless of how this resolves. -->
+  <noscript>
+    <style>
+      .explore-live { display: none !important; }
+      .explore-teaser { display: block !important; }
+    </style>
+  </noscript>
+
+  <!-- Full-bleed by design: no .k-container. The browser is an application
+       surface, not page copy, so it takes the whole viewport width and the
+       whole height below the sticky header. The teaser below keeps the
+       site's normal container. -->
   <section class="explore-live">
-    <div class="k-container">
-      <div class="explore-live__frame">
-        <ExploreBrowser client:only="react" />
-      </div>
+    <h1 class="explore-live__srtitle">Browse a live knomit knowledge base.</h1>
+    <div class="explore-live__frame">
+      <ExploreBrowser client:only="react" />
     </div>
   </section>
 
@@ -121,45 +136,64 @@ import { GITHUB_URL } from '../lib/site';
     }
   }
 
+  /* No padding-block: the frame butts directly against the header above and
+     the footer below, so every pixel between them belongs to the app. */
   .explore-live {
-    padding-block: clamp(2rem, 1.5rem + 3vw, 4rem);
+    padding-block: 0;
   }
+  /* The site's footer carries a 64px top margin, which reads as dead space
+     under a full-bleed app surface. This style block only ships on /explore,
+     so scoping it further isn't needed — but it is restored when the teaser
+     is showing, since there the footer follows ordinary page copy. */
+  body:not(.explore-fallback) footer {
+    margin-top: 0;
+  }
+  /* Fills the viewport below the sticky header. --k-header-h is a fallback;
+     ExploreBrowser measures the real header on mount and overwrites it, so a
+     header that grows (an extra nav item wrapping) can't silently clip or
+     over-extend the frame. `dvh` so mobile browser chrome collapsing doesn't
+     leave a gap. */
   .explore-live__frame {
-    height: min(80vh, 900px);
+    height: calc(100dvh - var(--k-header-h, 61px));
     min-height: 520px;
-    border: 1px solid var(--k-hairline);
-    border-radius: var(--k-radius);
+    border-top: 1px solid var(--k-hairline);
+    border-bottom: 1px solid var(--k-hairline);
     overflow: hidden;
     background: #0b0b0b;
   }
-  /* Server-rendered default: teaser visible, live frame hidden — this is
-     what a crawler or a no-JS visitor sees, and it's also what paints first
-     for everyone else (the island mounts `client:only`, after the page's own
-     JS loads). ExploreBrowser.tsx flips `explore-js` on <body> in a
-     layout effect on its very first mount — before the browser's next paint,
-     whatever `load` phase it's in — so the swap to the live frame happens as
-     early as the mount itself, not after the bundle fetch resolves; that's
-     what keeps this from flashing into view once JS has taken over. */
+  /* The live frame is the DEFAULT paint — no class toggle, no flash. Earlier
+     this was inverted (teaser first, island swaps it) to guarantee crawlable
+     text, but that made every visitor watch the teaser for the length of the
+     island's JS download: ~0.6s on Fast 4G, ~5.9s on Slow 3G, measured. The
+     <noscript> block below buys back the no-JS and non-JS-crawler case
+     without costing everyone else a flash. */
   .explore-teaser {
-    display: block;
+    display: none;
   }
   .explore-live {
-    display: none;
-  }
-  body.explore-js .explore-teaser {
-    display: none;
-  }
-  body.explore-js .explore-live {
     display: block;
   }
-  /* Bundle fetch failed or timed out: revert to the teaser regardless of
-     explore-js. Rule order (after the explore-js rules above), not extra
-     specificity, is what makes this win when both classes are present. */
+  /* Bundle fetch failed or timed out: swap to the teaser. Rule order, not
+     specificity, is what makes this win. */
   body.explore-fallback .explore-teaser {
     display: block;
   }
   body.explore-fallback .explore-live {
     display: none;
+  }
+  /* The live view's heading. The page needs an <h1> even when the teaser
+     (which carries the visible one) is hidden — for the document outline and
+     for a JS-executing crawler. */
+  .explore-live__srtitle {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
   }
   /* The failure sentence only ever appears alongside explore-fallback —
      never on a successful load, and never in what a no-JS visitor or
@@ -227,14 +261,19 @@ import { GITHUB_URL } from '../lib/site';
     overflow: hidden;
   }
   .explore-frame__rail {
-    /* EdgesRail's own vendored root is a hardcoded `width: 300` box — this
-       wrapper just gives it a slot to sit in and a definite height so its
-       `height: 100%` resolves; it does not (and, given the vendored fixed
-       width, cannot) stretch the rail itself. */
-    width: 300px;
     flex-shrink: 0;
     display: flex;
     min-height: 0;
+  }
+  /* EdgesRail's vendored root is a hardcoded inline `width: 300`. We can't
+     edit it — that's the invariant this whole design protects — but we can
+     override it from our own stylesheet, which is not the same thing as
+     hand-editing the file: `npm run sync` regenerates the component and this
+     rule keeps applying. It's already `box-sizing: border-box`, so 100% of
+     the wrapper is exactly right. Without this the rail stays 300px however
+     wide the user drags its splitter. */
+  .explore-frame__rail > * {
+    width: 100% !important;
   }
 
   @media (max-width: 860px) {
