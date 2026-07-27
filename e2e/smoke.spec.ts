@@ -10,9 +10,11 @@ test.describe('marketing site', () => {
     // Primary + secondary CTAs.
     await expect(page.getByRole('link', { name: /View on GitHub/i }).first()).toBeVisible();
     // /explore is a shipped feature (DEMO_LIVE=true): the header links to it.
-    await expect(page.getByRole('link', { name: /See it live/i }).first()).toHaveAttribute('href', '/explore');
-    // Footer "Live demo" link must also point at /explore.
-    await expect(page.getByRole('link', { name: /Live demo/i })).toHaveAttribute('href', '/explore');
+    // Labelled "Explore", not "See it live" — the page serves a build-time
+    // snapshot refreshed on a schedule, so "live" overclaimed.
+    await expect(page.getByRole('link', { name: /^Explore$/i }).first()).toHaveAttribute('href', '/explore');
+    // Footer link must also point at /explore.
+    await expect(page.getByRole('link', { name: /^Explore$/i }).last()).toHaveAttribute('href', '/explore');
     // Footer present.
     await expect(page.getByRole('contentinfo')).toBeVisible();
   });

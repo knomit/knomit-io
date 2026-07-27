@@ -6,7 +6,7 @@ import Icon from '../components/Icon.astro';
 import { GITHUB_URL } from '../lib/site';
 ---
 
-<BaseLayout title="Explore — knomit" description="Browse a live knomit knowledge base: typed facts, provenance, and full history.">
+<BaseLayout title="Explore — knomit" description="Browse a real knomit knowledge base: typed facts, provenance, and full history.">
   <!-- Without JS the island never mounts, so the frame would be an empty box.
        Swap to the teaser for exactly that audience — no-JS visitors and the
        non-JS-executing crawlers robots.txt welcomes — without making anyone
@@ -24,42 +24,38 @@ import { GITHUB_URL } from '../lib/site';
        whole height below the sticky header. The teaser below keeps the
        site's normal container. -->
   <section class="explore-live">
-    <h1 class="explore-live__srtitle">Browse a live knomit knowledge base.</h1>
+    <h1 class="explore-live__srtitle">Browse a real knomit knowledge base.</h1>
     <div class="explore-live__frame">
       <ExploreBrowser client:only="react" />
     </div>
   </section>
 
-  <!-- The server-rendered default: visible with no JS, to a crawler, or for
-       the moment before the island mounts — which is most of every real
-       visit too, since the island is `client:only`. ExploreBrowser.tsx adds
-       `explore-js` to <body> as soon as it mounts (hiding this and
-       revealing .explore-live), then `explore-fallback` on top of that if
-       the bundle fetch fails or times out (reverting back to this). Because
-       this is the *default*, not just a failure state, its title and lead
-       describe the feature; `.explore-teaser__error` below is the only part
-       that reads as a failure, and it only renders under
-       body.explore-fallback. -->
+  <!-- Shown to two audiences only: visitors without JS (via the <noscript>
+       rule above), and everyone else if the bundle fetch fails or times out
+       — ExploreBrowser adds `explore-fallback` to <body> in that case. It is
+       NOT what paints first on a normal visit; the live frame is. So its
+       title and lead describe the feature, and `.explore-teaser__error`
+       below is the only part that reads as a failure. -->
   <section class="explore-teaser k-grid-bg" data-testid="explore-teaser">
     <div class="k-container explore-teaser__inner">
       <div class="explore-teaser__copy">
-        <p class="k-eyebrow">Live knowledge base</p>
-        <h1 class="explore-teaser__title">Browse a live knomit knowledge base.</h1>
+        <p class="k-eyebrow">Knowledge base browser</p>
+        <h1 class="explore-teaser__title">Browse a real knomit knowledge base.</h1>
         <p class="k-lead explore-teaser__lead">
           /explore runs the real knomit web UI in your browser — browse,
           search, and inspect a fact's provenance and history — against a
           public, read-only knomit knowledge base.
         </p>
         <p class="explore-teaser__error" data-testid="explore-teaser-error">
-          The live knowledge base couldn't be loaded right now. Refresh to
-          try again, or read on: everything it shows is covered below too.
+          The knowledge base couldn't be loaded right now. Refresh to try
+          again, or read on: everything it shows is covered below too.
         </p>
         <div class="explore-teaser__cta">
           <a href="/docs/quick-start" class="k-btn">Run it yourself <Icon name="arrow" size={17} /></a>
           <a href={GITHUB_URL} class="k-btn k-btn--ghost" rel="noopener">View on GitHub</a>
         </div>
         <ul class="explore-teaser__list">
-          <li><Icon name="search" size={17} /> Library &amp; semantic search over real facts</li>
+          <li><Icon name="search" size={17} /> Browse the ontology and search real facts</li>
           <li><Icon name="provenance" size={17} /> Inspect a fact's signed-commit provenance</li>
           <li><Icon name="temporal" size={17} /> Time-travel the graph to any past commit</li>
         </ul>
