@@ -18,6 +18,9 @@ src/generated/*
 !src/generated/.gitkeep
 public/openapi.yaml
 
+# generated at build time by scripts/build-kb-bundle.mjs
+public/kb/
+
 # test artifacts
 test-results/
 playwright-report/
