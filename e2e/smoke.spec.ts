@@ -9,10 +9,10 @@ test.describe('marketing site', () => {
     );
     // Primary + secondary CTAs.
     await expect(page.getByRole('link', { name: /View on GitHub/i }).first()).toBeVisible();
-    // Demo link is hidden until the hosted instance exists (DEMO_LIVE=false).
-    await expect(page.getByRole('link', { name: /See it live/i })).toHaveCount(0);
-    // Footer "Live demo" link must also be absent in production.
-    await expect(page.getByRole('link', { name: /Live demo/i })).toHaveCount(0);
+    // /explore is a shipped feature (DEMO_LIVE=true): the header links to it.
+    await expect(page.getByRole('link', { name: /See it live/i }).first()).toHaveAttribute('href', '/explore');
+    // Footer "Live demo" link must also point at /explore.
+    await expect(page.getByRole('link', { name: /Live demo/i })).toHaveAttribute('href', '/explore');
     // Footer present.
     await expect(page.getByRole('contentinfo')).toBeVisible();
   });

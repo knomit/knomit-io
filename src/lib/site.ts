@@ -13,18 +13,11 @@ export const SITE_DESCRIPTION_SHORT =
 // Placeholder home — update once the public repo location is finalized.
 export const GITHUB_URL = 'https://github.com/knomit/knomit';
 
-// The live demo. The public instance will live at https://kb.knomit.io; for now
-// the iframe points at a local server for testing. Swap DEMO_URL back when the
-// hosted instance is up.
-export const DEMO_LABEL = 'kb.knomit.io';
-export const DEMO_URL = 'http://localhost:19278/';
-
-/** When true, /explore embeds the live UI; when false it shows the teaser.
- *  Keep false in production until the hosted instance (kb.knomit.io) is up —
- *  DEMO_URL points at localhost and must never ship in an iframe. */
-export const DEMO_LIVE = false;
-
-export const PORT = 19278;
+/** Whether the site's primary nav (header, footer, docs top-nav) links out to
+ *  /explore. /explore itself always renders the live KB browser against a
+ *  build-time static bundle — it does not depend on this flag — so this only
+ *  gates *discoverability* of an already-shipped page. */
+export const DEMO_LIVE = true;
 
 /** Twitter/X handle incl. leading @, or '' if none yet. Tags render only when set. */
 export const SITE_TWITTER = '@knomit_io';
