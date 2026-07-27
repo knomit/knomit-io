@@ -1,9 +1,9 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdtemp, rm, mkdir, writeFile } from 'node:fs/promises';
+import { mkdtemp, rm, mkdir, writeFile, readFile, readdir } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { buildBundle } from '../../scripts/build-kb-bundle.mjs';
+import { buildBundle, buildAndWrite } from '../../scripts/build-kb-bundle.mjs';
 
 let repoDir: string;
 
@@ -35,6 +35,12 @@ beforeAll(async () => {
   await writeFile(path.join(repoDir, 'kb/broken.md'),
     `---\ntype: "unclosed\ndomain: [x\n---\n# Broken\n\nbody\n`);
   await writeFile(path.join(repoDir, 'kb/nofm.md'), `# No frontmatter\n\njust prose\n`);
+  // Non-kb paths, mirroring the real corpus (a top-level README and a
+  // domains/ directory), so "excludes non-kb paths" has something to exclude
+  // — without these the assertion held vacuously against a kb/-only fixture.
+  await writeFile(path.join(repoDir, 'README.md'), `# kbfix\n\nNot a fact.\n`);
+  await mkdir(path.join(repoDir, 'domains'), { recursive: true });
+  await writeFile(path.join(repoDir, 'domains/ontology.yaml'), `alpha: {}\n`);
   git('add', '-A'); git('commit', '-qm', 'revise and add');
 });
 
@@ -88,7 +94,59 @@ describe('buildBundle', () => {
   it('excludes non-kb paths from trees', async () => {
     const b = await buildBundle(repoDir, 'main');
     for (const tree of Object.values(b.trees)) {
-      for (const p of Object.keys(tree)) expect(p.startsWith('kb/')).toBe(true);
+      const paths = Object.keys(tree);
+      for (const p of paths) expect(p.startsWith('kb/')).toBe(true);
+      // Explicit negatives: the fixture repo actually contains these paths,
+      // so — unlike the startsWith check above — this fails if the kb/
+      // filter in buildBundle is ever removed or narrowed.
+      expect(paths).not.toContain('README.md');
+      expect(paths).not.toContain('domains/ontology.yaml');
+    }
+  });
+});
+
+describe('buildAndWrite fallback', () => {
+  let outDir: string;
+  let genDir: string;
+
+  beforeAll(async () => {
+    outDir = await mkdtemp(path.join(tmpdir(), 'kb-out-'));
+    genDir = await mkdtemp(path.join(tmpdir(), 'kb-gen-'));
+    // Seed a previously-built bundle, as if an earlier successful run had
+    // produced one.
+    await writeFile(path.join(outDir, 'bundle-deadbeef.json'), '{"schemaVersion":1}');
+  });
+
+  afterAll(async () => {
+    await rm(outDir, { recursive: true, force: true });
+    await rm(genDir, { recursive: true, force: true });
+  });
+
+  it('reuses the vendored bundle and warns, rather than throwing, when the ref cannot be resolved', async () => {
+    // repoDir resolves fine (it's a real local checkout via KB_SRC-equivalent
+    // `src`), but the ref does not exist in it — this is the shape of the
+    // real failure mode: KB_REF is a per-machine agent branch that can move
+    // or disappear between the plan being written and the build running.
+    await expect(
+      buildAndWrite({ outDir, genDir, src: repoDir, ref: 'this-ref-does-not-exist' })
+    ).resolves.toBeUndefined();
+
+    const url = await readFile(path.join(genDir, 'kb-bundle-url.ts'), 'utf8');
+    expect(url).toContain(`'/kb/bundle-deadbeef.json'`);
+
+    // The seeded bundle must still be the only one present — a failed build
+    // must not have deleted it as "stale".
+    expect(await readdir(outDir)).toEqual(['bundle-deadbeef.json']);
+  });
+
+  it('throws when the ref cannot be resolved and no vendored bundle exists', async () => {
+    const emptyOutDir = await mkdtemp(path.join(tmpdir(), 'kb-empty-'));
+    try {
+      await expect(
+        buildAndWrite({ outDir: emptyOutDir, genDir, src: repoDir, ref: 'this-ref-does-not-exist' })
+      ).rejects.toThrow(/Could not build the KB bundle/);
+    } finally {
+      await rm(emptyOutDir, { recursive: true, force: true });
     }
   });
 });
