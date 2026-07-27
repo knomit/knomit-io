@@ -1,4 +1,4 @@
-import { useReducer, useEffect, useState, useRef, useCallback } from 'react';
+import { useReducer, useEffect, useLayoutEffect, useState, useRef, useCallback } from 'react';
 import type { ReactNode } from 'react';
 import { BUNDLE_URL } from '../generated/kb-bundle-url';
 import { setBundle, assertSchema } from '../lib/bundleApi';
@@ -55,9 +55,24 @@ type Load = { phase: 'loading' } | { phase: 'ready'; bundle: Bundle } | { phase:
 export default function ExploreBrowser() {
   const [load, setLoad] = useState<Load>({ phase: 'loading' });
 
+  // Signals "the island has mounted" to explore.astro's CSS (`.explore-js` on
+  // <body>), independent of whether the bundle fetch below has resolved yet
+  // — swapping to the live frame (with its own "Loading…" placeholder) as
+  // soon as this component exists, rather than waiting for `load.phase` to
+  // reach 'ready', is what keeps the teaser from being visibly shown then
+  // hidden a moment later. A layout effect (fires before the next paint,
+  // unlike a plain effect) is as early as this can happen; the island still
+  // mounts client:only, after the teaser's initial server-rendered paint, so
+  // there is no way to remove that first paint entirely — only to not add a
+  // second one on top of it.
+  useLayoutEffect(() => {
+    document.body.classList.add('explore-js');
+    return () => { document.body.classList.remove('explore-js'); };
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
-    fetch(BUNDLE_URL)
+    fetch(BUNDLE_URL, { signal: AbortSignal.timeout(15_000) })
       .then(r => { if (!r.ok) throw new Error(`${BUNDLE_URL} -> ${r.status}`); return r.json(); })
       .then((b: Bundle) => {
         assertSchema(b);
@@ -196,9 +211,15 @@ function Browser({ bundle }: { bundle: Bundle }) {
   // On a narrow viewport the library and the fact panel stack (see
   // explore.astro's @media rule); scroll the fact panel into view when a fact
   // opens so tapping a row deep in a long list doesn't strand the visitor
-  // scrolled past it, looking at an unchanged list.
+  // scrolled past it, looking at an unchanged list. Skip the very first
+  // factPath change, though: Library.tsx auto-opens the first fact on mount
+  // (its own AMEND_NAV), and that isn't a tap the visitor made — scrolling
+  // for it strands a first-time phone visitor past the header and library,
+  // looking at one fact with no way to tell what page they're even on.
+  const isFirstFactPath = useRef(true);
   useEffect(() => {
     if (!state.factPath) return;
+    if (isFirstFactPath.current) { isFirstFactPath.current = false; return; }
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
     if (!window.matchMedia('(max-width: 860px)').matches) return;
     mainRef.current?.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'start' });
