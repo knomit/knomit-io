@@ -58,10 +58,15 @@ test.describe('docs', () => {
 });
 
 test.describe('explore', () => {
-  test('renders the teaser while the hosted demo is gated', async ({ page }) => {
+  // /explore now mounts the real, live KB browser (an island, not an iframe);
+  // the "Browse a living knowledge base" teaser this test used to assert is
+  // the DEGRADED path — it only shows if the bundle fails to load, which
+  // e2e/explore.spec.ts covers directly by simulating that failure. This
+  // smoke test just needs to confirm the live page comes up.
+  test('mounts the live browser, not an iframe embed', async ({ page }) => {
     await page.goto('/explore');
     await expect(page.locator('iframe.explore-frame')).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: /Browse a living knowledge base/i })).toBeVisible();
+    await expect(page.getByTestId('explore-browser')).toBeVisible();
   });
 });
 

@@ -137,7 +137,7 @@ test('/security renders and covers signing, encryption, and local-first', async 
 });
 
 test.describe('sitemap', () => {
-  test('sitemap includes new pages and excludes /explore', async ({ page }) => {
+  test('sitemap includes new pages and the live /explore page', async ({ page }) => {
     const idx = await page.request.get('/sitemap-index.xml');
     expect(idx.status()).toBe(200);
     // Resolve the child sitemap from the index.
@@ -146,9 +146,11 @@ test.describe('sitemap', () => {
     expect(child, 'no child sitemap in index').toBeTruthy();
     const childPath = new URL(child!).pathname;
     const body = await (await page.request.get(childPath)).text();
-    for (const p of ['/faq', '/compare', '/security']) {
+    // /explore was excluded while the live KB browser was gated behind a
+    // teaser; it shipped as a real, crawlable page (astro.config.mjs's
+    // sitemap filter was dropped), so it belongs in the sitemap now.
+    for (const p of ['/faq', '/compare', '/security', '/explore']) {
       expect(body, `sitemap missing ${p}`).toContain(p);
     }
-    expect(body, 'sitemap should exclude /explore').not.toContain('/explore');
   });
 });
