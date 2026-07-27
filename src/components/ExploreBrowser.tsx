@@ -1,5 +1,5 @@
 import { useReducer, useEffect, useState, useRef, useCallback } from 'react';
-import type { CSSProperties, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 import { BUNDLE_URL } from '../generated/kb-bundle-url';
 import { setBundle, assertSchema } from '../lib/bundleApi';
 import type { Bundle } from '../lib/bundleTypes';
@@ -14,8 +14,41 @@ import { ErrorBoundary } from '../generated/kb-ui/ErrorBoundary';
 import { useNavigationManager } from '../generated/kb-ui/useNavigationManager';
 import { useTimeTravel } from '../generated/kb-ui/useTimeTravel';
 
-const EDGES_RAIL_SLOT: CSSProperties = { width: 300, flexShrink: 0, display: 'flex', minHeight: 0 };
-const LEFT_WIDTH = 340;
+// Library | content splitter. Mirrors upstream App.tsx's own constants (see
+// its LEFT_PANEL_MIN/MAX_FRACTION/DEFAULT_FRACTION) so the drag feels like the
+// real product — this is App-local layout code, not vendored, so it's ours to
+// carry over. One deliberate difference: upstream clamps against
+// window.innerWidth because it owns the whole viewport; this frame is boxed
+// inside the site's container, so clamping uses the FRAME's own clientWidth
+// instead (window.innerWidth would let the pane grow wider than the box it
+// lives in on a wide desktop where the container is narrower than the
+// viewport).
+const LEFT_PANEL_MIN = 180;
+const LEFT_PANEL_MAX_FRACTION = 0.6;
+const LEFT_PANEL_DEFAULT_FRACTION = 0.35;
+const LEFT_PANEL_FALLBACK = 340; // used only until the frame's width is measured
+const LEFT_PANEL_STORAGE_KEY = 'knomit.explore.leftPanelWidth';
+
+const prefersReducedMotion =
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function clampLeftPanelWidth(px: number, containerWidth: number): number {
+  const max = Math.max(LEFT_PANEL_MIN, Math.floor(containerWidth * LEFT_PANEL_MAX_FRACTION));
+  return Math.max(LEFT_PANEL_MIN, Math.min(max, Math.round(px)));
+}
+
+function readStoredWidth(): number | null {
+  try {
+    const raw = localStorage.getItem(LEFT_PANEL_STORAGE_KEY);
+    if (!raw) return null;
+    const n = Number(raw);
+    return Number.isFinite(n) ? n : null;
+  } catch {
+    return null;
+  }
+}
 
 type Load = { phase: 'loading' } | { phase: 'ready'; bundle: Bundle } | { phase: 'failed' };
 
@@ -86,6 +119,7 @@ function Browser({ bundle }: { bundle: Bundle }) {
   const { navigate } = useNavigationManager(state, dispatch);
   const tt = useTimeTravel(state, dispatch);
   const frameRef = useRef<HTMLDivElement>(null);
+  const mainRef = useRef<HTMLDivElement>(null);
 
   const jumpTrail = useCallback((i: number) => {
     const depth = selectTrail(stateRef.current).length - 1;
@@ -112,6 +146,64 @@ function Browser({ bundle }: { bundle: Bundle }) {
     return () => el.removeEventListener('keydown', handler);
   }, [tt, dispatch]);
 
+  // Library | content splitter — desktop only (hidden below the site's 860px
+  // breakpoint via CSS; see explore.astro). Measured against the FRAME's own
+  // width, not the window's — see the constants comment above.
+  const [leftPanelWidth, setLeftPanelWidth] = useState<number>(LEFT_PANEL_FALLBACK);
+  useEffect(() => {
+    const el = frameRef.current;
+    if (!el) return;
+    const containerWidth = el.clientWidth;
+    const stored = readStoredWidth();
+    const initial = stored != null
+      ? stored
+      : Math.round(containerWidth * LEFT_PANEL_DEFAULT_FRACTION);
+    setLeftPanelWidth(clampLeftPanelWidth(initial, containerWidth));
+    // Run once on mount, after the frame has its real layout width.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    const onResize = () => {
+      const el = frameRef.current;
+      if (!el) return;
+      setLeftPanelWidth(w => clampLeftPanelWidth(w, el.clientWidth));
+    };
+    window.addEventListener('resize', onResize);
+    return () => window.removeEventListener('resize', onResize);
+  }, []);
+  const startSplitterDrag = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const el = frameRef.current;
+    if (!el) return;
+    const containerWidth = el.clientWidth;
+    const startX = e.clientX;
+    const startWidth = leftPanelWidth;
+    const onMove = (ev: MouseEvent) => {
+      setLeftPanelWidth(clampLeftPanelWidth(startWidth + (ev.clientX - startX), containerWidth));
+    };
+    const onUp = () => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      setLeftPanelWidth(w => {
+        try { localStorage.setItem(LEFT_PANEL_STORAGE_KEY, String(w)); } catch { /* quota / disabled */ }
+        return w;
+      });
+    };
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  };
+
+  // On a narrow viewport the library and the fact panel stack (see
+  // explore.astro's @media rule); scroll the fact panel into view when a fact
+  // opens so tapping a row deep in a long list doesn't strand the visitor
+  // scrolled past it, looking at an unchanged list.
+  useEffect(() => {
+    if (!state.factPath) return;
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    if (!window.matchMedia('(max-width: 860px)').matches) return;
+    mainRef.current?.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'start' });
+  }, [state.factPath]);
+
   const edge = factHistoryAnchor(state);
 
   return (
@@ -119,9 +211,9 @@ function Browser({ bundle }: { bundle: Bundle }) {
       ref={frameRef}
       tabIndex={-1}
       data-testid="explore-browser"
-      style={{ display: 'flex', height: '100%', minHeight: 0, overflow: 'hidden', outline: 'none' }}
+      className="explore-frame"
     >
-      <div style={{ width: LEFT_WIDTH, flexShrink: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <div className="explore-frame__left" style={{ width: leftPanelWidth }}>
         <ErrorBoundary variant="inline" label="The library hit an error">
           <LeftPanel
             state={state} dispatch={dispatch} navigate={navigate}
@@ -129,12 +221,20 @@ function Browser({ bundle }: { bundle: Bundle }) {
           />
         </ErrorBoundary>
       </div>
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', overflow: 'hidden', borderLeft: '1px solid #222' }}>
+      {/* Drag handle, desktop only. 4px visible separator + 8px hit zone via
+          negative margins on either side, matching upstream's own splitter. */}
+      <div
+        className="explore-frame__splitter"
+        data-testid="library-splitter"
+        onMouseDown={startSplitterDrag}
+        title="Drag to resize"
+      />
+      <div className="explore-frame__main" ref={mainRef}>
         <ErrorBoundary variant="inline" label="The filter bar hit an error">
           <FilterBar state={state} dispatch={dispatch} onJumpTrail={jumpTrail} />
         </ErrorBoundary>
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', overflow: 'hidden' }}>
-          <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+        <div className="explore-frame__body">
+          <div className="explore-frame__content">
             <ErrorBoundary variant="inline" label="This fact could not be displayed">
               <RightPanel state={state} dispatch={dispatch} onScrub={tt.scrub} onHopRef={tt.hopEdge} />
             </ErrorBoundary>
@@ -142,7 +242,7 @@ function Browser({ bundle }: { bundle: Bundle }) {
           {state.factPath && (
             /* Our own wrapper, so the E2E spec has a stable hook without
                adding a test id to a vendored component. */
-            <div style={EDGES_RAIL_SLOT} data-testid="edges-rail-slot">
+            <div className="explore-frame__rail" data-testid="edges-rail-slot">
               <ErrorBoundary variant="inline" label="Connections could not be displayed">
                 <EdgesRail
                   repo={edge.repo} branch={edge.branch} factPath={edge.path}

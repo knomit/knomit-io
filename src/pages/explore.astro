@@ -122,4 +122,123 @@ import { GITHUB_URL } from '../lib/site';
   body.explore-fallback .explore-live {
     display: none;
   }
+
+  /* ── ExploreBrowser layout ──────────────────────────────────────────────
+     ExploreBrowser.tsx renders its own layout with these class names (and no
+     inline layout styles of its own) so the responsive rules below — real
+     @media queries — can reach it; a React inline `style` object can't
+     express a breakpoint. Below the site's own 860px breakpoint (the same
+     one .explore-teaser__inner uses above), library + content + rail can't
+     hold side by side: a dragged/default library width plus the rail's fixed
+     300px leaves the fact panel a sliver or negative width on a phone. Stack
+     instead — library, then the filter bar + fact panel, then the
+     connections rail — each given a real (vh, not %) height so the vendored
+     panels' own `height: 100%` internals still resolve, and the frame itself
+     scrolls through them. Nothing is ever unreachable; there's just more of
+     it below the fold. */
+  .explore-frame {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    outline: none;
+  }
+  .explore-frame__left {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .explore-frame__splitter {
+    width: 4px;
+    margin-left: -2px;
+    margin-right: -2px;
+    cursor: ew-resize;
+    flex-shrink: 0;
+    z-index: 1;
+    background: transparent;
+    border-left: 1px solid var(--k-hairline);
+  }
+  .explore-frame__splitter:hover {
+    background: rgba(119, 204, 153, 0.15);
+  }
+  .explore-frame__main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-left: 1px solid var(--k-hairline);
+  }
+  .explore-frame__body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    overflow: hidden;
+  }
+  .explore-frame__content {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .explore-frame__rail {
+    /* EdgesRail's own vendored root is a hardcoded `width: 300` box — this
+       wrapper just gives it a slot to sit in and a definite height so its
+       `height: 100%` resolves; it does not (and, given the vendored fixed
+       width, cannot) stretch the rail itself. */
+    width: 300px;
+    flex-shrink: 0;
+    display: flex;
+    min-height: 0;
+  }
+
+  @media (max-width: 860px) {
+    .explore-frame {
+      flex-direction: column;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    /* Every stacked section below gets `flex: 0 0 auto` — its OWN explicit
+       (vh) height, not a share of the parent's. .explore-frame__main and
+       .explore-frame__body inherit `flex: 1` from the desktop (row) rules
+       above; left as flex:1, each nests one level deeper than .explore-frame
+       itself, so their "remaining space" is computed from an ALREADY-SHRUNK
+       ancestor rather than the frame's full height — content's flex-basis:0%
+       then has nothing left to grow into once its sibling rail's explicit
+       height is subtracted, and it collapses to 0 (reproducing this same
+       finding one level down). Switching every section to auto-sized content
+       stacked in a plain scrolling column sidesteps the arithmetic entirely:
+       each one is exactly as tall as its own rule says, and the frame's
+       overflow-y:auto scrolls through the (correctly) taller-than-the-box
+       total, the same way the library's and rail's internal scroll already
+       work today. */
+    .explore-frame__left {
+      width: 100% !important;
+      height: 46vh;
+      flex: 0 0 auto;
+    }
+    .explore-frame__splitter {
+      display: none;
+    }
+    .explore-frame__main {
+      width: 100%;
+      flex: 0 0 auto;
+      border-left: none;
+      border-top: 1px solid var(--k-hairline);
+    }
+    .explore-frame__body {
+      flex-direction: column;
+      flex: 0 0 auto;
+    }
+    .explore-frame__content {
+      width: 100%;
+      height: 46vh;
+      flex: 0 0 auto;
+    }
+    .explore-frame__rail {
+      width: 100% !important;
+      height: 36vh;
+      flex: 0 0 auto;
+    }
+  }
 </style>
