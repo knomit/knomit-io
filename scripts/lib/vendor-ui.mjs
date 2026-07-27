@@ -1,6 +1,6 @@
 /**
  * Resolve the knomit web UI source set by walking its import graph, and
- * write the resolved set to disk atomically.
+ * write the resolved set to disk via build-then-swap (see writeVendorSwap).
  *
  * The set is REF-DEPENDENT: at master it is 24 files importing only react,
  * react-dom and react-markdown; at dev, FactBody additionally pulls ./markdown
@@ -148,23 +148,21 @@ export async function resolveImportGraph(read, seeds = SEEDS) {
 
 /**
  * Write a resolved set of {destination path -> content} entries into `outDir`
- * atomically: the whole tree is built in a sibling `<outDir>.tmp` directory
- * first, and `outDir` is only touched — via a single rename — once every
- * entry has been written successfully. If anything throws before that swap
- * (a write failure, a full disk, ...), `outDir` is left exactly as it was;
- * the temp directory is cleaned up either way.
- *
- * This is what lets a caller resolve the whole graph and hold everything in
- * memory (see `resolveImportGraph`'s `sources`) and still guarantee that a
- * bad write can never leave a PARTIAL vendor behind — replacing a stale-but-
- * complete directory with a half-written broken one would be strictly worse.
+ * via build-then-swap: write the whole tree into a sibling `<outDir>.tmp`
+ * first, then remove `outDir` and rename the temp directory into its place.
+ * A failure during the build leaves the previous vendor untouched. The swap
+ * itself is two calls, not one — POSIX `rename` refuses a non-empty
+ * destination — so a process killed between the `rm` and the `rename` leaves
+ * `outDir` absent until the next successful sync: recoverable (generated,
+ * gitignored), but a build in that window fails rather than falling back to
+ * a stale vendor. Narrower than round 2's window, not zero.
  *
  * @param {string} outDir
  * @param {Map<string, string>} entries - path (relative to outDir) -> content
  * @param {{mkdir, writeFile, rm, rename}} [fsImpl] - injectable for testing;
  *   defaults to the real node:fs/promises.
  */
-export async function writeVendorAtomic(outDir, entries, fsImpl = DEFAULT_FS) {
+export async function writeVendorSwap(outDir, entries, fsImpl = DEFAULT_FS) {
   const { mkdir, writeFile, rm, rename } = fsImpl;
   const tmpDir = `${outDir}.tmp`;
   await rm(tmpDir, { recursive: true, force: true });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveImportGraph, renderApiBarrel, writeVendorAtomic } from '../../scripts/lib/vendor-ui.mjs';
+import { resolveImportGraph, renderApiBarrel, writeVendorSwap } from '../../scripts/lib/vendor-ui.mjs';
 
 /** In-memory reader: path -> source. Returns null for a miss (404 / ENOENT). */
 function reader(files: Record<string, string>) {
@@ -112,7 +112,7 @@ describe('resolveImportGraph', () => {
   });
 });
 
-describe('writeVendorAtomic', () => {
+describe('writeVendorSwap', () => {
   /**
    * A minimal in-memory stand-in for node:fs/promises, keyed by full path
    * (no real disk I/O). `mkdir` is a no-op since the fake has no concept of
@@ -142,7 +142,7 @@ describe('writeVendorAtomic', () => {
 
   it('replaces outDir with the new entries when every write succeeds', async () => {
     const fs = fakeFs({ '/out/OldFile.tsx': 'stale' });
-    await writeVendorAtomic('/out', new Map([
+    await writeVendorSwap('/out', new Map([
       ['A.tsx', 'new A'],
       ['B.tsx', 'new B'],
     ]), fs);
@@ -172,7 +172,7 @@ describe('writeVendorAtomic', () => {
       ['B.tsx', 'new B'], // this write throws
       ['api.ts', 'new barrel'],
     ]);
-    await expect(writeVendorAtomic('/out', entries, failingFs))
+    await expect(writeVendorSwap('/out', entries, failingFs))
       .rejects.toThrow('simulated disk failure');
 
     // The old vendor must be untouched — not partially overwritten, not gone.

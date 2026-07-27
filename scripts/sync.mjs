@@ -20,7 +20,7 @@ import { constants } from 'node:fs';
 import { accessSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { resolveImportGraph, renderApiBarrel, writeVendorAtomic, SEEDS } from './lib/vendor-ui.mjs';
+import { resolveImportGraph, renderApiBarrel, writeVendorSwap, SEEDS } from './lib/vendor-ui.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -153,7 +153,7 @@ async function syncUI() {
 
   // Build the destination -> content map entirely from what resolveImportGraph
   // already read (no second read — sources.get never touches the network or
-  // disk again), then hand it to writeVendorAtomic, which only replaces
+  // disk again), then hand it to writeVendorSwap, which only replaces
   // UI_OUT_DIR once every entry including the barrel is written. That keeps a
   // write-phase failure (disk full, permissions, ...) from ever leaving the
   // previous good vendor half-overwritten — matching the "keep the old copy,
@@ -166,7 +166,7 @@ async function syncUI() {
     entries.set(out, sources.get(rel));
   }
   entries.set('api.ts', renderApiBarrel());
-  await writeVendorAtomic(UI_OUT_DIR, entries);
+  await writeVendorSwap(UI_OUT_DIR, entries);
 
   console.log(`  ✓ kb-ui/  (${origin}, ${files.length} files)`);
 
