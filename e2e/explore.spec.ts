@@ -75,17 +75,32 @@ test.describe('/explore live KB browser', () => {
   test('exposes no write controls', async ({ page }) => {
     await page.goto('/explore');
     await openFirstFact(page);
-    // RightPanel.tsx always renders a retract control (`onRetract` is always
-    // passed); with `serverReadOnly: true` it must render disabled rather
-    // than absent. Assert on the disabled attribute itself — the button's
-    // accessible name is its `title` ("Read-only — anchor is not live" when
-    // disabled), which a role-name match for /^retract$/i would never catch,
-    // disabled or not, so that alone can't prove read-only is enforced.
-    await expect(page.getByTestId('retract-btn')).toBeDisabled();
+    // The shell deliberately leaves `serverReadOnly` false, because upstream
+    // overloads that flag to also disable click-to-filter (see the next
+    // test). So RightPanel renders its retract control as usual and
+    // explore.astro hides it. `toBeHidden` — not `toBeDisabled` — is the
+    // assertion that matches: display:none keeps it out of the
+    // accessibility tree, so a keyboard user can't reach it either.
+    await expect(page.getByTestId('retract-btn')).toBeHidden();
     // FactEditor (with textual Save/Cancel buttons) only mounts for a fact
-    // with a parse error, which the opened fact doesn't have — so this is a
-    // belt-and-suspenders check, not the load-bearing one above.
+    // with a parse error, which the opened fact doesn't have.
     await expect(page.getByRole('button', { name: /^(edit|save)$/i })).toHaveCount(0);
+  });
+
+  test('clicking a domain chip adds it to the filter', async ({ page }) => {
+    await page.goto('/explore');
+    await openFirstFact(page);
+    // Regression guard for the `serverReadOnly` trade-off above. FactBody
+    // gates these chips on the same `readOnly` boolean as the write
+    // controls, so re-introducing serverReadOnly silently turns
+    // click-to-filter into a no-op — the UI still renders the chips, they
+    // just stop doing anything.
+    const chip = page.locator('.explore-frame__content span')
+      .filter({ hasText: /^agentic-engineering$/ }).first();
+    await expect(chip).toBeVisible();
+    await chip.click();
+    await expect(page.locator('#filter-input').locator('..').locator('..'))
+      .toContainText('domain:agentic-engineering');
   });
 
   test('filters the recent list via a path chip', async ({ page }) => {

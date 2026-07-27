@@ -275,6 +275,19 @@ import { GITHUB_URL } from '../lib/site';
   .explore-frame__rail > * {
     width: 100% !important;
   }
+  /* Write controls. The shell deliberately does NOT set serverReadOnly (see
+     ExploreBrowser.tsx for why — it would also disable click-to-filter), so
+     the vendored panels render their edit affordances as if writes were
+     possible. They aren't: bundleApi's updateFact/retractFact throw, and
+     there is no server to write to. Hide them here rather than by editing a
+     vendored file. `display: none` (not just pointer-events) so they leave
+     the accessibility tree too, and keyboard users can't reach a control
+     that would only ever produce an error. */
+  .explore-frame [data-testid='retract-btn'],
+  .explore-frame [data-testid='retract-confirm-btn'],
+  .explore-frame [data-testid='fact-save-btn'] {
+    display: none !important;
+  }
 
   @media (max-width: 860px) {
     .explore-frame {

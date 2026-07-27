@@ -146,9 +146,21 @@ function Browser({ bundle }: { bundle: Bundle }) {
     branch: bundle.ref,
     headCommit: bundle.head,
     ontologyRoot: 'kb',
-    // Drives isReadOnly(), which the vendored panels already honour — this is
-    // how every write affordance disappears without forking a component.
-    serverReadOnly: true,
+    // NOT serverReadOnly. It looks like the right switch — isReadOnly() feeds
+    // the vendored panels and hides every write affordance — but upstream
+    // overloads that flag: FactBody gates its domain/entity/origin chips on
+    // the same boolean (`if (!readOnly) onTagClick(name)`, FactBody.tsx:163),
+    // so setting it also kills click-to-filter, which is a READ feature and
+    // one of the better things about the UI.
+    //
+    // The write surface it was buying us is small: the retract button, and
+    // FactEditor, which only renders for a fact with a parse_error. Those are
+    // hidden from this page's stylesheet instead (see explore.astro), and
+    // bundleApi's updateFact/retractFact throw regardless — the API, not the
+    // CSS, is the real guarantee. Leaving this false also means time-travel
+    // still disables editing on its own, via isReadOnly's `|| !isLive(s)`,
+    // exactly as upstream intends.
+    serverReadOnly: false,
   }));
 
   const stateRef = useRef(state);
