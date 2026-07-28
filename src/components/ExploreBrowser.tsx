@@ -344,7 +344,7 @@ function Browser({ bundle }: { bundle: Bundle }) {
       {tour.active && tour.step && (
         <TourBar
           step={tour.step} index={tour.index!} total={tour.steps.length}
-          onNext={tour.next} onStop={tour.stop}
+          onNext={tour.next} onStop={tour.stop} busy={tour.busy}
         />
       )}
       {!tour.active && tour.invite && (

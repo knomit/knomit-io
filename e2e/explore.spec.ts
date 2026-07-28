@@ -264,6 +264,19 @@ test.describe('/explore guided tour', () => {
     expect(Math.abs(Number(tx) - (target.x - frame.x + Math.min(target.width / 2, 40))))
       .toBeLessThan(12);
 
+    // The button reports itself disabled while the pointer is in flight.
+    // Read two frames after the click so React has committed, rather than
+    // asserting later and racing the ~1.2s animation to completion — an
+    // earlier version of this check was dropped for being flaky, and its
+    // absence let `busy` go unwired to the button for three commits: the
+    // guard in next() kept the BEHAVIOUR correct, so the behavioural test
+    // below still passed while the control lied about its state.
+    const disabledInFlight = await page.evaluate(() => new Promise<boolean>(res => {
+      const b = document.querySelector('[data-testid="tour-next"]') as HTMLButtonElement;
+      requestAnimationFrame(() => requestAnimationFrame(() => res(b.disabled)));
+    }));
+    expect(disabledInFlight).toBe(true);
+
     // Then the action lands and the pointer is removed.
     await expect(page.getByTestId('left-panel')).toHaveAttribute('data-sort', 'path');
     await expect(page.getByTestId('tour-cursor')).toHaveCount(0);
