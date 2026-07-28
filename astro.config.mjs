@@ -108,6 +108,10 @@ export default defineConfig({
           ],
         },
         {
+          label: 'Publish',
+          items: [{ label: 'OKF export', slug: 'docs/okf' }],
+        },
+        {
           label: 'Integrations',
           items: [
             { label: 'Claude Code', slug: 'docs/claude-code' },
@@ -134,6 +138,9 @@ export default defineConfig({
       ],
       components: {
         // Dark-only product, branded to match the marketing chrome.
+        // TwoColumnContent is overridden to append the marketing footer after
+        // the content — see the component for why it isn't the Footer slot.
+        TwoColumnContent: './src/components/starlight/TwoColumnContent.astro',
         ThemeProvider: './src/components/starlight/ThemeProvider.astro',
         ThemeSelect: './src/components/starlight/ThemeSelect.astro',
         SiteTitle: './src/components/starlight/SiteTitle.astro',
@@ -141,10 +148,8 @@ export default defineConfig({
         Head: './src/components/starlight/Head.astro',
       },
       head: [
-        {
-          tag: 'meta',
-          attrs: { property: 'og:image', content: `${SITE}/og.png` },
-        },
+        // og:image is emitted by the Head override instead, so it can vary by
+        // route — a tag injected here lands on every docs page unconditionally.
         {
           tag: 'script',
           content: PANEL_TOGGLE_SCRIPT,

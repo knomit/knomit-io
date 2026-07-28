@@ -14,6 +14,7 @@ const groups = [
         title: 'Codebase tribal knowledge',
         body: 'Invariants, gotchas, and design rationale that never make it into comments. Your coding agent — and your teammates — read them before touching an area, and write new ones when they discover something non-obvious.',
         tag: 'invariants · gotchas · decisions — in the repo',
+        link: { href: '/compare', label: 'Versus the memory tool you use now' },
       },
       {
         icon: 'provenance',
@@ -79,6 +80,13 @@ const groups = [
         body: 'A public knomit repo anyone contributes to via pull request — a shared commons with full provenance, where deduplication means the network pays each learning cost once.',
         tag: 'public repo · PR contributions · paid once',
       },
+      {
+        icon: 'markdown',
+        title: 'Publish knowledge as an open standard',
+        body: 'Export the whole base to Open Knowledge Format — Google Cloud\'s open spec — and push it to any git host. Consumers read plain markdown with standard frontmatter, with no knomit anywhere in the picture. Your private, agent-shaped base stays private; what you publish is portable and belongs to no vendor.',
+        tag: 'OKF 0.2 · conformance-validated · one git URL',
+        link: { href: '/okf', label: 'How OKF export works' },
+      },
     ],
   },
   {
@@ -104,7 +112,7 @@ const groups = [
 
 <BaseLayout
   title="Use cases — memory for AI agents & coding assistants"
-  description="Eleven things developers and agents can build on a git-native, fact-based knowledge base: researchers, open networks, and decentralized edge deployment."
+  description="Twelve things developers and agents can build on a git-native, fact-based knowledge base: research fleets, open networks, OKF publishing, and edge deployment."
 >
   <section class="k-section uc-hero k-grid-bg">
     <div class="k-container">

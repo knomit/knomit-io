@@ -1,16 +1,16 @@
 ---
 title: CLI reference
-description: Every subcommand and flag for knomit (server & admin), knomit-bridge (MCP proxy & Claude integration), and knomit-desktop.
+description: Every subcommand and flag for knomit (server & admin), knomit-bridge (MCP proxy & Claude integration), knomit-okf (OKF export), and knomit-desktop.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-Three binaries expose a command line: `knomit` (server + admin), `knomit-bridge`
-(MCP proxy + Claude integration), and `knomit-desktop` (the app). All three print
-the same build string, but the accepted spelling differs: `knomit` and
-`knomit-bridge` take only the bare `version` subcommand — `--version` is an
-unknown flag on both. `knomit-desktop` accepts `version`, `--version` and
-`-version`.
+Four binaries expose a command line: `knomit` (server + admin), `knomit-bridge`
+(MCP proxy + Claude integration), `knomit-okf` ([OKF export](/docs/okf/)), and
+`knomit-desktop` (the app). All four print the same build string, but the
+accepted spelling differs: `knomit` and `knomit-bridge` take only the bare
+`version` subcommand — `--version` is an unknown flag on both. `knomit-okf` and
+`knomit-desktop` accept `version`, `--version` and `-version`.
 
 ## `knomit` — server & admin
 
@@ -123,6 +123,69 @@ rather than baked into a broken `.mcp.json`. The generated file contains
 
 Invoked by Claude Code's hook config; reads stdin, writes guidance to stdout.
 Valid events: `session-start`, `post-edit`, `post-ask`, `pre-compact`.
+
+## `knomit-okf` — OKF export
+
+Publishes a knomit knowledge base as a portable
+[Open Knowledge Format](/docs/okf/) repository. Pure Go — no CGO, no native
+libraries — and built by the top-level `make build` alongside the others.
+
+```
+knomit-okf clone    [-b <branch>] [--publish-source] [auth] <kb-url> <dir>
+knomit-okf sync     [-b <branch>] [--source <url>] [--publish-source] [auth]
+knomit-okf branches [--source <url>] [--no-fetch] [auth]
+knomit-okf version
+```
+
+`sync` and `branches` run inside an export directory; `clone` creates one. The
+tool commits but **never pushes** — you run `git push` yourself.
+
+<Aside type="caution" title="Flags come before positional arguments">
+Go's `flag` package stops parsing at the first non-flag argument, so
+`clone <url> <dir> -b main` fails with a usage error. Write
+`clone -b main <url> <dir>`.
+</Aside>
+
+### `knomit-okf clone` — create an export directory
+
+| Flag | Type | Default | Meaning |
+|------|------|---------|---------|
+| `-b` | string | source's advertised HEAD | Source branch to export. A knomit server's HEAD is usually the *agent* branch — pass `-b main` for consensus. |
+| `--publish-source` | bool | `false` | Record the KB URL in `.knomit-okf.yaml` so a stranger who clones the published repo can sync it |
+
+### `knomit-okf sync` — re-export and commit
+
+| Flag | Type | Default | Meaning |
+|------|------|---------|---------|
+| `-b` | string | the branch in `.knomit-okf.yaml` | Source branch to export |
+| `--source` | string | the `knomit-source` remote | Override the KB URL **for this run only** — it does not repoint the stored remote |
+| `--publish-source` | bool | `false` | Record the KB URL in `.knomit-okf.yaml` |
+
+### `knomit-okf branches` — survey what's exported
+
+| Flag | Type | Default | Meaning |
+|------|------|---------|---------|
+| `--source` | string | the `knomit-source` remote | Override the KB URL for this run |
+| `--no-fetch` | bool | `false` | List from already-fetched refs without contacting the remote; the output says the counts may be stale |
+
+### Authentication flags
+
+Accepted by all three commands. A knomit server's git endpoint is
+unauthenticated and needs none. A flag that does not match the URL's transport is
+rejected outright rather than ignored.
+
+| Flag | Env fallback | Transport | Meaning |
+|------|--------------|-----------|---------|
+| `--token` | `KNOMIT_OKF_TOKEN` | HTTPS | Access token, sent as the basic-auth **password** (never a Bearer header) |
+| `--token-file` | — | HTTPS | Read the token from a file instead of argv; mutually exclusive with `--token` |
+| `--username` | — | HTTPS | Basic-auth username, default `git`. Bitbucket requires `x-token-auth`; rejected without a token. |
+| `--ssh-key` | `KNOMIT_OKF_SSH_KEY` | SSH | Explicit private key. Failing to load it is a hard error, never a silent fallback. |
+| — | `KNOMIT_OKF_SSH_PASSPHRASE` | SSH | Passphrase for an encrypted key. No flag exists, because a passphrase on argv is visible via `ps`. |
+
+### `knomit-okf version`
+
+Prints `knomit-okf <semver>.<sha>`. Accepts `version`, `--version`, or
+`-version`.
 
 ## `knomit-desktop` — tray/desktop app
 

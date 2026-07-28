@@ -1,0 +1,734 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SectionHeading from '../components/SectionHeading.astro';
+import FactCard from '../components/FactCard.astro';
+import Icon from '../components/Icon.astro';
+import { GITHUB_URL } from '../lib/site';
+import { howToSchema } from '../lib/schema';
+
+const OKF_REPO = 'https://github.com/GoogleCloudPlatform/knowledge-catalog';
+const OKF_SPEC = `${OKF_REPO}/blob/main/okf/SPEC.md`;
+
+// The three commands that are the whole tool. Also the HowTo steps below —
+// one source, so the page and its structured data can never disagree.
+const steps = [
+  {
+    cmd: 'knomit-okf clone -b main <kb-url> my-kb',
+    title: 'Clone the knowledge base into an export',
+    body: 'Point it at your knomit server’s git endpoint. The directory it creates is the OKF repository — there is no second checkout and no cache.',
+  },
+  {
+    cmd: 'git remote add origin … && git push -u origin main',
+    title: 'Publish it wherever you host code',
+    body: 'knomit-okf never pushes. It commits; you push — your remote, your credentials, your cadence.',
+  },
+  {
+    cmd: 'knomit-okf sync && git push',
+    title: 'Refresh it whenever the knowledge moves',
+    body: 'An unchanged source does no work at all: a sync with nothing to do costs a fetch and about 70ms, so running it on a timer is free.',
+  },
+];
+
+const why = [
+  {
+    icon: 'distributed',
+    title: 'An exit, not a silo',
+    body: 'Every other memory tool is somewhere your knowledge goes in and does not come out. An OKF bundle is plain markdown in a git repo, readable by any conformant consumer and by anyone with a text editor. Nothing about it depends on knomit still being in the picture.',
+  },
+  {
+    icon: 'provenance',
+    title: 'Deterministic, and validated before it commits',
+    body: 'Rendering is a pure function of the source commit, and the export commit is timestamped from that commit rather than the clock — so two people exporting the same knowledge get byte-identical repositories. Every bundle is checked against OKF conformance rules before it is committed; a non-conformant bundle is an error, not a commit.',
+  },
+  {
+    icon: 'consensus',
+    title: 'Your source address stays yours',
+    body: 'The KB URL lives in a git remote that is never pushed, and the KB’s own history is fetched to refs outside refs/heads/*, so the default push refspec cannot publish it. Recording the address in the bundle is opt-in, and credentials are stripped from it first.',
+  },
+];
+
+// The bundle's five owned entries. Everything else in the repository is the
+// publisher's and is never read, written, or staged.
+const bundle = [
+  { path: 'index.md', note: 'root index, links kb/ and views/' },
+  { path: 'log.md', note: 'changelog, newest first, grouped by date' },
+  { path: 'kb/', note: 'one concept document per fact, plus per-directory index.md and log.md' },
+  { path: 'views/', note: 'derived cross-cutting views — domains, entities, retired, synthesis' },
+  { path: '.knomit-okf.yaml', note: 'sync state: branch, synced commit, tool version' },
+];
+
+const jsonLd = howToSchema({
+  name: 'Publish a knomit knowledge base as an OKF repository',
+  description:
+    'Export a knomit knowledge base to the Open Knowledge Format with knomit-okf, publish it to any git host, and keep it in sync.',
+  steps: steps.map((s) => ({ name: s.title, text: s.body })),
+});
+---
+
+<BaseLayout
+  title="OKF export — publish a knowledge base as Open Knowledge Format"
+  description="knomit-okf publishes a knowledge base as a portable Open Knowledge Format (OKF) repository — Google Cloud's open spec — from a single git URL. Deterministic, conformance-validated, and push-it-yourself."
+  image="/og-okf.png"
+  jsonLd={jsonLd}
+>
+  <!-- Hero: the thing they searched for, confirmed in one screen -->
+  <section class="okf-hero k-grid-bg">
+    <div class="k-container okf-hero__inner">
+      <div>
+        <p class="k-eyebrow">Export · a format nobody owns</p>
+        <h1 class="okf-hero__title">
+          Publish your knowledge base as <span>Open Knowledge Format</span>.
+        </h1>
+        <p class="k-lead okf-hero__lead">
+          <strong>knomit-okf</strong> turns a knomit knowledge base into a
+          publishable <a href={OKF_REPO} rel="noopener">OKF</a> repository, and
+          keeps it in sync — using nothing but a git URL. Plain markdown,
+          readable by any OKF consumer and by any human with a browser.
+        </p>
+        <div class="okf-hero__cta">
+          <a href="/docs/okf/" class="k-btn">Read the reference <Icon name="arrow" size={17} /></a>
+          <a href={GITHUB_URL} class="k-btn k-btn--ghost" rel="noopener">View on GitHub</a>
+        </div>
+      </div>
+      <div class="okf-hero__art k-reveal">
+        <div class="okf-term" aria-label="Terminal transcript of a knomit-okf export">
+          <div class="okf-term__bar k-mono"><span></span>knomit-okf</div>
+          <pre class="okf-term__body k-mono"><span class="okf-ok">✓</span> Fetching    4 branches  2.8s
+<span class="okf-ok">✓</span> Reading     333 facts · 620 events · 50 retired  2.1s
+<span class="okf-ok">✓</span> Rendering   1029 documents  12ms
+<span class="okf-ok">✓</span> Validating  <span class="okf-hl">conformant with OKF 0.2</span>  10ms
+<span class="okf-ok">✓</span> Writing     1030 changed · 0 removed  93ms
+<span class="okf-ok">✓</span> Staging     1030 files  942ms
+<span class="okf-ok">✓</span> Committing  eab7a97d on main  4ms
+
+<span class="okf-ok">✓</span> Cloned main into my-kb in 6.0s</pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- What OKF is: they searched the term, so define it before selling anything -->
+  <section class="k-section okf-what">
+    <div class="k-container okf-what__grid">
+      <div class="k-prose">
+        <SectionHeading
+          eyebrow="The format"
+          title="What the Open Knowledge Format is."
+          lead="An open specification published by Google Cloud in June 2026, currently at version 0.2."
+        />
+        <p class="k-text-2">
+          OKF represents knowledge as a directory of plain markdown documents with
+          YAML frontmatter. There is no schema registry, no central authority, and
+          no required tooling — if you can read a file, you can read OKF; if you
+          can clone a repo, you can ship it. It is deliberately minimal:
+          <code>type</code> is the only always-required key, and a document
+          carrying just <code>type</code> is fully conformant.
+        </p>
+        <p class="k-text-2">
+          It is not tied to any agent, framework, model provider, or serving
+          system. That is the point — knowledge in OKF survives moving between
+          systems, lives in version control alongside code, and is readable by
+          humans and agents without a translation layer.
+        </p>
+        <p class="okf-speclink">
+          <a href={OKF_SPEC} rel="noopener">Read the specification <Icon name="arrow" size={15} /></a>
+        </p>
+      </div>
+      <aside class="okf-note k-reveal">
+        <p class="okf-note__tag k-mono">Where knomit sits</p>
+        <p class="k-text-2">
+          A knomit knowledge base is a <strong>private, agent-shaped</strong>
+          thing: facts under <code>kb/</code>, one branch per author, provenance
+          edges, an embedding index. OKF is the <strong>portable,
+          consumer-shaped</strong> thing.
+        </p>
+        <p class="k-text-2">
+          <code>knomit-okf</code> is the mapper between them — a standalone CLI,
+          not a server feature. The export runs against a plain git clone, so no
+          knomit server, database, or cache is involved beyond serving the URL.
+        </p>
+        <p class="okf-note__scope k-mono">
+          v1 is export-only. OKF out, not OKF in.
+        </p>
+      </aside>
+    </div>
+  </section>
+
+  <!-- The publish loop -->
+  <section class="k-section">
+    <div class="k-container">
+      <SectionHeading
+        eyebrow="The loop"
+        title="Three commands, then it's a habit."
+        lead="Clone once. Push it somewhere. Sync whenever the knowledge moves."
+        align="center"
+      />
+      <ol class="okf-steps">
+        {
+          steps.map((s, i) => (
+            <li class="okf-step k-reveal">
+              <span class="okf-step__n k-mono">{String(i + 1).padStart(2, '0')}</span>
+              <div class="okf-step__text">
+                <h3 class="okf-step__title">{s.title}</h3>
+                <p class="k-text-2 okf-step__body">{s.body}</p>
+                <code class="okf-step__cmd k-mono">{s.cmd}</code>
+              </div>
+            </li>
+          ))
+        }
+      </ol>
+    </div>
+  </section>
+
+  <!-- The mapping, made visible -->
+  <section class="k-section okf-map">
+    <div class="k-container">
+      <SectionHeading
+        eyebrow="The mapping"
+        title="A fact goes in. A concept document comes out."
+        lead="Meaning lands in standard OKF keys; knomit's own axes are preserved alongside them under knomit_*, so nothing is lost and nothing is invented."
+        align="center"
+      />
+      <div class="okf-map__pair">
+        <figure class="okf-map__side k-reveal">
+          <figcaption class="okf-map__cap k-mono">in knomit</figcaption>
+          <FactCard
+            path="kb/invariants/embeddings/mandatory/f34da09a.md"
+            frontmatter={{
+              type: 'policy',
+              origin: 'authored',
+              confidence: 0.95,
+              domain: ['embeddings', 'store', 'app'],
+              entities: ['app.New', 'embeddings.NewEmbedder'],
+              refs: ['src://knomit/internal/app/app.go'],
+            }}
+            body="Embeddings are **mandatory**, not an optional degraded mode — the service refuses to start without an embedder."
+            commit="1c62518"
+            signer="agent/mindev-8ef0cd32"
+            evolution="0.80 → 0.95"
+          />
+        </figure>
+        <div class="okf-map__arrow" aria-hidden="true">
+          <Icon name="arrow" size={22} />
+        </div>
+        <figure class="okf-map__side k-reveal">
+          <figcaption class="okf-map__cap k-mono">published as OKF</figcaption>
+          <article class="okf-doc">
+            <header class="okf-doc__path k-mono">
+              kb/invariants/embeddings/mandatory/embeddings-are-mandatory-….md
+            </header>
+            <pre class="okf-doc__fm k-mono"><span class="okf-doc__rule">---</span>
+<span class="okf-doc__k">type:</span> <span class="okf-doc__std">invariant</span>
+<span class="okf-doc__k">title:</span> 'Embeddings are mandatory: …'
+<span class="okf-doc__k">resource:</span> <span class="okf-doc__uri">knomit://3ec012f5b4d2/kb/…</span>
+<span class="okf-doc__k">tags:</span> [embeddings, store, app, pragmatic]
+<span class="okf-doc__k">timestamp:</span> "2026-06-08T15:02:45Z"
+<span class="okf-doc__k">generated:</span>
+  <span class="okf-doc__k">by:</span> knomit/authored
+<span class="okf-doc__own">knomit_type:</span> policy
+<span class="okf-doc__own">knomit_confidence:</span> <span class="okf-doc__num">0.95</span>
+<span class="okf-doc__own">knomit_origin:</span> authored
+<span class="okf-doc__own">knomit_refs:</span> [src://knomit/internal/app/app.go]
+<span class="okf-doc__rule">---</span></pre>
+            <footer class="okf-doc__legend k-mono">
+              <span><span class="okf-swatch okf-swatch--std"></span>standard OKF keys</span>
+              <span><span class="okf-swatch okf-swatch--own"></span>knomit_* extensions</span>
+            </footer>
+          </article>
+        </figure>
+      </div>
+      <p class="okf-map__note k-text-2">
+        <code>type</code> maps from the fact's <strong>topic</strong> — the first
+        segment under <code>kb/</code> — because it is OKF's only required key and
+        answers "what this document is". The leaf type is kept as
+        <code>knomit_type</code> rather than discarded. Links inside the bundle
+        are relative, so it browses correctly on GitHub, on a static host, or
+        straight off the filesystem.
+      </p>
+    </div>
+  </section>
+
+  <!-- Bundle anatomy -->
+  <section class="k-section okf-anatomy-sec">
+    <div class="k-container okf-anatomy__grid">
+      <div class="k-prose">
+        <SectionHeading
+          eyebrow="What you publish"
+          title="Five entries, and everything else is yours."
+          lead="knomit-okf writes these completely and prunes inside them. Your README, your LICENSE, your .github/ — never read, never written, never staged."
+        />
+        <p class="k-text-2">
+          It deletes inside the owned paths too, which is not optional: overlaying
+          files can never remove them, so a retired fact's document would stay
+          published forever, contradicting the <code>views/retired.md</code> in
+          the same bundle.
+        </p>
+      </div>
+      <ul class="okf-anatomy k-reveal">
+        {
+          bundle.map((b) => (
+            <li>
+              <code class="okf-anatomy__path k-mono">{b.path}</code>
+              <span class="okf-anatomy__note k-text-2">{b.note}</span>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+
+  <!-- Why publish -->
+  <section class="k-section">
+    <div class="k-container">
+      <SectionHeading
+        eyebrow="Why publish"
+        title="Portable knowledge is knowledge you keep."
+        align="center"
+      />
+      <div class="okf-why">
+        {
+          why.map((w) => (
+            <div class="okf-why__card k-reveal">
+              <span class="okf-why__icon" aria-hidden="true">
+                <Icon name={w.icon as any} size={20} />
+              </span>
+              <h3 class="okf-why__title">{w.title}</h3>
+              <p class="k-text-2 okf-why__body">{w.body}</p>
+            </div>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="k-section">
+    <div class="k-container">
+      <div class="okf-cta k-reveal">
+        <h2 class="okf-cta__title">Two doors from here.</h2>
+        <p class="k-lead okf-cta__lead">
+          The reference covers every command, flag, and gotcha — including the
+          two very different ways the two remotes authenticate. Or read the
+          source, which is the whole argument for a format like this.
+        </p>
+        <div class="okf-cta__actions">
+          <a href="/docs/okf/" class="k-btn">Read the reference</a>
+          <a href={GITHUB_URL} class="k-btn k-btn--ghost" rel="noopener">View on GitHub</a>
+        </div>
+      </div>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  /* Hero */
+  .okf-hero {
+    padding-block: clamp(3rem, 1.5rem + 6vw, 6rem);
+    border-bottom: 1px solid var(--k-hairline-soft);
+    position: relative;
+    overflow: hidden;
+  }
+  .okf-hero__inner {
+    display: grid;
+    grid-template-columns: 1.05fr 0.95fr;
+    gap: clamp(2rem, 1rem + 4vw, 4rem);
+    align-items: center;
+  }
+  /* Grid items default to min-width:auto, so the terminal's long pre lines set
+     the column's min-content width and blow past the container — silently, because
+     the hero clips. This is what lets overflow-x:auto on the pre actually apply. */
+  .okf-hero__inner > * {
+    min-width: 0;
+  }
+  .okf-hero__title {
+    /* Between h2 and h1: the headline carries the full spec name for search,
+       which is too many words to also carry hero-scale type. */
+    font-size: clamp(1.9rem, 1.3rem + 2.4vw, 2.75rem);
+    line-height: 1.12;
+    margin: 0.5rem 0 0;
+    text-wrap: balance;
+  }
+  .okf-hero__title span {
+    color: var(--k-brand);
+  }
+  .okf-hero__lead {
+    margin-top: 1.35rem;
+    max-width: 38rem;
+  }
+  .okf-hero__lead strong {
+    color: var(--k-brand);
+    font-weight: 600;
+    font-family: var(--k-font-mono);
+    font-size: 0.94em;
+  }
+  .okf-hero__cta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.85rem;
+    margin-top: 2rem;
+  }
+
+  /* Terminal card */
+  .okf-term {
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius);
+    background: var(--k-surface-1);
+    box-shadow: var(--k-shadow);
+    overflow: hidden;
+  }
+  .okf-term__bar {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.6rem 0.95rem;
+    background: var(--k-surface-2);
+    border-bottom: 1px solid var(--k-hairline);
+    font-size: 0.76rem;
+    color: var(--k-text-muted);
+  }
+  .okf-term__bar span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--k-brand);
+    box-shadow: 0 0 8px var(--k-brand);
+    flex: none;
+  }
+  .okf-term__body {
+    margin: 0;
+    padding: 1rem 1.1rem 1.2rem;
+    font-size: 0.76rem;
+    line-height: 1.75;
+    color: var(--k-text-2);
+    overflow-x: auto;
+  }
+  .okf-ok {
+    color: var(--k-brand);
+  }
+  .okf-hl {
+    color: var(--k-brand-2);
+  }
+
+  /* What OKF is */
+  .okf-what {
+    background: var(--k-surface-1);
+    border-bottom: 1px solid var(--k-hairline-soft);
+  }
+  .okf-what__grid {
+    display: grid;
+    grid-template-columns: 1.15fr 0.85fr;
+    gap: clamp(2rem, 1rem + 4vw, 3.5rem);
+    align-items: start;
+  }
+  .okf-what p {
+    line-height: 1.65;
+    margin-bottom: 1rem;
+  }
+  .okf-speclink {
+    margin-top: 1.25rem;
+  }
+  .okf-speclink a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 500;
+  }
+  .okf-note {
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius);
+    padding: 1.5rem 1.6rem;
+    background:
+      radial-gradient(120% 140% at 0% 0%, var(--k-brand-glow), transparent 60%),
+      var(--k-bg);
+  }
+  .okf-note__tag {
+    font-size: 0.72rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--k-brand);
+    margin-bottom: 0.9rem;
+  }
+  .okf-note p {
+    line-height: 1.6;
+    font-size: 0.94rem;
+  }
+  .okf-note strong {
+    color: var(--k-text);
+    font-weight: 600;
+  }
+  .okf-note__scope {
+    margin-top: 1.1rem;
+    padding-top: 0.9rem;
+    border-top: 1px dashed var(--k-hairline);
+    font-size: 0.78rem;
+    color: var(--k-text-muted);
+  }
+
+  /* Steps */
+  .okf-steps {
+    list-style: none;
+    margin: 0 auto;
+    padding: 0;
+    max-width: 46rem;
+    display: grid;
+    gap: 1.75rem;
+  }
+  .okf-step {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 1.1rem;
+    align-items: start;
+  }
+  /* Same reason as the hero: the command line is a long unbroken string. */
+  .okf-step__text {
+    min-width: 0;
+  }
+  .okf-step__n {
+    color: var(--k-brand);
+    font-size: 0.85rem;
+    padding-top: 0.15rem;
+    opacity: 0.8;
+  }
+  .okf-step__title {
+    font-size: 1.08rem;
+    margin-bottom: 0.4rem;
+  }
+  .okf-step__body {
+    line-height: 1.6;
+    font-size: 0.95rem;
+  }
+  .okf-step__cmd {
+    display: block;
+    margin-top: 0.75rem;
+    padding: 0.6rem 0.85rem;
+    background: var(--k-surface-1);
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius-sm);
+    font-size: 0.8rem;
+    color: var(--k-brand-2);
+    overflow-x: auto;
+  }
+
+  /* Mapping */
+  .okf-map {
+    background: var(--k-surface-1);
+    border-block: 1px solid var(--k-hairline-soft);
+  }
+  .okf-map__pair {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 1.25rem;
+    /* Tops aligned so the two captions sit on one line; the arrow re-centres
+       itself against the taller of the two cards. */
+    align-items: start;
+  }
+  .okf-map__side {
+    margin: 0;
+    min-width: 0;
+  }
+  .okf-map__cap {
+    font-size: 0.72rem;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--k-text-muted);
+    margin-bottom: 0.7rem;
+  }
+  .okf-map__arrow {
+    color: var(--k-brand);
+    display: flex;
+    justify-content: center;
+    align-self: center;
+  }
+  .okf-map__note {
+    max-width: 46rem;
+    margin: 2.25rem auto 0;
+    text-align: center;
+    line-height: 1.65;
+    font-size: 0.95rem;
+  }
+
+  /* OKF document card — mirrors FactCard's language, different frontmatter */
+  .okf-doc {
+    background: var(--k-bg);
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius);
+    overflow: hidden;
+    box-shadow: var(--k-shadow);
+  }
+  .okf-doc__path {
+    padding: 0.65rem 1rem;
+    background: var(--k-surface-2);
+    border-bottom: 1px solid var(--k-hairline);
+    color: var(--k-text-2);
+    font-size: 0.72rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .okf-doc__fm {
+    margin: 0;
+    padding: 1rem;
+    font-size: 0.74rem;
+    line-height: 1.6;
+    color: var(--k-text-2);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .okf-doc__rule,
+  .okf-doc__k {
+    color: var(--k-text-muted);
+  }
+  .okf-doc__std {
+    color: var(--k-brand);
+  }
+  .okf-doc__own {
+    color: var(--k-ref);
+  }
+  .okf-doc__uri {
+    color: var(--k-ref);
+  }
+  .okf-doc__num {
+    color: var(--k-temporal);
+  }
+  .okf-doc__legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem 1.1rem;
+    padding: 0.6rem 1rem;
+    border-top: 1px solid var(--k-hairline-soft);
+    background: var(--k-surface-2);
+    font-size: 0.7rem;
+    color: var(--k-text-muted);
+  }
+  .okf-doc__legend span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .okf-swatch {
+    width: 8px;
+    height: 8px;
+    border-radius: 2px;
+    flex: none;
+  }
+  .okf-swatch--std {
+    background: var(--k-brand);
+  }
+  .okf-swatch--own {
+    background: var(--k-ref);
+  }
+
+  /* Anatomy */
+  .okf-anatomy-sec {
+    border-bottom: 1px solid var(--k-hairline-soft);
+  }
+  .okf-anatomy__grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(2rem, 1rem + 4vw, 3.5rem);
+    align-items: center;
+  }
+  .okf-anatomy {
+    list-style: none;
+    margin: 0;
+    padding: 1.25rem 1.4rem;
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius);
+    background: var(--k-surface-1);
+    display: grid;
+    gap: 1rem;
+  }
+  .okf-anatomy li {
+    display: grid;
+    gap: 0.25rem;
+  }
+  .okf-anatomy li + li {
+    border-top: 1px solid var(--k-hairline-soft);
+    padding-top: 1rem;
+  }
+  .okf-anatomy__path {
+    color: var(--k-brand);
+    font-size: 0.86rem;
+  }
+  .okf-anatomy__note {
+    font-size: 0.88rem;
+    line-height: 1.5;
+  }
+
+  /* Why */
+  .okf-why {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.25rem;
+  }
+  .okf-why__card {
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius);
+    padding: 1.5rem;
+    background: var(--k-surface-1);
+  }
+  .okf-why__icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 11px;
+    color: var(--k-brand);
+    background: var(--k-brand-glow);
+    border: 1px solid rgba(119, 204, 153, 0.25);
+    margin-bottom: 1rem;
+  }
+  .okf-why__title {
+    font-size: 1.08rem;
+    margin-bottom: 0.55rem;
+  }
+  .okf-why__body {
+    font-size: 0.93rem;
+    line-height: 1.6;
+  }
+
+  /* CTA */
+  .okf-cta {
+    text-align: center;
+    padding: clamp(2.5rem, 1.5rem + 5vw, 4.5rem) 1.5rem;
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius-lg);
+    background:
+      radial-gradient(120% 140% at 50% 0%, var(--k-brand-glow), transparent 60%),
+      var(--k-surface-1);
+  }
+  .okf-cta__title {
+    font-size: var(--k-step-h2);
+  }
+  .okf-cta__lead {
+    margin: 1.1rem auto 2rem;
+    max-width: 40rem;
+  }
+  .okf-cta__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.85rem;
+    justify-content: center;
+  }
+
+  @media (max-width: 960px) {
+    .okf-map__pair {
+      grid-template-columns: 1fr;
+    }
+    .okf-map__arrow {
+      transform: rotate(90deg);
+      padding-block: 0.25rem;
+    }
+  }
+  @media (max-width: 880px) {
+    .okf-hero__inner,
+    .okf-what__grid,
+    .okf-anatomy__grid {
+      grid-template-columns: 1fr;
+    }
+    .okf-hero__art {
+      order: -1;
+    }
+  }
+</style>

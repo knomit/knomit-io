@@ -45,7 +45,19 @@ export const FAQ_ITEMS: FaqItem[] = [
     a: 'Beyond storing and synthesizing, knomit can discover facts nobody wrote down. An effort dial on review and hypothesize seeds from "bridges" — facts that share a domain or entity yet sit in different similarity clusters — and proposes the keystone those bridges imply. Forward discovery writes a synthesis fact (a consequence); backward discovery writes a hypothesis (an unstated premise), ranked by blast radius. Each carries origin: discovered, so the emergent set is queryable and auditable. Similarity-only retrieval is structurally blind to these cross-cluster links — that is exactly why the facts went unwritten.',
   },
   {
+    q: 'Does knomit support the Open Knowledge Format (OKF)?',
+    a: 'Yes, as an export target. knomit ships knomit-okf, a standalone CLI that publishes a knowledge base as a portable OKF repository — the open specification Google Cloud published in June 2026, currently at version 0.2. Every bundle is validated against OKF conformance rules before it is committed, so a non-conformant bundle is an error rather than a commit. This is one-way: knomit exports to OKF and does not import from it.',
+  },
+  {
+    q: 'How do I publish a knomit knowledge base as OKF?',
+    a: 'Three commands. Run "knomit-okf clone -b main <kb-url> my-kb" against your knomit server\'s git endpoint, add your own git remote and push, then run "knomit-okf sync && git push" whenever the knowledge moves. The tool commits but never pushes, so your remote and credentials stay yours. A sync with nothing to do costs a fetch and about 70 milliseconds, which makes it cheap to run on a timer.',
+  },
+  {
+    q: 'What is the difference between a knomit knowledge base and an OKF bundle?',
+    a: 'A knomit KB is the private, agent-shaped original: facts under kb/, one git branch per author, provenance edges, confidence that moves, and an embedding index for semantic search. An OKF bundle is the portable, consumer-shaped publication of it: plain markdown concept documents with standard frontmatter, directory indexes, and a changelog, readable by any conformant tool without knomit involved. knomit-okf is the mapper between them — meaning lands in standard OKF keys, and knomit-specific axes like confidence and origin are preserved alongside under knomit_* rather than discarded.',
+  },
+  {
     q: 'Where can I run knomit?',
-    a: 'knomit ships three binaries: a server (knomit), a desktop tray app (knomit-desktop), and a bridge (knomit-bridge) that proxies MCP over stdio into clients like Claude Code and Claude Desktop. It runs on macOS and Linux.',
+    a: 'knomit ships four binaries: a server (knomit), a desktop tray app (knomit-desktop), a bridge (knomit-bridge) that proxies MCP over stdio into clients like Claude Code and Claude Desktop, and knomit-okf, which publishes a knowledge base as a portable Open Knowledge Format repository. It runs on macOS and Linux.',
   },
 ];

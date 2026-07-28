@@ -10,6 +10,9 @@ export const GET: APIRoute = async ({ site }) => {
     { title: 'How knomit works (concepts)', path: '/concepts', note: 'Facts, ontology, provenance, consensus, temporal graph' },
     { title: 'Use cases', path: '/use-cases', note: 'What you can build on a fact-based, git-native KB' },
     { title: 'Comparison', path: '/compare', note: 'knomit vs RAG, vector DBs, and agent-memory tools' },
+    { title: 'OKF export', path: '/okf', note: 'Publish a knowledge base as an Open Knowledge Format repository with knomit-okf' },
+    { title: 'Security & privacy', path: '/security', note: 'Local-first, signed history, encrypted credentials, guarded remotes' },
+    { title: 'Explore a live knowledge base', path: '/explore', note: 'Browse a real KB — facts, refs, history — in the product UI' },
     { title: 'FAQ', path: '/faq', note: 'Common questions, answered' },
   ];
 
@@ -27,6 +30,10 @@ export const GET: APIRoute = async ({ site }) => {
   lines.push('');
   lines.push(
     'knomit is git-backed knowledge for AI agents: a distributed, decentralized knowledge base built from concise, typed facts — not documents. Each fact carries a kind (epistemic or pragmatic), a confidence, an ontology path, an origin (authored, distilled, or discovered), and signed-commit provenance. Beyond storing and synthesizing, knomit discovers emergent keystone facts across the similarity bridges that retrieval is blind to. Peers learn on their own branches and converge on a shared main. Open source; MCP-native.',
+  );
+  lines.push('');
+  lines.push(
+    'knomit also publishes to the Open Knowledge Format (OKF), the open specification Google Cloud released in June 2026 for representing knowledge as plain markdown with YAML frontmatter. The knomit-okf CLI exports a knowledge base as a conformant OKF repository from a single git URL and keeps it in sync — rendering deterministically, validating against the spec before it commits, and leaving the push to you. The export is one-way: knomit writes OKF, and does not read it.',
   );
   lines.push('');
 

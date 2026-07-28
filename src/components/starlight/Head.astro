@@ -15,8 +15,19 @@ const crumbs = [
   { name: 'Docs', url: '/docs/' },
   { name: title, url: Astro.url.pathname },
 ];
+
+// og:image lives here rather than in astro.config's `head` array so it can vary
+// by route. A tag injected from config is emitted on every docs page with no way
+// to override it, and a second og:image would just be a coin-flip for whichever
+// crawler reads first. Starlight sets twitter:card but no twitter:image; every
+// major unfurler falls back to og:image, so one tag is enough.
+const OG_BY_PATH: Record<string, string> = {
+  '/docs/okf/': '/og-okf.png',
+};
+const ogImage = new URL(OG_BY_PATH[Astro.url.pathname] ?? '/og.png', site);
 ---
 <Default><slot /></Default>
+<meta property="og:image" content={ogImage} />
 <JsonLd schema={organizationSchema(site)} />
 <JsonLd schema={websiteSchema(site)} />
 <JsonLd schema={breadcrumbSchema(site, crumbs)} />

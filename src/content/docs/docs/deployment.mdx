@@ -95,7 +95,9 @@ means either way.) Read-only is **startup-only** (it cannot be toggled at
 runtime) and, across every surface:
 
 - **HTTP** — all mutating methods (`POST`/`PUT`/`PATCH`/`DELETE`) return `403`,
-  and the built-in git smart-HTTP endpoint is not mounted. Both MCP dispatch
+  and the built-in git smart-HTTP endpoint is not mounted — so a read-only
+  instance cannot serve an [OKF export](/docs/okf/), which reads that endpoint.
+  Point `knomit-okf` at a writable instance, or at the repo on disk. Both MCP dispatch
   routes (`/repos/{repo}/branches/{branch}/mcp` and `/lenses/{lens}/mcp`) are
   exempt from the method gate, because MCP reads are `POST`s; read-only-ness
   there is enforced by tool filtering instead. The [lens](/docs/lenses/) REST

@@ -5,6 +5,7 @@
   "private": true,
   "description": "Marketing, docs, and blog site for knomit — git-backed knowledge for AI agents.",
   "scripts": {
+    "og": "node scripts/make-og.mjs",
     "sync": "node --env-file-if-exists=.env scripts/sync.mjs",
     "kb": "node --env-file-if-exists=.env scripts/build-kb-bundle.mjs",
     "prebuild": "node --env-file-if-exists=.env scripts/sync.mjs && node --env-file-if-exists=.env scripts/build-kb-bundle.mjs",

@@ -1,0 +1,34 @@
+---
+/**
+ * Carry the marketing footer onto the docs pages.
+ *
+ * Docs pages shipped with no footer at all, which left /security, /compare and
+ * /faq unreachable from 19 of the site's 33 pages — the docs top nav carries
+ * only four links. This closes that.
+ *
+ * Why this component and not Footer or PageFrame — both alternatives break:
+ *
+ *   Footer renders inside <main>, within ContentPanel's --sl-content-width
+ *   container and inside the element carrying data-pagefind-body. The footer
+ *   would be squeezed into the prose column and every footer link would be
+ *   indexed into docs search on all 19 pages.
+ *
+ *   PageFrame's default slot spans the whole main frame — which runs *under*
+ *   the right-hand table of contents. That panel is `position: fixed` at
+ *   100vh, so it overlays the footer's right edge and swallows clicks on the
+ *   Project column (GitHub, RSS were both unreachable). Painting over it with
+ *   z-index only trades that for the footer covering the TOC on short pages.
+ *
+ * TwoColumnContent's default slot lands in .main-pane, which upstream already
+ * sizes to clear the TOC. The footer inherits that width for free, sits after
+ * </main> so pagefind skips it, and needs no layout math of its own.
+ */
+import Default from '@astrojs/starlight/components/TwoColumnContent.astro';
+import Footer from '../Footer.astro';
+---
+
+<Default>
+  <slot name="right-sidebar" slot="right-sidebar" />
+  <slot />
+  <Footer />
+</Default>
