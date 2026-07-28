@@ -72,6 +72,10 @@ unreadable at boot, the encryptor is unavailable and setting a remote
 **refuses** to persist any auth token rather than writing it in the clear.
 (Legacy plaintext values are still read, with a warning.)
 
+This is one of several guarantees that hold at the sync boundary — the local
+origin gate and host-key pinning above are the others. See
+[Security & privacy](/security) for how they fit together.
+
 ## The origin record
 
 Set the origin via `knomit.toml` (`[git] origin` / `[remote]`), the
