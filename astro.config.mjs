@@ -148,10 +148,8 @@ export default defineConfig({
         Head: './src/components/starlight/Head.astro',
       },
       head: [
-        {
-          tag: 'meta',
-          attrs: { property: 'og:image', content: `${SITE}/og.png` },
-        },
+        // og:image is emitted by the Head override instead, so it can vary by
+        // route — a tag injected here lands on every docs page unconditionally.
         {
           tag: 'script',
           content: PANEL_TOGGLE_SCRIPT,
