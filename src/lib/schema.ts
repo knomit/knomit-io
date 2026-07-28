@@ -32,6 +32,17 @@ export function softwareApplicationSchema(site: URL) {
     url: site.origin + '/',
     description:
       'Git-backed knowledge for AI agents: a distributed knowledge base of typed, provenanced facts.',
+    featureList: [
+      'Typed, atomic facts in plain markdown — not chunked documents',
+      'Ed25519-signed git commits with full provenance',
+      'Confidence that rises and falls with the evidence',
+      'Semantic search over a local embedding model',
+      'Synthesis, hypotheses, and emergent discovery',
+      'Agent branches with consensus on main',
+      'MCP-native tools for Claude Code and any MCP client',
+      'REST API (HAL+JSON) and an embedded web UI',
+      'Open Knowledge Format (OKF) export',
+    ],
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },
     license: GITHUB_URL,
     isAccessibleForFree: true,
