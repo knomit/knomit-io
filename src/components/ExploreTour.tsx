@@ -32,7 +32,7 @@ export interface TourDeps {
   };
 }
 
-export type HighlightKey = 'library' | 'fact' | 'edges' | 'filter';
+export type HighlightKey = 'library' | 'fact' | 'edges' | 'filter' | 'version';
 
 export interface TourStep {
   /** Short label for the progress readout. */
@@ -133,7 +133,10 @@ export function buildSteps(t: BundleTour): TourStep[] {
       clickTarget: (f) => f.querySelector('[data-testid="version-walker"]')
         ?? f.querySelector('[data-testid="timeline-nav"]'),
       body: 'This one has been revised since it was written. Here it is at its first version — the body, the confidence, and the sources are all as they were then.',
-      highlight: 'library',
+      // The version walker, not the library: the pointer already goes there,
+      // and ringing the library for a step about a fact's history pointed at
+      // the one pane the step is not about.
+      highlight: 'version',
       run: ({ tt, tour }) => tt.scrub(tour.targetVersions[0]),
     },
     {
@@ -216,6 +219,22 @@ export function useTour(deps: TourDeps | null, frameRef: { current: HTMLElement 
   const depsRef = useRef(deps);
   depsRef.current = deps;
 
+  // Every pending timer and frame for the pointer flight. Without these the
+  // callbacks below outlive Skip: stop() tore down the UI but the scheduled
+  // advance still fired ~2.5s later, resurrecting the tour on top of a
+  // visitor who had just opted out — and at step 6 it re-entered time-travel
+  // while stop() had already cleared the open fact, stranding them in history
+  // with no fact and no filter bar.
+  const pending = useRef<{ timers: number[]; frame: number | null }>({ timers: [], frame: null });
+  const cancelFlight = useCallback(() => {
+    pending.current.timers.forEach(id => window.clearTimeout(id));
+    pending.current.timers = [];
+    if (pending.current.frame !== null) window.cancelAnimationFrame(pending.current.frame);
+    pending.current.frame = null;
+  }, []);
+  // Navigating away mid-flight must not leave callbacks touching a dead tree.
+  useEffect(() => cancelFlight, [cancelFlight]);
+
   const steps = useMemo(() => (deps ? buildSteps(deps.tour) : []), [deps?.tour]);
   const active = index !== null;
 
@@ -239,6 +258,9 @@ export function useTour(deps: TourDeps | null, frameRef: { current: HTMLElement 
   }, [runStep]);
 
   const stop = useCallback(() => {
+    cancelFlight();
+    setCursor(null);
+    setBusy(false);
     setIndex(null);
     setInvite(false);
     markSeen();
@@ -252,7 +274,7 @@ export function useTour(deps: TourDeps | null, frameRef: { current: HTMLElement 
       d.navigate({ view: 'library', factPath: null });
       d.dispatch({ type: 'SET_LIBRARY_SORT', sort: 'recent' });
     })();
-  }, []);
+  }, [cancelFlight]);
 
   // ── Simulated pointer ──────────────────────────────────────────────────
   // Advancing animates a pointer to the control that would perform the next
@@ -287,7 +309,8 @@ export function useTour(deps: TourDeps | null, frameRef: { current: HTMLElement 
     // Two frames: one for the scroll above to apply, one to measure after it.
     // Measuring in the same frame reads the pre-scroll box, which on a narrow
     // viewport put the pointer below the frame entirely.
-    requestAnimationFrame(() => requestAnimationFrame(() => {
+    pending.current.frame = requestAnimationFrame(() => {
+      pending.current.frame = requestAnimationFrame(() => {
       const box = frame!.getBoundingClientRect();
       const t = target.getBoundingClientRect();
       // Clamp into the frame. `block: 'nearest'` does not guarantee the target
@@ -300,15 +323,16 @@ export function useTour(deps: TourDeps | null, frameRef: { current: HTMLElement 
         y: clamp(t.top - box.top + t.height / 2, box.height),
         clicking: false,
       });
-      window.setTimeout(() => {
+      pending.current.timers.push(window.setTimeout(() => {
         setCursor(c => (c ? { ...c, clicking: true } : c));
-        window.setTimeout(() => {
+        pending.current.timers.push(window.setTimeout(() => {
           advance(n);
           setCursor(null);
           setBusy(false);
-        }, CLICK_MS);
-      }, TRAVEL_MS);
-    }));
+        }, CLICK_MS));
+      }, TRAVEL_MS));
+      });
+    });
   }, [busy, index, steps, stop, advance]);
 
   const dismissInvite = useCallback(() => { setInvite(false); markSeen(); }, []);

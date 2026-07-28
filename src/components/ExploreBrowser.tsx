@@ -48,6 +48,7 @@ const HIGHLIGHT_SELECTOR: Record<string, string> = {
   fact: '[data-testid="fact-title"]',
   edges: '[data-testid="edges-rail-slot"]',
   filter: '#filter-input',
+  version: '[data-testid="version-walker"]',
 };
 
 const prefersReducedMotion =
@@ -142,7 +143,7 @@ function Fallback() {
   return (
     <Placeholder>
       <span data-testid="explore-fallback">
-        The live knowledge base could not be loaded right now.
+        The knowledge base could not be loaded right now.
       </span>
     </Placeholder>
   );

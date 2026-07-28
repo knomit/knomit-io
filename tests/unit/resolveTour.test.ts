@@ -68,11 +68,20 @@ describe('resolveTour', () => {
     };
     expect(resolveTour(commits, trees, blobs)).toBeUndefined();
 
+    // The external-ref half needs a URL that WOULD otherwise qualify — i.e.
+    // one present in the head tree with multiple versions — or `!head[target]`
+    // alone rejects it and the `startsWith('kb/')` guard is never exercised.
+    // As originally written this assertion survived deleting that guard.
+    const extTrees = {
+      c3: { 'kb/s.md': 'bs', 'https://example.com/paper': 'p2' },
+      c2: { 'https://example.com/paper': 'p1' },
+      c1: {},
+    };
     const external = {
       bs: f({ type: 'synthesis', entities: ['Widget'], refs: ['https://example.com/paper'] }),
-      bt1: f({}), bt2: f({}),
+      p1: f({}), p2: f({}),
     };
-    expect(resolveTour(commits, { c3: { 'kb/s.md': 'bs' }, c2: {}, c1: {} }, external)).toBeUndefined();
+    expect(resolveTour(commits, extTrees, external)).toBeUndefined();
   });
 
   it('prefers the target with the most versions, so the change is most visible', () => {

@@ -590,7 +590,7 @@ export const api = {
 
   getAgentBranch: async (_repo: string): Promise<string> => state().b.ref,
 
-  // Unreachable: the shell sets serverReadOnly, so isReadOnly() hides every
+  // Unreachable: the shell hides the write controls in CSS, so isReadOnly() hides every
   // write control. These are a backstop, not a code path. Declared with a
   // rest parameter (rather than the brief's zero-arg draft) because the real
   // call sites pass their full argument lists regardless — e.g.

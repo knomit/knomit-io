@@ -386,7 +386,8 @@ import { GITHUB_URL } from '../lib/site';
   .explore-frame[data-tour-highlight='library'] [data-testid='library-header'],
   .explore-frame[data-tour-highlight='fact'] [data-testid='fact-title'],
   .explore-frame[data-tour-highlight='edges'] [data-testid='edges-rail-slot'],
-  .explore-frame[data-tour-highlight='filter'] #filter-input {
+  .explore-frame[data-tour-highlight='filter'] #filter-input,
+  .explore-frame[data-tour-highlight='version'] [data-testid='version-walker'] {
     position: relative;
     border-radius: var(--k-radius);
     outline: 2px solid color-mix(in srgb, var(--k-brand) 70%, transparent);
@@ -430,7 +431,8 @@ import { GITHUB_URL } from '../lib/site';
   @media (prefers-reduced-motion: reduce) {
     .explore-tour-cursor { transition: none; }
     .explore-frame[data-tour-highlight] :is([data-testid='library-header'],
-      [data-testid='fact-title'], [data-testid='edges-rail-slot'], #filter-input) {
+      [data-testid='fact-title'], [data-testid='edges-rail-slot'],
+      [data-testid='version-walker'], #filter-input) {
       animation: none;
     }
   }

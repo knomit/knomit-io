@@ -81,6 +81,13 @@ test.describe('/explore live KB browser', () => {
     // explore.astro hides it. `toBeHidden` — not `toBeDisabled` — is the
     // assertion that matches: display:none keeps it out of the
     // accessibility tree, so a keyboard user can't reach it either.
+    // toHaveCount(1) FIRST. On its own, toBeHidden() is satisfied by an
+    // element that does not exist — so when the vendored test id changes
+    // under `npm run sync`, the CSS rule hiding it stops matching, a live
+    // retract button appears on a public page, and this test stays green.
+    // Reproduced: renaming retract-btn upstream produced a visible, clickable
+    // control with its confirmation modal, with the suite passing.
+    await expect(page.getByTestId('retract-btn')).toHaveCount(1);
     await expect(page.getByTestId('retract-btn')).toBeHidden();
     // FactEditor (with textual Save/Cancel buttons) only mounts for a fact
     // with a parse error, which the opened fact doesn't have.
@@ -184,10 +191,11 @@ test.describe('/explore guided tour', () => {
     await next();
     await expect(page.getByTestId('left-panel')).toHaveAttribute('data-sort', 'relevance');
 
-    // 4 — a fact is open.
+    // 4 — a fact is open. Remember which: step 7 has to come back to it.
     await next();
     await expect(page.getByTestId('fact-title')).toBeVisible();
     await expect(frame).toHaveAttribute('data-tour-highlight', 'fact');
+    const synthesisTitle = (await page.getByTestId('fact-title').textContent())!.trim();
 
     // 5 — hopped down an edge; the rail is the highlight.
     await next();
@@ -200,10 +208,15 @@ test.describe('/explore guided tour', () => {
     await expect(bar).toContainText('6/8');
     await expect(page.locator('#filter-input')).toHaveCount(0);
 
-    // 7 — back up the edge AND back to live. Regression guard: a stale-ref
-    // race used to leave this pinned in history, which stranded the last step.
+    // 7 — back up the edge AND back to live. Both halves are asserted:
+    // `#filter-input` proves the anchor returned to live, and the title
+    // proves we hopped back to the SYNTHESIS rather than merely un-pinning
+    // where we stood. Asserting only the first passed when step 6 was
+    // reverted to `await tt.returnToNow()` — live, but on the wrong fact —
+    // which is exactly the stale-ref regression this claims to guard.
     await next();
     await expect(page.locator('#filter-input')).toHaveCount(1);
+    await expect(page.getByTestId('fact-title')).toHaveText(synthesisTitle);
 
     // 8 — the entity filter stacks on the type filter from step 3.
     await next();
@@ -271,32 +284,28 @@ test.describe('/explore guided tour', () => {
     await expect(page.getByTestId('tour-next')).toBeEnabled();
   });
 
-  test('impatient clicking during the animation cannot skip a step', async ({ page }) => {
+  test('a click during the flight cannot double-run the step', async ({ page }) => {
     await page.goto('/explore');
     await page.getByTestId('tour-start').click();
-    await expect(page.getByTestId('tour-bar')).toContainText('1/8');
-
-    // dispatchEvent, not click(): click() waits for the button to become
-    // enabled, which would defeat the point. These fire while it is disabled.
-    // NOTE: there is deliberately no assertion here on the button's `disabled`
-    // attribute. `busy` did go unwired to it for three commits, but three
-    // separate formulations of that check proved unreliable — Playwright's
-    // click actionability, the assertion round-trip, and rAF throttling under
-    // parallel workers all routinely outlast the ~1.2s animation, so the
-    // button has re-enabled by the time anything looks. A direct probe
-    // confirms it is disabled from ~10ms to ~900ms.
-    //
-    // The wiring is a prop mismatch, and `astro check` catches that class
-    // exactly — it is what caught the original bug, in CI. What this test
-    // owns is the behaviour the guard exists for, below.
-    const next = page.getByTestId('tour-next');
-    await next.click();
-    for (let i = 0; i < 4; i++) await next.dispatchEvent('click');
-
-    // One step per accepted click, never five — the busy guard swallows the
-    // extras rather than queueing them, which would race several steps'
-    // dispatches into the same animation window.
+    // Advance to step 2, so the NEXT transition runs step 3 — whose action is
+    // ADD_FILTER. That matters: the reducer appends non-path chips without
+    // deduping (state.ts:209, `[...s.filters, a.chip]`), so a step that runs
+    // twice leaves two identical chips. Every other step's action is
+    // idempotent, which is why the previous version of this test could not
+    // observe the guard at all: with `if (busy)` replaced by `if (false)` it
+    // still passed, because both clicks compute the same target index and the
+    // duplicated work was invisible.
+    await page.getByTestId('tour-next').click();
     await expect(page.getByTestId('tour-bar')).toContainText('2/8');
+
+    await page.getByTestId('tour-next').click();
+    // Mid-flight, after the guard is set but well before the ~1.2s advance.
+    await page.waitForTimeout(300);
+    await page.getByTestId('tour-next').dispatchEvent('click');
+
+    await expect(page.getByTestId('tour-bar')).toContainText('3/8');
+    // Exactly one chip. Two means the step ran twice.
+    await expect(page.locator('.explore-frame').getByText('type:synthesis')).toHaveCount(1);
   });
 
   test('on a phone the narration stays on screen for every step', async ({ page }) => {
@@ -321,6 +330,36 @@ test.describe('/explore guided tour', () => {
     }
   });
 
+  test('skipping mid-flight does not resurrect the tour', async ({ page }) => {
+    await page.goto('/explore');
+    await page.getByTestId('tour-start').click();
+    // Advance to step 5, so the pending flight is the one into step 6 —
+    // whose action scrubs into time-travel. That was the worst case: stop()
+    // nulled the open fact, then the orphaned timer fired anyway and pinned a
+    // historical anchor, leaving someone who had just opted out looking at no
+    // fact, in history, with no filter bar.
+    for (let i = 0; i < 4; i++) {
+      await page.getByTestId('tour-next').click();
+      await expect(page.getByTestId('tour-bar')).toContainText(`${i + 2}/8`);
+    }
+    await page.getByTestId('tour-next').click();
+    await page.waitForTimeout(250);          // mid-flight
+    await page.getByTestId('tour-skip').click();
+
+    await expect(page.getByTestId('tour-bar')).toHaveCount(0);
+    await expect(page.getByTestId('tour-launcher')).toBeVisible();
+
+    // Outlast both scheduled timers (900ms travel + 320ms click) with room to
+    // spare. Nothing may come back.
+    await page.waitForTimeout(2500);
+    await expect(page.getByTestId('tour-bar')).toHaveCount(0);
+    await expect(page.getByTestId('tour-cursor')).toHaveCount(0);
+    await expect(page.getByTestId('tour-launcher')).toBeVisible();
+    // And the app is left usable: live anchor, no filters, library restored.
+    await expect(page.locator('#filter-input')).toHaveCount(1);
+    await expect(page.getByTestId('left-panel')).toHaveAttribute('data-sort', 'recent');
+  });
+
   test('the launcher names the real repo and links to it', async ({ page }) => {
     await page.goto('/explore');
     await page.getByTestId('tour-dismiss').click();
@@ -328,7 +367,11 @@ test.describe('/explore guided tour', () => {
     // Typographic apostrophes in the copy (&rsquo;), so match around them.
     await expect(launcher).toContainText(/browsing/);
     await expect(launcher).toContainText(/own web UI, served as a static snapshot/);
-    await expect(launcher).toContainText(/147 facts, 83 commits of history/);
+    // Shape, never values. `prebuild` re-clones KB_REF on every build and the
+    // KB only grows — asserting 147/83 went red overnight at 169/92. What
+    // matters is that real numbers are interpolated, not that they are any
+    // particular numbers.
+    await expect(launcher).toContainText(/\d+ facts, \d+ commits of history/);
     // Label and href both derive from bundle.repo, so this catches a
     // retargeted KB_REPO_SLUG leaving the link pointing at the old repo.
     const link = launcher.getByRole('link');
