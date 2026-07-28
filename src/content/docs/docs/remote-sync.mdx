@@ -154,6 +154,10 @@ Set `KNOMIT_GIT_SERVE` (default **on**, optionally with `KNOMIT_GIT_PORT`) to
 expose a git smart-HTTP endpoint at `/git`, so other knomit instances or git
 clients can clone and fetch directly from this server.
 
+This endpoint is also what [`knomit-okf`](/docs/okf/) reads: the KB URL you hand
+`clone` is `<server>/git/<repo>`, and it is unauthenticated, so an export against
+your own server needs no credentials.
+
 ## Seeding a repo from a remote
 
 `KNOMIT_GIT_ORIGIN` seeds the default repo's origin at startup. You can also
