@@ -180,6 +180,29 @@ type CursorState = { x: number; y: number; clicking: boolean } | null;
 
 const TRAVEL_MS = 900;
 const CLICK_MS = 320;
+/** Keep the pointer this far inside the frame's edges. */
+const EDGE_PAD = 16;
+
+/**
+ * Bring `el` into view by scrolling ONLY the scroll container it lives in.
+ *
+ * Not scrollIntoView: that walks every scrollable ancestor including the
+ * document, so on a narrow viewport — where the frame is a scrolling column
+ * and the page itself can scroll — it pushed the whole frame up and carried
+ * the tour's own narration off screen. The visitor was left reading nothing
+ * while the pointer moved.
+ */
+export function scrollWithin(root: HTMLElement, el: Element): void {
+  let box: HTMLElement | null = el.parentElement;
+  while (box && box !== root && box.scrollHeight <= box.clientHeight) box = box.parentElement;
+  if (!box || box === root || box.scrollHeight <= box.clientHeight) return;
+  const c = box.getBoundingClientRect();
+  const t = el.getBoundingClientRect();
+  if (t.top >= c.top && t.bottom <= c.bottom) return;         // already visible
+  box.scrollTop += (t.top < c.top)
+    ? t.top - c.top - EDGE_PAD
+    : t.bottom - c.bottom + EDGE_PAD;
+}
 
 function reducedMotion(): boolean {
   return typeof window !== 'undefined'
@@ -259,14 +282,22 @@ export function useTour(deps: TourDeps | null, frameRef: { current: HTMLElement 
     setBusy(true);
     // Bring the control on screen before measuring: animating to an element
     // scrolled out of the library's list would send the pointer off the frame.
-    target.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+    scrollWithin(frame!, target);
 
-    requestAnimationFrame(() => {
+    // Two frames: one for the scroll above to apply, one to measure after it.
+    // Measuring in the same frame reads the pre-scroll box, which on a narrow
+    // viewport put the pointer below the frame entirely.
+    requestAnimationFrame(() => requestAnimationFrame(() => {
       const box = frame!.getBoundingClientRect();
       const t = target.getBoundingClientRect();
+      // Clamp into the frame. `block: 'nearest'` does not guarantee the target
+      // is fully visible — in the stacked mobile layout a row near the bottom
+      // of a pane stays partly below the fold — and a pointer animating off
+      // the edge reads as a glitch rather than as an instruction.
+      const clamp = (v: number, max: number) => Math.max(EDGE_PAD, Math.min(max - EDGE_PAD, v));
       setCursor({
-        x: t.left - box.left + Math.min(t.width / 2, 40),
-        y: t.top - box.top + t.height / 2,
+        x: clamp(t.left - box.left + Math.min(t.width / 2, 40), box.width),
+        y: clamp(t.top - box.top + t.height / 2, box.height),
         clicking: false,
       });
       window.setTimeout(() => {
@@ -277,7 +308,7 @@ export function useTour(deps: TourDeps | null, frameRef: { current: HTMLElement 
           setBusy(false);
         }, CLICK_MS);
       }, TRAVEL_MS);
-    });
+    }));
   }, [busy, index, steps, stop, advance]);
 
   const dismissInvite = useCallback(() => { setInvite(false); markSeen(); }, []);

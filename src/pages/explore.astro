@@ -441,6 +441,27 @@ import { GITHUB_URL } from '../lib/site';
       overflow-y: auto;
       overflow-x: hidden;
     }
+    /* The bar is 49px on a desktop's single line; wrapped on a phone it grew
+       to 166px — over a fifth of the frame, taken from panes already short of
+       height. Tighter type and padding, and the step label drops out: the
+       count alone carries the progress. */
+    .explore-tour {
+      padding: 0.4rem 0.7rem;
+      gap: 0.35rem 0.6rem;
+    }
+    .explore-tour__body {
+      font-size: 0.82rem;
+      line-height: 1.35;
+      min-width: 0;
+    }
+    .explore-tour__label {
+      display: none;
+    }
+    .explore-tour__skip,
+    .explore-tour__next {
+      font-size: 0.8rem;
+      padding: 0.25rem 0.7rem;
+    }
     /* Every stacked section below gets `flex: 0 0 auto` — its OWN explicit
        (vh) height, not a share of the parent's. .explore-frame__main and
        .explore-frame__body inherit `flex: 1` from the desktop (row) rules

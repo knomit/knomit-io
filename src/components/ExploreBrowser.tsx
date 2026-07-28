@@ -13,7 +13,7 @@ import { FilterBar } from '../generated/kb-ui/FilterBar';
 import { ErrorBoundary } from '../generated/kb-ui/ErrorBoundary';
 import { useNavigationManager } from '../generated/kb-ui/useNavigationManager';
 import { useTimeTravel } from '../generated/kb-ui/useTimeTravel';
-import { useTour, TourBar, TourInvite, TourLauncher, TourCursor } from './ExploreTour';
+import { useTour, TourBar, TourInvite, TourLauncher, TourCursor, scrollWithin } from './ExploreTour';
 
 // Library | content splitter. Mirrors upstream App.tsx's own constants (see
 // its LEFT_PANEL_MIN/MAX_FRACTION/DEFAULT_FRACTION) so the drag feels like the
@@ -303,9 +303,11 @@ function Browser({ bundle }: { bundle: Bundle }) {
     // Let the step's own dispatch land — the rail only exists once a fact is
     // open, and the filter input only while the anchor is live.
     const id = window.setTimeout(() => {
-      frameRef.current?.querySelector(sel)?.scrollIntoView({
-        block: 'nearest', behavior: prefersReducedMotion ? 'auto' : 'smooth',
-      });
+      const frame = frameRef.current;
+      const el = frame?.querySelector(sel);
+      // Scroll the pane, never the document — see scrollWithin. A plain
+      // scrollIntoView here carried the whole frame off a phone screen.
+      if (frame && el) scrollWithin(frame, el);
     }, 80);
     return () => window.clearTimeout(id);
   }, [tour.step]);
@@ -318,10 +320,19 @@ function Browser({ bundle }: { bundle: Bundle }) {
   // (its own AMEND_NAV), and that isn't a tap the visitor made — scrolling
   // for it strands a first-time phone visitor past the header and library,
   // looking at one fact with no way to tell what page they're even on.
+  //
+  // Suppressed entirely while the tour is running. The tour opens facts as
+  // part of its own choreography, and this effect answers by scrolling the
+  // document — which on a phone carried the tour's narration bar off the top
+  // of the screen from step 3 onwards, leaving a pointer moving around with
+  // nothing left to explain it.
   const isFirstFactPath = useRef(true);
+  const tourActiveRef = useRef(false);
+  tourActiveRef.current = tour.active;
   useEffect(() => {
     if (!state.factPath) return;
     if (isFirstFactPath.current) { isFirstFactPath.current = false; return; }
+    if (tourActiveRef.current) return;
     if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
     if (!window.matchMedia('(max-width: 860px)').matches) return;
     mainRef.current?.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'start' });
