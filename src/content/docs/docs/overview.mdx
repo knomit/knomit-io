@@ -1,6 +1,6 @@
 ---
 title: Overview & architecture
-description: The three shipped artifacts (server, desktop app, bridge), how a request flows, and the core model in one paragraph.
+description: The four shipped artifacts (server, desktop app, bridge, OKF exporter), how a request flows, and the core model in one paragraph.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -19,17 +19,18 @@ Knowledge is reached over two surfaces:
 - a **REST API** (`/api/v1`, HAL+JSON, commit-anchored URIs) that the web UI and
   any HTTP client use.
 
-## The three shipped artifacts
+## The four shipped artifacts
 
 | Artifact | Binary | What it is |
 |----------|--------|------------|
 | **Server** | `knomit` | The core HTTP server. Serves the REST API, the MCP endpoint, the embedded web UI, and (optionally) a git smart-HTTP endpoint. CGO build (ONNX Runtime + graphqlite). |
 | **Desktop app** | `knomit-desktop` | A Wails v3 tray/desktop app that boots the server in-process on a loopback port and shows the web UI in a native webview. Ships as `Knomit.app` on macOS; a binary on Linux, where `make desktop-install` adds the `.desktop` launcher and icon. See [Desktop app](/docs/desktop/). |
 | **Bridge** | `knomit-bridge` | A small pure-Go adapter. Its primary job is a **stdio ↔ HTTP MCP proxy** that an MCP client (Claude Code, Claude Desktop, Claude Cowork) spawns to talk to the server. It also scaffolds Claude Code integration and runs the editor hooks. |
+| **OKF exporter** | `knomit-okf` | A standalone CLI that publishes a knowledge base as a portable [Open Knowledge Format](/docs/okf/) repository. It talks to the git endpoint and nothing else — no server, database, or cache is involved in an export. Pure Go, like the bridge. |
 
-A fourth UI layer, the **web UI** (React/TypeScript), is built to static assets
-and embedded into both `knomit` and `knomit-desktop`. There is no separately
-deployed frontend.
+A fifth layer, the **web UI** (React/TypeScript), is built to static assets and
+embedded into both `knomit` and `knomit-desktop`. There is no separately deployed
+frontend.
 
 <Aside type="note">
 Build-only tools (not shipped to users): `fetchlibs` downloads the native libs,
