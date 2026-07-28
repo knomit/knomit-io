@@ -134,6 +134,9 @@ export default defineConfig({
       ],
       components: {
         // Dark-only product, branded to match the marketing chrome.
+        // TwoColumnContent is overridden to append the marketing footer after
+        // the content — see the component for why it isn't the Footer slot.
+        TwoColumnContent: './src/components/starlight/TwoColumnContent.astro',
         ThemeProvider: './src/components/starlight/ThemeProvider.astro',
         ThemeSelect: './src/components/starlight/ThemeSelect.astro',
         SiteTitle: './src/components/starlight/SiteTitle.astro',
