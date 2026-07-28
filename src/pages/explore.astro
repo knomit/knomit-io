@@ -1,10 +1,71 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import ExitWidget from '../components/ExitWidget.tsx';
+import ExploreBrowser from '../components/ExploreBrowser.tsx';
 import KnowledgeGraph from '../components/KnowledgeGraph.astro';
 import Icon from '../components/Icon.astro';
-import { DEMO_LIVE, DEMO_URL, GITHUB_URL } from '../lib/site';
+import { GITHUB_URL } from '../lib/site';
 ---
+
+<BaseLayout title="Explore — knomit" description="Browse a real knomit knowledge base: typed facts, provenance, and full history.">
+  <!-- Without JS the island never mounts, so the frame would be an empty box.
+       Swap to the teaser for exactly that audience — no-JS visitors and the
+       non-JS-executing crawlers robots.txt welcomes — without making anyone
+       with JS watch a flash. The teaser's markup is in the document either
+       way, so its text is indexable regardless of how this resolves. -->
+  <noscript>
+    <style>
+      .explore-live { display: none !important; }
+      .explore-teaser { display: block !important; }
+    </style>
+  </noscript>
+
+  <!-- Full-bleed by design: no .k-container. The browser is an application
+       surface, not page copy, so it takes the whole viewport width and the
+       whole height below the sticky header. The teaser below keeps the
+       site's normal container. -->
+  <section class="explore-live">
+    <h1 class="explore-live__srtitle">Browse a real knomit knowledge base.</h1>
+    <div class="explore-live__frame">
+      <ExploreBrowser client:only="react" />
+    </div>
+  </section>
+
+  <!-- Shown to two audiences only: visitors without JS (via the <noscript>
+       rule above), and everyone else if the bundle fetch fails or times out
+       — ExploreBrowser adds `explore-fallback` to <body> in that case. It is
+       NOT what paints first on a normal visit; the live frame is. So its
+       title and lead describe the feature, and `.explore-teaser__error`
+       below is the only part that reads as a failure. -->
+  <section class="explore-teaser k-grid-bg" data-testid="explore-teaser">
+    <div class="k-container explore-teaser__inner">
+      <div class="explore-teaser__copy">
+        <p class="k-eyebrow">Knowledge base browser</p>
+        <h1 class="explore-teaser__title">Browse a real knomit knowledge base.</h1>
+        <p class="k-lead explore-teaser__lead">
+          /explore runs the real knomit web UI in your browser — browse,
+          search, and inspect a fact's provenance and history — against a
+          public, read-only knomit knowledge base.
+        </p>
+        <p class="explore-teaser__error" data-testid="explore-teaser-error">
+          The knowledge base couldn't be loaded right now. Refresh to try
+          again, or read on: everything it shows is covered below too.
+        </p>
+        <div class="explore-teaser__cta">
+          <a href="/docs/quick-start" class="k-btn">Run it yourself <Icon name="arrow" size={17} /></a>
+          <a href={GITHUB_URL} class="k-btn k-btn--ghost" rel="noopener">View on GitHub</a>
+        </div>
+        <ul class="explore-teaser__list">
+          <li><Icon name="search" size={17} /> Browse the ontology and search real facts</li>
+          <li><Icon name="provenance" size={17} /> Inspect a fact's signed-commit provenance</li>
+          <li><Icon name="temporal" size={17} /> Time-travel the graph to any past commit</li>
+        </ul>
+      </div>
+      <div class="explore-teaser__art">
+        <KnowledgeGraph />
+      </div>
+    </div>
+  </section>
+</BaseLayout>
 
 <style is:global>
   .explore-teaser {
@@ -23,6 +84,15 @@ import { DEMO_LIVE, DEMO_URL, GITHUB_URL } from '../lib/site';
   .explore-teaser__lead {
     margin-top: 1.25rem;
     max-width: 38rem;
+  }
+  /* Only true on the degraded path (see body.explore-fallback below): the
+     default teaser — seen with no JS, by a crawler, or during the moment
+     before the island mounts — describes the feature, not a failure. */
+  .explore-teaser__error {
+    display: none;
+    margin-top: 1.25rem;
+    max-width: 38rem;
+    color: var(--k-text-2);
   }
   .explore-teaser__cta {
     display: flex;
@@ -61,65 +131,380 @@ import { DEMO_LIVE, DEMO_URL, GITHUB_URL } from '../lib/site';
       max-width: 320px;
     }
   }
-</style>
 
-{
-  DEMO_LIVE ? (
-    <BaseLayout
-      title="Live demo — knomit"
-      description="Browse a live knomit knowledge base of AI and cybersecurity facts in the real web UI, read-only."
-      chrome={false}
-    >
-      <!-- The live demo IS the real knomit web UI, full-bleed. -->
-      <iframe
-        class="explore-frame"
-        src={DEMO_URL}
-        title="knomit live demo"
-        loading="eager"
-        referrerpolicy="no-referrer-when-downgrade"
-        style="position:fixed;inset:0;width:100vw;height:100vh;border:0;display:block;"
-      />
-      <ExitWidget client:load />
-      <style is:global>
-        html,
-        body {
-          margin: 0;
-          height: 100%;
-          overflow: hidden;
-        }
-      </style>
-    </BaseLayout>
-  ) : (
-    <BaseLayout
-      title="Live demo — coming soon — knomit"
-      description="The live knomit demo lets you browse a real knowledge base in the actual web UI. Launching soon — explore the docs in the meantime."
-    >
-      <section class="explore-teaser k-grid-bg">
-        <div class="k-container explore-teaser__inner">
-          <div class="explore-teaser__copy">
-            <p class="k-eyebrow">Live demo · coming soon</p>
-            <h1 class="explore-teaser__title">Browse a living knowledge base.</h1>
-            <p class="k-lead explore-teaser__lead">
-              The live demo drops you into the <em>real</em> knomit web UI, running
-              against a public, read-only instance — the actual product, not a
-              screenshot. We're putting the finishing touches on the hosted
-              instance. In the meantime, here's everything else.
-            </p>
-            <div class="explore-teaser__cta">
-              <a href="/docs/quick-start" class="k-btn">Run it yourself <Icon name="arrow" size={17} /></a>
-              <a href={GITHUB_URL} class="k-btn k-btn--ghost" rel="noopener">View on GitHub</a>
-            </div>
-            <ul class="explore-teaser__list">
-              <li><Icon name="search" size={17} /> Library &amp; semantic search over real facts</li>
-              <li><Icon name="provenance" size={17} /> Inspect a fact's signed-commit provenance</li>
-              <li><Icon name="temporal" size={17} /> Time-travel the graph to any past commit</li>
-            </ul>
-          </div>
-          <div class="explore-teaser__art">
-            <KnowledgeGraph />
-          </div>
-        </div>
-      </section>
-    </BaseLayout>
-  )
-}
+  /* No padding-block: the frame butts directly against the header above and
+     the footer below, so every pixel between them belongs to the app. */
+  .explore-live {
+    padding-block: 0;
+  }
+  /* The site's footer carries a 64px top margin, which reads as dead space
+     under a full-bleed app surface. This style block only ships on /explore,
+     so scoping it further isn't needed — but it is restored when the teaser
+     is showing, since there the footer follows ordinary page copy. */
+  body:not(.explore-fallback) footer {
+    margin-top: 0;
+  }
+  /* Fills the viewport below the sticky header. --k-header-h is a fallback;
+     ExploreBrowser measures the real header on mount and overwrites it, so a
+     header that grows (an extra nav item wrapping) can't silently clip or
+     over-extend the frame. `dvh` so mobile browser chrome collapsing doesn't
+     leave a gap. */
+  .explore-live__frame {
+    height: calc(100dvh - var(--k-header-h, 61px));
+    min-height: 520px;
+    border-top: 1px solid var(--k-hairline);
+    border-bottom: 1px solid var(--k-hairline);
+    overflow: hidden;
+    background: #0b0b0b;
+  }
+  /* The live frame is the DEFAULT paint — no class toggle, no flash. Earlier
+     this was inverted (teaser first, island swaps it) to guarantee crawlable
+     text, but that made every visitor watch the teaser for the length of the
+     island's JS download: ~0.6s on Fast 4G, ~5.9s on Slow 3G, measured. The
+     <noscript> block below buys back the no-JS and non-JS-crawler case
+     without costing everyone else a flash. */
+  .explore-teaser {
+    display: none;
+  }
+  .explore-live {
+    display: block;
+  }
+  /* Bundle fetch failed or timed out: swap to the teaser. Rule order, not
+     specificity, is what makes this win. */
+  body.explore-fallback .explore-teaser {
+    display: block;
+  }
+  body.explore-fallback .explore-live {
+    display: none;
+  }
+  /* The live view's heading. The page needs an <h1> even when the teaser
+     (which carries the visible one) is hidden — for the document outline and
+     for a JS-executing crawler. */
+  .explore-live__srtitle {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+  }
+  /* The failure sentence only ever appears alongside explore-fallback —
+     never on a successful load, and never in what a no-JS visitor or
+     crawler sees by default. */
+  body.explore-fallback .explore-teaser__error {
+    display: block;
+  }
+
+  /* ── ExploreBrowser layout ──────────────────────────────────────────────
+     ExploreBrowser.tsx renders its own layout with these class names (and no
+     inline layout styles of its own) so the responsive rules below — real
+     @media queries — can reach it; a React inline `style` object can't
+     express a breakpoint. Below the site's own 860px breakpoint (the same
+     one .explore-teaser__inner uses above), library + content + rail can't
+     hold side by side: a dragged/default library width plus the rail's fixed
+     300px leaves the fact panel a sliver or negative width on a phone. Stack
+     instead — library, then the filter bar + fact panel, then the
+     connections rail — each given a real (vh, not %) height so the vendored
+     panels' own `height: 100%` internals still resolve, and the frame itself
+     scrolls through them. Nothing is ever unreachable; there's just more of
+     it below the fold. */
+  /* Column: the tour bar spans the full browser width, the split sits below
+     it. Before this the bar lived inside the content column and started where
+     the library ended, which made it look like commentary on the fact panel
+     alone even when the step was about the library. */
+  .explore-frame {
+    position: relative;   /* containing block for the simulated pointer */
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    outline: none;
+  }
+  .explore-frame__row {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+  }
+  .explore-frame__left {
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .explore-frame__splitter {
+    width: 4px;
+    margin-left: -2px;
+    margin-right: -2px;
+    cursor: ew-resize;
+    flex-shrink: 0;
+    z-index: 1;
+    background: transparent;
+    border-left: 1px solid var(--k-hairline);
+  }
+  .explore-frame__splitter:hover {
+    background: rgba(119, 204, 153, 0.15);
+  }
+  .explore-frame__main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    border-left: 1px solid var(--k-hairline);
+  }
+  .explore-frame__body {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    overflow: hidden;
+  }
+  .explore-frame__content {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .explore-frame__rail {
+    flex-shrink: 0;
+    display: flex;
+    min-height: 0;
+  }
+  /* EdgesRail's vendored root is a hardcoded inline `width: 300`. We can't
+     edit it — that's the invariant this whole design protects — but we can
+     override it from our own stylesheet, which is not the same thing as
+     hand-editing the file: `npm run sync` regenerates the component and this
+     rule keeps applying. It's already `box-sizing: border-box`, so 100% of
+     the wrapper is exactly right. Without this the rail stays 300px however
+     wide the user drags its splitter. */
+  .explore-frame__rail > * {
+    width: 100% !important;
+  }
+  /* Write controls. The shell deliberately does NOT set serverReadOnly (see
+     ExploreBrowser.tsx for why — it would also disable click-to-filter), so
+     the vendored panels render their edit affordances as if writes were
+     possible. They aren't: bundleApi's updateFact/retractFact throw, and
+     there is no server to write to. Hide them here rather than by editing a
+     vendored file. `display: none` (not just pointer-events) so they leave
+     the accessibility tree too, and keyboard users can't reach a control
+     that would only ever produce an error. */
+  .explore-frame [data-testid='retract-btn'],
+  .explore-frame [data-testid='retract-confirm-btn'],
+  .explore-frame [data-testid='fact-save-btn'] {
+    display: none !important;
+  }
+
+  /* ── Guided tour ─────────────────────────────────────────────────────────
+     The narration bar sits above the filter bar, in the flow rather than
+     floating: an anchored callout would have to chase its target through
+     splitter drags, panel scrolls and the 860px reflow, and would be wrong
+     at exactly the moments it is trying to draw attention. */
+  /* One row where there's width for it: meta, prose, buttons. The stacked
+     three-row version cost ~110px of the browser's height on every step. */
+  .explore-tour {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.5rem 1rem;
+    padding: 0.45rem 1rem;
+    border-bottom: 1px solid var(--k-hairline);
+    background: color-mix(in srgb, var(--k-brand) 8%, #0b0b0b);
+  }
+  .explore-tour__meta {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    font-family: var(--k-font-mono);
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .explore-tour__count { color: var(--k-brand); }
+  .explore-tour__label { color: var(--k-text-2); }
+  .explore-tour__body {
+    margin: 0;
+    flex: 1;
+    min-width: 18rem;
+    font-size: 0.9rem;
+    line-height: 1.45;
+    color: var(--k-text-1);
+  }
+  .explore-tour__actions {
+    display: flex;
+    gap: 0.5rem;
+    margin-left: auto;
+    flex-shrink: 0;
+  }
+  .explore-tour__meta { flex-shrink: 0; }
+  .explore-tour__skip,
+  .explore-tour__next {
+    font: inherit;
+    font-size: 0.85rem;
+    padding: 0.3rem 0.85rem;
+    border-radius: var(--k-radius);
+    cursor: pointer;
+    border: 1px solid var(--k-hairline);
+    background: transparent;
+    color: var(--k-text-2);
+  }
+  .explore-tour__next {
+    border-color: color-mix(in srgb, var(--k-brand) 45%, transparent);
+    background: color-mix(in srgb, var(--k-brand) 18%, transparent);
+    color: var(--k-text-1);
+  }
+  .explore-tour__skip:hover { color: var(--k-text-1); }
+  .explore-tour__next:hover { background: color-mix(in srgb, var(--k-brand) 28%, transparent); }
+  .explore-tour--invite .explore-tour__body { color: var(--k-text-2); }
+  /* Collapsed to a single row once the invitation has been answered, so the
+     tour stays reachable without permanently spending a paragraph of height. */
+  .explore-tour--launcher {
+    padding: 0.4rem 1rem;
+    background: transparent;
+  }
+  .explore-tour--launcher .explore-tour__body {
+    font-size: 0.85rem;
+    color: var(--k-text-2);
+  }
+  .explore-tour--launcher a {
+    color: var(--k-brand);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  .explore-tour--launcher .explore-tour__next {
+    font-size: 0.8rem;
+    padding: 0.2rem 0.7rem;
+  }
+
+  /* One highlight treatment, retargeted each step — the same ring wherever
+     attention needs to go, so it reads as one language rather than a series
+     of unrelated effects. Two pulses, then it settles and stays outlined for
+     as long as the step does. */
+  .explore-frame[data-tour-highlight='library'] [data-testid='library-header'],
+  .explore-frame[data-tour-highlight='fact'] [data-testid='fact-title'],
+  .explore-frame[data-tour-highlight='edges'] [data-testid='edges-rail-slot'],
+  .explore-frame[data-tour-highlight='filter'] #filter-input,
+  .explore-frame[data-tour-highlight='version'] [data-testid='version-walker'] {
+    position: relative;
+    border-radius: var(--k-radius);
+    outline: 2px solid color-mix(in srgb, var(--k-brand) 70%, transparent);
+    outline-offset: -2px;
+    animation: explore-tour-pulse 1.1s ease-out 2;
+  }
+  @keyframes explore-tour-pulse {
+    0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--k-brand) 55%, transparent); }
+    70%  { box-shadow: 0 0 0 10px color-mix(in srgb, var(--k-brand) 0%, transparent); }
+    100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--k-brand) 0%, transparent); }
+  }
+  /* Simulated pointer. Decorative only: it never receives events, and the
+     tour skips the whole animation under prefers-reduced-motion rather than
+     easing it, since the point is motion. */
+  .explore-tour-cursor {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 30;
+    pointer-events: none;
+    filter: drop-shadow(0 1px 3px rgba(0, 0, 0, 0.6));
+    transition: transform 900ms cubic-bezier(0.33, 0.9, 0.35, 1);
+  }
+  .explore-tour-cursor::after {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border-radius: 50%;
+    border: 2px solid var(--k-brand);
+    opacity: 0;
+    transform: scale(0.4);
+  }
+  .explore-tour-cursor.is-clicking::after {
+    animation: explore-tour-click 320ms ease-out;
+  }
+  @keyframes explore-tour-click {
+    0%   { opacity: 0.9; transform: scale(0.4); }
+    100% { opacity: 0;   transform: scale(1.8); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .explore-tour-cursor { transition: none; }
+    .explore-frame[data-tour-highlight] :is([data-testid='library-header'],
+      [data-testid='fact-title'], [data-testid='edges-rail-slot'],
+      [data-testid='version-walker'], #filter-input) {
+      animation: none;
+    }
+  }
+
+  @media (max-width: 860px) {
+    .explore-frame__row {
+      flex-direction: column;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    /* The bar is 49px on a desktop's single line; wrapped on a phone it grew
+       to 166px — over a fifth of the frame, taken from panes already short of
+       height. Tighter type and padding, and the step label drops out: the
+       count alone carries the progress. */
+    .explore-tour {
+      padding: 0.4rem 0.7rem;
+      gap: 0.35rem 0.6rem;
+    }
+    .explore-tour__body {
+      font-size: 0.82rem;
+      line-height: 1.35;
+      min-width: 0;
+    }
+    .explore-tour__label {
+      display: none;
+    }
+    .explore-tour__skip,
+    .explore-tour__next {
+      font-size: 0.8rem;
+      padding: 0.25rem 0.7rem;
+    }
+    /* Every stacked section below gets `flex: 0 0 auto` — its OWN explicit
+       (vh) height, not a share of the parent's. .explore-frame__main and
+       .explore-frame__body inherit `flex: 1` from the desktop (row) rules
+       above; left as flex:1, each nests one level deeper than .explore-frame
+       itself, so their "remaining space" is computed from an ALREADY-SHRUNK
+       ancestor rather than the frame's full height — content's flex-basis:0%
+       then has nothing left to grow into once its sibling rail's explicit
+       height is subtracted, and it collapses to 0 (reproducing this same
+       finding one level down). Switching every section to auto-sized content
+       stacked in a plain scrolling column sidesteps the arithmetic entirely:
+       each one is exactly as tall as its own rule says, and the frame's
+       overflow-y:auto scrolls through the (correctly) taller-than-the-box
+       total, the same way the library's and rail's internal scroll already
+       work today. */
+    .explore-frame__left {
+      width: 100% !important;
+      height: 46vh;
+      flex: 0 0 auto;
+    }
+    .explore-frame__splitter {
+      display: none;
+    }
+    .explore-frame__main {
+      width: 100%;
+      flex: 0 0 auto;
+      border-left: none;
+      border-top: 1px solid var(--k-hairline);
+    }
+    .explore-frame__body {
+      flex-direction: column;
+      flex: 0 0 auto;
+    }
+    .explore-frame__content {
+      width: 100%;
+      height: 46vh;
+      flex: 0 0 auto;
+    }
+    .explore-frame__rail {
+      width: 100% !important;
+      height: 36vh;
+      flex: 0 0 auto;
+    }
+  }
+</style>

@@ -36,7 +36,7 @@ const isActive = (href: string) =>
     </nav>
 
     <div class="k-header__actions">
-      {DEMO_LIVE && <a href="/explore" class="k-header__link k-header__link--demo">See it live</a>}
+      {DEMO_LIVE && <a href="/explore" class="k-header__link k-header__link--demo">Explore</a>}
       <a href={GITHUB_URL} class="k-btn k-btn--ghost k-header__gh" rel="noopener">
         <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">
           <path
@@ -54,7 +54,7 @@ const isActive = (href: string) =>
 
   <nav class="k-header__mobile" aria-label="Mobile" hidden>
     {nav.map((item) => <a href={item.href} class="k-header__link">{item.label}</a>)}
-    {DEMO_LIVE && <a href="/explore" class="k-header__link">See it live</a>}
+    {DEMO_LIVE && <a href="/explore" class="k-header__link">Explore</a>}
     <a href={GITHUB_URL} class="k-header__link" rel="noopener">GitHub</a>
   </nav>
 </header>

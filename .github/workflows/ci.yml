@@ -4,6 +4,12 @@ on:
   push:
     branches: [main]
   pull_request:
+  # The KB repo updates independently of this site, so rebuild on a timer to
+  # pick up new facts. Bounded at 8 builds/day rather than one per KB commit —
+  # the reference branch took 68 commits in a single day.
+  schedule:
+    - cron: '0 */3 * * *'
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -16,6 +22,10 @@ jobs:
       # repo — no token needed. Pin KNOMIT_REF to a tag/SHA once one exists;
       # `master` (the default branch) is the fallback until then.
       KNOMIT_REF: ${{ vars.KNOMIT_REF || 'master' }}
+      KB_REPO_SLUG: ${{ vars.KB_REPO_SLUG || 'knomit/agentic-engineering-kb' }}
+      # The agent branch name encodes a hostname; keep it a repo variable so
+      # retargeting needs no code change.
+      KB_REF: ${{ vars.KB_REF || 'agent/mindev.local-8ef0cd32' }}
       SITE_URL: https://knomit.io
     steps:
       - uses: actions/checkout@v5
@@ -27,8 +37,17 @@ jobs:
 
       - run: npm ci
 
+      # Must run before the unit tests: src/generated/kb-ui/ is gitignored and
+      # only exists after this step's sync runs, and bundleApi.ts imports from
+      # it at module scope. Running the tests first also meant the
+      # upstream-drift contract test (bundleApi.contract.test.ts) validated
+      # yesterday's vendor against today's bundleApi — the one test that's
+      # supposed to catch drift couldn't see it from there.
       - name: Build (runs prebuild sync)
         run: npm run build
+
+      - name: Unit tests
+        run: npm run test:unit
 
       - name: Type & content check
         run: npm run check
@@ -36,7 +55,7 @@ jobs:
       # Hand the built site to the deploy job (main pushes only) so it ships the
       # exact artifact CI validated — no rebuild, no drift.
       - name: Upload built site
-        if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+        if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
         uses: actions/upload-artifact@v7
         with:
           name: dist
@@ -46,7 +65,7 @@ jobs:
       - name: Install Playwright browser
         run: npx playwright install --with-deps chromium
 
-      - name: Smoke tests
+      - name: End-to-end tests (Playwright)
         run: npm test
 
       - name: Upload Playwright report
@@ -58,10 +77,14 @@ jobs:
           retention-days: 7
 
   # Ship to Cloudflare Pages only after build/check/tests pass, and only for
-  # pushes to main (never PRs). `needs` is the gate; the `if` scopes it to prod.
+  # pushes to main, a scheduled rebuild, or a manual dispatch — never PRs.
+  # `needs` is the gate; the `if` scopes it to prod.
   deploy:
     needs: build-and-test
-    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/main' }}
+    if: >-
+      ${{ github.event_name == 'schedule'
+          || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main')
+          || (github.event_name == 'push' && github.ref == 'refs/heads/main') }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
