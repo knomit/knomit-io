@@ -20,6 +20,7 @@ import { constants } from 'node:fs';
 import { accessSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { resolveImportGraph, renderApiBarrel, writeVendorSwap, SEEDS } from './lib/vendor-ui.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
@@ -64,6 +65,14 @@ const ARTIFACTS = [
   { src: SENTINEL, out: 'openapi.yaml', required: true },
   { src: 'README.md', out: 'knomit-readme.md', required: false },
 ];
+
+const UI_SRC_DIR = 'web/src';
+const UI_OUT_DIR = path.join(OUT_DIR, 'kb-ui');
+// Local checkouts are usually AHEAD of the pinned ref (the knomit dev branch runs
+// hundreds of commits past master). Vendoring from local by default would build a
+// different site locally than in CI, so UI files take the pinned ref unless the
+// developer opts in explicitly.
+const UI_ALLOW_LOCAL = process.env.KNOMIT_UI_LOCAL === '1';
 
 const exists = (p) =>
   access(p, constants.F_OK).then(() => true).catch(() => false);
@@ -122,12 +131,64 @@ async function syncOne({ src, out, required }) {
   console.log(`  ✓ ${out}  (${origin}, ${content.length} bytes)`);
 }
 
+async function syncUI() {
+  const useLocal = UI_ALLOW_LOCAL && LOCAL;
+  const read = async (rel) => {
+    const srcPath = `${UI_SRC_DIR}/${rel}`;
+    if (useLocal) {
+      const full = path.join(LOCAL, srcPath);
+      return (await exists(full)) ? readFile(full, 'utf8') : null;
+    }
+    const url = `https://raw.githubusercontent.com/${REPO}/${REF}/${srcPath}`;
+    const headers = { 'User-Agent': 'knomit-site-sync' };
+    if (TOKEN) headers.Authorization = `Bearer ${TOKEN}`;
+    const res = await fetch(url, { headers });
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`GitHub fetch ${url} -> ${res.status} ${res.statusText}`);
+    return res.text();
+  };
+
+  const origin = useLocal ? `local:${LOCAL}` : `github:${REPO}@${REF}`;
+  const { files, bareDeps, sources } = await resolveImportGraph(read, SEEDS);
+
+  // Build the destination -> content map entirely from what resolveImportGraph
+  // already read (no second read — sources.get never touches the network or
+  // disk again), then hand it to writeVendorSwap, which only replaces
+  // UI_OUT_DIR once every entry including the barrel is written. That keeps a
+  // write-phase failure (disk full, permissions, ...) from ever leaving the
+  // previous good vendor half-overwritten — matching the "keep the old copy,
+  // warn, don't break the build" philosophy the other artifacts in this file
+  // already follow (see the module docstring above).
+  const entries = new Map();
+  for (const rel of files) {
+    // api.ts is vendored under a different name; the barrel below takes its slot.
+    const out = rel === 'api.ts' ? 'upstreamApi.ts' : rel;
+    entries.set(out, sources.get(rel));
+  }
+  entries.set('api.ts', renderApiBarrel());
+  await writeVendorSwap(UI_OUT_DIR, entries);
+
+  console.log(`  ✓ kb-ui/  (${origin}, ${files.length} files)`);
+
+  // Fail loudly rather than at runtime if upstream grew a dependency we do not have.
+  const pkg = JSON.parse(await readFile(path.join(ROOT, 'package.json'), 'utf8'));
+  const have = new Set(Object.keys({ ...pkg.dependencies, ...pkg.devDependencies }));
+  const missing = bareDeps.filter(d => !have.has(d));
+  if (missing.length) {
+    throw new Error(
+      `Vendored UI needs npm packages this site does not have: ${missing.join(', ')}.\n` +
+      `Run: npm install --save ${missing.join(' ')}`);
+  }
+}
+
 async function main() {
   console.log(`knomit sync — ref=${REF}${LOCAL ? `, local=${LOCAL}` : ''}`);
   await mkdir(OUT_DIR, { recursive: true });
   for (const artifact of ARTIFACTS) {
     await syncOne(artifact);
   }
+
+  await syncUI();
 
   // Publish the spec under public/ so the REST API page (Scalar) can fetch it
   // at /openapi.yaml and offer it as a download.

@@ -268,6 +268,38 @@ const steps = [
         align="center"
       />
       <FeatureGrid features={pillars} />
+      <p class="features__more">
+        <a href="/use-cases">And what people build with it <Icon name="arrow" size={16} /></a>
+      </p>
+    </div>
+  </section>
+
+  <!-- Interop: publish as OKF -->
+  <section class="k-section okfband-sec">
+    <div class="k-container">
+      <div class="okfband k-reveal">
+        <div class="okfband__copy">
+          <p class="k-eyebrow">Interoperable by design</p>
+          <h2 class="okfband__title">Publish it as Open Knowledge Format.</h2>
+          <p class="k-text-2 okfband__body">
+            A knomit knowledge base is private and agent-shaped.
+            <strong>knomit-okf</strong> publishes it as a portable
+            <a href="/okf">OKF</a> repository — Google Cloud's open spec — from a
+            single git URL. Plain markdown any conformant consumer can read, and
+            a bundle that is validated against the spec before it commits.
+          </p>
+          <a href="/okf" class="k-btn k-btn--ghost okfband__cta">
+            How publishing works <Icon name="arrow" size={16} />
+          </a>
+        </div>
+        <div class="okfband__code">
+          <pre class="k-mono"><span class="okfband__c">$</span> knomit-okf clone -b main &lt;kb-url&gt; my-kb
+<span class="okfband__c">$</span> git push -u origin main
+
+<span class="okfband__c">$</span> knomit-okf sync &amp;&amp; git push</pre>
+          <p class="okfband__note k-mono">it commits · you push</p>
+        </div>
+      </div>
     </div>
   </section>
 
@@ -539,6 +571,76 @@ const steps = [
     color: var(--k-brand);
   }
 
+  .features__more {
+    margin-top: 2.25rem;
+    text-align: center;
+  }
+  .features__more a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.95rem;
+    font-weight: 500;
+  }
+
+  /* OKF band */
+  .okfband {
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: clamp(1.5rem, 0.75rem + 3vw, 3rem);
+    align-items: center;
+    padding: clamp(1.75rem, 1rem + 3vw, 2.75rem);
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius-lg);
+    background:
+      radial-gradient(120% 150% at 100% 0%, var(--k-brand-glow), transparent 55%),
+      var(--k-surface-1);
+  }
+  /* Long unbroken command lines would otherwise set the column's min-content
+     width and push the band past its container. */
+  .okfband > * {
+    min-width: 0;
+  }
+  .okfband__title {
+    font-size: var(--k-step-h3);
+    margin: 0.4rem 0 0.75rem;
+  }
+  .okfband__body {
+    line-height: 1.6;
+    font-size: 0.96rem;
+    max-width: 40rem;
+  }
+  .okfband__body strong {
+    color: var(--k-brand);
+    font-family: var(--k-font-mono);
+    font-size: 0.94em;
+    font-weight: 600;
+  }
+  .okfband__cta {
+    margin-top: 1.4rem;
+  }
+  .okfband__code pre {
+    margin: 0;
+    padding: 1rem 1.1rem;
+    background: var(--k-bg);
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius);
+    font-size: 0.78rem;
+    line-height: 1.9;
+    color: var(--k-text-2);
+    overflow-x: auto;
+  }
+  .okfband__c {
+    color: var(--k-brand);
+  }
+  .okfband__note {
+    margin-top: 0.7rem;
+    text-align: right;
+    font-size: 0.72rem;
+    color: var(--k-text-muted);
+    letter-spacing: 0.05em;
+  }
+
   /* Blog strip */
   .blogstrip__head {
     display: flex;
@@ -599,6 +701,7 @@ const steps = [
   @media (max-width: 880px) {
     .hero__inner,
     .facts__grid,
+    .okfband,
     .problem-head {
       grid-template-columns: 1fr;
     }

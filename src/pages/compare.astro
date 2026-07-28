@@ -76,11 +76,18 @@ const refinery = [
     icon: 'provenance',
     title: 'Every change is signed — and reversible',
     body: 'Each fact is an Ed25519-signed git commit. Because the substrate is git, knomit prunes and rewrites itself safely: nothing is ever lost, and every refinement is a commit you can review, diff, and revert.',
+    link: { href: '/security', label: 'How the signing holds up' },
   },
   {
     icon: 'consensus',
     title: 'Knowledge converges across peers',
     body: 'Agents and humans propose facts on branches; review merges them to main. One reviewed source of truth, shared instead of siloed — the gap every other cluster leaves open.',
+  },
+  {
+    icon: 'markdown',
+    title: 'It exports to a standard nobody owns',
+    body: 'Every profile above is somewhere knowledge goes in and does not come out. knomit publishes the whole base as Open Knowledge Format — Google Cloud’s open spec — plain markdown in a git repo that any conformant consumer can read without knomit in the picture. The exit is the feature.',
+    link: { href: '/okf', label: 'How OKF export works' },
   },
 ];
 
@@ -103,7 +110,7 @@ const mapAria =
 
 <BaseLayout
   title="knomit vs the AI-memory landscape — comparison"
-  description="How knomit compares to the four operational profiles of AI memory — raw stores, recall layers, graph engines, and agent runtimes — across provenance, synthesis, confidence, consensus, and time-travel."
+  description="How knomit compares to the four operational profiles of AI memory — raw stores, recall layers, graph engines, and agent runtimes — across provenance, synthesis, confidence, consensus, time-travel, and export to Open Knowledge Format."
 >
   <!-- Reframe + map -->
   <section class="k-section">
@@ -190,6 +197,11 @@ const mapAria =
             </span>
             <h3 class="cmp-card__title">{r.title}</h3>
             <p class="cmp-card__profile k-text-2">{r.body}</p>
+            {r.link && (
+              <a href={r.link.href} class="cmp-card__link">
+                {r.link.label} <Icon name="arrow" size={15} />
+              </a>
+            )}
           </div>
         ))}
       </div>
@@ -234,6 +246,11 @@ const mapAria =
           </ul>
         </div>
       </div>
+      <p class="cmp-fit__more k-text-2">
+        Recognise yourself on the left?
+        <a href="/use-cases">See what people build on it</a> — twelve of them,
+        from a solo developer's codebase to an open knowledge network.
+      </p>
     </div>
   </section>
 
@@ -251,7 +268,7 @@ const mapAria =
           Quick start <Icon name="arrow" size={16} />
         </a>
         {DEMO_LIVE && (
-          <a href="/explore" class="k-btn k-btn--ghost">See it live</a>
+          <a href="/explore" class="k-btn k-btn--ghost">Explore</a>
         )}
       </div>
     </div>
@@ -353,6 +370,14 @@ const mapAria =
     padding: 1.4rem;
     background: var(--k-bg);
   }
+  .cmp-card__link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    margin-top: 0.7rem;
+    font-size: 0.92rem;
+    font-weight: 500;
+  }
   .cmp-card--brand {
     border-color: rgba(119, 204, 153, 0.3);
     background:
@@ -453,6 +478,12 @@ const mapAria =
   }
   .cmp-fit__col--yes .cmp-fit__head :global(.k-icon) {
     color: var(--k-brand);
+  }
+  .cmp-fit__more {
+    margin-top: 2rem;
+    text-align: center;
+    font-size: 0.95rem;
+    line-height: 1.6;
   }
   .cmp-fit__list {
     list-style: none;

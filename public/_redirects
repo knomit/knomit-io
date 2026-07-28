@@ -1,3 +1,11 @@
 # Cloudflare Pages redirects.
 # @astrojs/sitemap can only emit sitemap-index.xml; alias the conventional path.
 /sitemap.xml /sitemap-index.xml 301
+
+# /docs had a card-grid landing page that nothing linked to — not the header
+# (which points at quick-start), not the footer, not the Starlight sidebar. It
+# was in the sitemap regardless, which is the shape Google files under "orphan".
+# It's gone; the path still has to resolve, because knomit's own README links to
+# knomit.io/docs from GitHub. Note this fires on Cloudflare only: under
+# `astro dev` /docs 404s, which is the price of a real 301 over a meta refresh.
+/docs /docs/quick-start 301

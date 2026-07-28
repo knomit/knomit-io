@@ -28,6 +28,10 @@ const pillars = [
     body: 'Each machine is the sole writer of its own agent branch. No peer merges another peer\'s branch directly. Facts land on main through review and merge, exactly like a pull request. You can host the store on any git host and apply the same access controls you already use for code.',
   },
   {
+    title: 'Exports do not leak their source',
+    body: 'Publishing a knowledge base as an OKF repository never publishes its address. The KB URL lives in a git remote that is not pushed, and the KB\'s own history is fetched to refs outside refs/heads/*, so the default push refspec cannot carry it. Recording the address in the published bundle is opt-in — and credentials are stripped from it first, with the tool saying so whenever that changes anything.',
+  },
+  {
     title: 'Open source and auditable',
     body: 'knomit is open source. The store format is plain markdown in a git repo — you can read every fact, diff every change, and audit the whole system yourself.',
   },
@@ -36,7 +40,7 @@ const pillars = [
 
 <BaseLayout
   title="Security & privacy — knomit"
-  description="How knomit keeps knowledge secure: local-first, Ed25519-signed history, encrypted remote credentials, guarded remotes, verified SSH host keys, git-native review, and open source."
+  description="How knomit keeps knowledge secure: local-first, Ed25519-signed history, encrypted remote credentials, guarded remotes, verified SSH host keys, exports that don't leak their source, git-native review, and open source."
 >
   <section class="k-section">
     <div class="k-container">

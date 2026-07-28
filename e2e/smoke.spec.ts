@@ -9,10 +9,12 @@ test.describe('marketing site', () => {
     );
     // Primary + secondary CTAs.
     await expect(page.getByRole('link', { name: /View on GitHub/i }).first()).toBeVisible();
-    // Demo link is hidden until the hosted instance exists (DEMO_LIVE=false).
-    await expect(page.getByRole('link', { name: /See it live/i })).toHaveCount(0);
-    // Footer "Live demo" link must also be absent in production.
-    await expect(page.getByRole('link', { name: /Live demo/i })).toHaveCount(0);
+    // /explore is a shipped feature (DEMO_LIVE=true): the header links to it.
+    // Labelled "Explore", not "See it live" — the page serves a build-time
+    // snapshot refreshed on a schedule, so "live" overclaimed.
+    await expect(page.getByRole('link', { name: /^Explore$/i }).first()).toHaveAttribute('href', '/explore');
+    // Footer link must also point at /explore.
+    await expect(page.getByRole('link', { name: /^Explore$/i }).last()).toHaveAttribute('href', '/explore');
     // Footer present.
     await expect(page.getByRole('contentinfo')).toBeVisible();
   });
@@ -58,10 +60,15 @@ test.describe('docs', () => {
 });
 
 test.describe('explore', () => {
-  test('renders the teaser while the hosted demo is gated', async ({ page }) => {
+  // /explore now mounts the real, live KB browser (an island, not an iframe);
+  // the "Browse a living knowledge base" teaser this test used to assert is
+  // the DEGRADED path — it only shows if the bundle fails to load, which
+  // e2e/explore.spec.ts covers directly by simulating that failure. This
+  // smoke test just needs to confirm the live page comes up.
+  test('mounts the live browser, not an iframe embed', async ({ page }) => {
     await page.goto('/explore');
     await expect(page.locator('iframe.explore-frame')).toHaveCount(0);
-    await expect(page.getByRole('heading', { name: /Browse a living knowledge base/i })).toBeVisible();
+    await expect(page.getByTestId('explore-browser')).toBeVisible();
   });
 });
 
