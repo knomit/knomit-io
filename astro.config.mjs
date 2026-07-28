@@ -108,6 +108,10 @@ export default defineConfig({
           ],
         },
         {
+          label: 'Publish',
+          items: [{ label: 'OKF export', slug: 'docs/okf' }],
+        },
+        {
           label: 'Integrations',
           items: [
             { label: 'Claude Code', slug: 'docs/claude-code' },

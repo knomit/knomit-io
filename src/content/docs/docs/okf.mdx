@@ -1,0 +1,599 @@
+---
+title: OKF export
+description: Publish a knomit knowledge base as a portable Open Knowledge Format (OKF) repository with knomit-okf — clone, sync, and branches, plus the bundle layout, determinism, authentication, and privacy model.
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+`knomit-okf` turns a knomit knowledge base into a publishable
+**[Open Knowledge Format](https://github.com/GoogleCloudPlatform/knowledge-catalog)**
+repository, and keeps it in sync — using nothing but a git URL.
+
+```sh
+knomit-okf clone -b main http://localhost:19278/git/knomit-kb my-kb
+cd my-kb
+git remote add origin git@github.com:me/my-kb-okf.git
+git push -u origin main
+```
+
+Later, whenever you want to publish new knowledge:
+
+```sh
+knomit-okf sync && git push
+```
+
+That is the whole tool. Everything below is detail.
+
+## What OKF is
+
+The **Open Knowledge Format** is an open specification published by Google Cloud
+in June 2026, currently at version 0.2. It represents knowledge as a directory of
+plain markdown documents with YAML frontmatter — no schema registry, no central
+authority, no required tooling. A conformant bundle is readable by any consumer
+that knows the format, and by any human with a text editor.
+
+It is deliberately minimal. `type` is the only always-required frontmatter key;
+a document carrying just `type` is fully conformant. The specification also
+allows an `index.md` at any level for progressive disclosure, and a `log.md` at
+any level recording changes to that scope.
+
+Read the [OKF specification](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
+for the format itself. This page covers what knomit does with it.
+
+## Why it exists
+
+A knomit KB is a private, agent-shaped thing: facts under `kb/`, one agent branch
+per author, provenance edges, an embedding index. OKF is the portable,
+consumer-shaped thing: plain markdown concept documents with standard
+frontmatter, directory indexes, and a changelog.
+
+`knomit-okf` is the mapper between them. It is a **standalone CLI**, not a server
+feature: the export runs against a plain git clone of the KB, so no knomit
+server, database, or cache is involved beyond serving the git URL.
+
+It also **never pushes**. It commits; you push — your remote, your credentials,
+your cadence.
+
+<Aside type="note">
+The KB URL is your knomit server's git endpoint, `<server>/git/<repo>`. That
+endpoint is on by default; see
+[Serving git over HTTP](/docs/remote-sync/#serving-git-over-http) for how it is
+exposed, and [Deployment](/docs/deployment/) for the one mode that does not mount
+it.
+</Aside>
+
+## Mental model
+
+The **output directory _is_ the export**. There is no second checkout, no cache
+directory, and no state held by a knomit server.
+
+```
+my-kb/
+├── .git/
+│   ├── refs/heads/main                  ← the bundle: what you publish
+│   └── refs/knomit-okf/source/main      ← the KB's own history, private
+├── index.md      ┐
+├── log.md        │
+├── kb/           ├─ owned by knomit-okf: written completely, pruned
+├── views/        │  of anything it did not write
+├── .knomit-okf.yaml ┘
+├── README.md     ┐  yours. Never read, never written, never staged.
+└── LICENSE       ┘
+```
+
+The knowledge base's own history is fetched into the same `.git` under
+`refs/knomit-okf/source/*`, which is **outside `refs/heads/*`** — so git's
+default push refspec never publishes it, and it is never checked out. That is the
+whole reason one directory can be both the export and its own source.
+
+<Aside type="caution" title="The one leak path">
+An explicit `git push --mirror`, or any `refs/*` refspec, would publish the
+source refs. This is not defended against in code — push branches, not refs.
+</Aside>
+
+## Install
+
+`knomit-okf` is built by the top-level `make build` and ships in the server
+tarball and the desktop bundles:
+
+```sh
+make build            # → dist/<platform>/knomit-okf
+```
+
+Or on its own — it is pure Go, no CGO, no native libraries:
+
+```sh
+go build -o knomit-okf ./tools/okf/
+```
+
+The desktop app symlinks it into `<home>/bin` on launch, alongside
+`knomit-bridge`.
+
+## Commands
+
+```
+knomit-okf clone    [-b <branch>] [--publish-source] [auth] <kb-url> <dir>
+knomit-okf sync     [-b <branch>] [--source <url>] [--publish-source] [auth]
+knomit-okf branches [--source <url>] [--no-fetch] [auth]
+knomit-okf version
+```
+
+`sync` and `branches` run **inside** an export directory; `clone` creates one.
+
+### `clone`
+
+Creates `<dir>` as an OKF repository for `<kb-url>`. The directory must be
+missing or empty — refusing a non-empty one is deliberate, because `clone` writes
+a whole repository and silently merging into an existing directory is not
+recoverable.
+
+| Flag | Default | Description |
+|---|---|---|
+| `-b <branch>` | the source's HEAD branch | Source branch to export |
+| `--publish-source` | off | Record the KB URL in `.knomit-okf.yaml` so a stranger who clones the published repo can sync it |
+| auth flags | none | `--token`, `--token-file`, `--username`, `--ssh-key` — see [Authentication](#authentication). A knomit server needs none. |
+
+`clone` is the only command that records **where the knowledge comes from**: it
+creates the `knomit-source` git remote in `.git/config`. That remote is local and
+never travels.
+
+A run reads as a pipeline — fetch, read facts at a commit, render, validate,
+write, stage, commit:
+
+```
+knomit-okf dev
+
+  ✓ Fetching    4 branches  2.8s
+  ✓ Reading     333 facts · 620 events · 50 retired  2.1s
+  ✓ Rendering   1029 documents  12ms
+  ✓ Validating  conformant with OKF 0.2  10ms
+  ✓ Writing     1030 changed · 0 removed  (of 1030)  93ms
+  ✓ Staging     1030 files  942ms
+  ✓ Committing  eab7a97d on main  4ms
+
+✓ Cloned main into my-kb in 6.0s
+```
+
+<Aside type="caution" title="Note which branch it picks">
+Without `-b`, the source's own advertised HEAD is used, falling back to
+`main`/`master`, and finally to the sole fetched branch. A knomit server's HEAD
+is usually the **agent** branch — one author's working memory, not consensus.
+Pass `-b main` when you mean to publish consensus.
+
+The difference is real: on the base above, `main` carried 297 facts against the
+agent branch's 333.
+</Aside>
+
+### `sync`
+
+Re-exports the branch this directory tracks and commits the result.
+
+| Flag | Default | Description |
+|---|---|---|
+| `-b <branch>` | the branch in `.knomit-okf.yaml` | Source branch to export |
+| `--source <url>` | the `knomit-source` remote | Override the KB URL **for this run only** |
+| `--publish-source` | off | Record the KB URL in `.knomit-okf.yaml` |
+| auth flags | none | `--token`, `--token-file`, `--username`, `--ssh-key` |
+
+Run it from anywhere inside the export — like git, it searches upward for the
+repository and resolves the bundle against the repository root, not your current
+directory. It refuses a git repository that is not one of its own exports (no
+`knomit-source` remote, no `.knomit-okf.yaml`), so a stray `sync` in an unrelated
+checkout cannot render a bundle into someone's source tree.
+
+Source URL precedence, highest first: `--source` → the `knomit-source` remote →
+the `source` field in the committed config.
+
+<Aside type="note">
+`--source` is genuinely one-off: it does **not** repoint the stored remote for
+future runs. A KB that has genuinely moved is repointed deliberately, with
+`git remote set-url knomit-source <url>`.
+</Aside>
+
+### `branches`
+
+Lists every source branch and how far each exported bundle has fallen behind.
+
+| Flag | Default | Description |
+|---|---|---|
+| `--source <url>` | the `knomit-source` remote | Override the KB URL for this run |
+| `--no-fetch` | off | List from what is already fetched, without contacting the remote |
+| auth flags | none | Ignored under `--no-fetch`, which says so |
+
+```
+  BRANCH                             EXPORTED  STATUS
+    agent/mindev.local-8ef0cd32      ea7c116b  up to date
+  * main                             8f238008  up to date
+    okf/agent/mindev.local-8ef0cd32  —         not exported
+    okf/main                         —         not exported
+```
+
+`*` marks the output branch currently checked out. The `EXPORTED` column is the
+**source** commit each bundle was built from, not the bundle's own commit.
+`branches` reads each output branch's committed `.knomit-okf.yaml` straight out
+of its tree, so nothing is checked out to produce this table.
+
+Fetching by default is the point — "behind by N" computed against stale refs
+would be worse than not reporting it. `--no-fetch` is for offline use, and says
+so in its output.
+
+| Status | Meaning | What to do |
+|---|---|---|
+| `up to date` | Bundle matches the source head | Nothing |
+| `N commits behind` | Source moved forward | `knomit-okf sync -b <branch>` |
+| `not exported` | Source branch has no bundle | `knomit-okf sync -b <branch>` |
+| `never synced` | Output branch exists, no commit recorded | `knomit-okf sync -b <branch>` |
+| `diverged — re-sync rewrites the bundle` | Source moved somewhere that doesn't contain what you exported | Decide, then re-sync |
+| `source branch gone` | Branch deleted upstream | Delete the output branch, or keep it as an archive |
+| `N+ commits behind` | Counting hit its 1000-commit bound; `N` is a lower bound, not a count | `knomit-okf sync -b <branch>` |
+| `unknown (exported commit missing)` | The recorded commit isn't in this repo — rewritten history, or a bundle from another KB | Re-sync, or check the source |
+| `exported by N branches (…)` | Two output branches claim one source, after a `git branch -c` | Delete the stale copy |
+
+## The branching model
+
+**One output repository carries every branch of one KB**, and each output branch
+is named after the source branch it exports:
+
+| Source branch | Output branch |
+|---|---|
+| `main` | `main` |
+| `agent/mindev.local-8ef0cd32` | `agent/mindev.local-8ef0cd32` |
+
+Output branches are **orphans** — unrelated snapshots, not descendants of one
+another. Bundles for different source branches share no history, because a shared
+one would produce only meaningless diffs between them.
+
+The join between a source branch and its output branch is each output branch's
+committed `.knomit-okf.yaml`, not its name — which is why `branches` can inspect
+every branch without checking any of them out.
+
+## What gets written
+
+`knomit-okf` owns exactly five entries, and prunes *inside* them:
+
+```
+index.md              root index, links kb/ and views/
+log.md                root changelog, newest first, grouped by date
+kb/                   concept documents + per-directory index.md and log.md
+views/                derived cross-cutting views:
+  ├── index.md
+  ├── domains/        one document per domain tag
+  ├── entities/       one document per entity
+  ├── retired.md      retracted and superseded facts (index only)
+  ├── synthesis.md    higher-order facts distilled from clusters
+  ├── hypotheses.md   falsifiable predictions
+  └── methodology.md  lessons about how to reason over this KB
+.knomit-okf.yaml      sync state: branch, synced_commit, tool_version, source?
+```
+
+A digest with no facts produces no page rather than an empty one, so a small KB
+will not have all three of `synthesis.md` / `hypotheses.md` / `methodology.md`.
+The same rule applies to logs: a scope with nothing to report gets no `log.md`.
+
+**Everything else in the repository belongs to the publisher** — `README.md`,
+`LICENSE`, `.github/` — and is never read, written, or staged. Staging with
+`--all` would sweep a publisher's uncommitted edits into an okf commit; the tool
+stages only the paths it owns.
+
+Deleting inside the owned paths is not optional: overlaying files can never
+remove them, so a retired fact's document would stay published forever,
+contradicting the `views/retired.md` in the same bundle.
+
+### Concept documents
+
+One markdown file per fact, at the fact's ontology path, with a slugified-title
+filename. Frontmatter carries meaning in **standard OKF keys** and knomit
+specifics in `knomit_*`:
+
+```yaml
+---
+type: invariant                       # from the TOPIC (kb/invariants/…), singularized
+title: 'Embeddings are mandatory: …'
+resource: knomit://3ec012f5b4d2/kb/invariants/embeddings/mandatory/f34da09a.md
+tags: [embeddings, store, app, …]     # domains, then entities, then kind
+timestamp: "2026-06-08T15:02:45Z"
+generated:
+  by: knomit/authored
+  at: "2026-06-08T15:02:45Z"
+knomit_type: policy                   # the LEAF fact.Type, preserved
+knomit_kind: pragmatic
+knomit_confidence: 0.95
+knomit_origin: authored
+knomit_domain: [embeddings, store, app]
+knomit_entities: [app.New, embeddings.NewEmbedder, …]
+knomit_refs: [src://knomit/internal/app/app.go, …]
+knomit_path: kb/invariants/embeddings/mandatory/f34da09a.md
+---
+```
+
+OKF's `type` maps from the fact's **topic** — the first path segment under `kb/` —
+not from its leaf `fact.Type`. `type` is OKF's only required key and answers
+"what this document is"; the leaf type is preserved as `knomit_type`.
+
+The body carries the authored text, then `# Related` (domains and entities,
+linked into `views/`), `# Citations` (refs, with cited facts resolved to titled
+relative links), and `# History` when the fact has more than one revision *worth
+reporting*. That qualifier is the whole rule: a fact revised only by a ref count
+moving has two revisions and no history section, because the section would assert
+that something happened while unable to say what.
+
+Links are **relative**, so a bundle browses correctly on GitHub, on a static
+host, or straight off the filesystem — no base URL is baked in.
+
+<Aside type="caution" title="Retirements are indexed, never published as documents">
+A retracted fact appears only in `views/retired.md`. Its claims have been
+disavowed, and a conformant consumer may ignore `status: deprecated` — so an
+ingestible document would invite re-ingestion of withdrawn knowledge.
+</Aside>
+
+### The changelog
+
+§9 allows a `log.md` at any level, and the bundle uses that: **every event lands
+in exactly one log.** A revision or a withdrawal belongs to the folder holding the
+fact it happened to; when that folder is gone — its last fact retired — it falls
+to the root, the only scope that still contains it.
+
+Creations are the one exception and always stay at the root, collapsed to a daily
+count. They were 93% of all events on the 1208-fact base this was measured
+against, so partitioning them would scatter hundreds of folder files saying
+nothing but `1 fact added`.
+
+```markdown
+# Log
+
+**Months:** [2026-07](#2026-07-26) (89) · [2026-06](#2026-06-30) (110) · …
+
+## 2026-07-25
+
+- **Creation** 7 facts added
+- **Deprecation** OKF bundles regenerate lazily during ref advertisement … — retracted
+```
+
+Three labels, the ones §9 names: **Creation**, **Update**, **Deprecation**.
+Withdrawals are reported, not just indexed — a base that logged only what it
+gained would describe half of what happened to it. Measured on a 333-fact export:
+65 folder logs, and a root log of 39 Creation / 44 Deprecation / 5 Update rows
+against 92 Update / 6 Deprecation rows spread across the folders.
+
+The month list is a **jump bar, not headings**: §9 requires a flat list of
+date-grouped entries under ISO `YYYY-MM-DD` headings, so grouping by month the
+way `views/` does would read better and break the rule.
+
+A successor is **named, never linked**: the same Deprecation row renders into the
+root log and into a folder log at a different depth, so a relative link correct
+in one would be broken in the other. `views/retired.md` is the view that links.
+
+## Determinism
+
+Rendering is a pure function of the source commit, and the export commit is
+timestamped from the **source commit**, never the clock. Two people exporting the
+same knowledge get byte-identical repositories.
+
+That is also what makes a re-sync cheap: an unchanged source needs no work at
+all, rather than a full render whose output happens to match.
+
+```
+✓ Fetching    4 branches  7ms
+· Checking    already up to date at ea7c116b
+
+✓ Nothing to do in 72ms
+```
+
+The dot (`·`) instead of a checkmark means a stage was skipped, not performed.
+
+The skip is keyed on the source commit **and** the tool's release, because a
+bundle is a function of both. Upgrading to a new release re-exports every branch
+once, even against an unchanged source — otherwise a mapper improvement would
+never reach a knowledge base that has stopped moving. Rebuilding the same release
+does not: `tool_version` records the build SHA, but only the `Major.Minor.Patch`
+part drives the decision.
+
+Every bundle is validated against OKF conformance rules **before** it is
+committed — a non-conformant bundle is an error, not a commit. The whole value of
+the export is that a consumer can trust the format without re-validating.
+
+## Authentication
+
+Two remotes are involved, and they authenticate very differently.
+
+**Pushing to your publish remote** is plain `git push` — the tool never pushes —
+so the git CLI handles auth with everything you normally have: SSH keys,
+`ssh-agent`, credential helpers, `~/.ssh/config`, tokens. Publishing to a private
+GitHub or GitLab repo needs no special handling.
+
+**Fetching the knowledge base** happens in-process via go-git, using whatever
+`clone`, `sync`, or `branches` was given on the command line:
+
+| Source | Auth needed |
+|---|---|
+| A knomit server's git endpoint | none — it's unauthenticated |
+| `/path/to/repo` or `file://…` | none — local filesystem |
+| A private HTTPS repo | `--token` (or `--token-file`, or `$KNOMIT_OKF_TOKEN`) |
+| A private SSH repo | `--ssh-key` (or ssh-agent, or a default identity) |
+
+Pass the flag that matches the URL's transport. A flag the transport cannot use
+is an error, not a silent no-op — `--ssh-key` against an `https://` source used
+to fetch anonymously and then blame the token.
+
+### HTTPS — a token, sent as the basic-auth password
+
+```sh
+knomit-okf clone --token $GH_TOKEN https://github.com/me/private-kb my-kb
+```
+
+The token always rides as the basic-auth *password*, never a Bearer header —
+GitHub, GitLab, and Bitbucket all reject Bearer on their git-over-HTTPS
+endpoints. The username (`--username`, default `git`) is ignored by GitHub and
+GitLab but matters on Bitbucket:
+
+| Host | `--username` | Notes |
+|---|---|---|
+| GitHub | anything — default `git` works | ignored |
+| GitLab | anything — default `git` works | ignored |
+| Bitbucket | `x-token-auth` **required** | access tokens are rejected under any other username |
+
+`--username` names the field a *token* rides in, so it does nothing on its own:
+passing it without `--token` is rejected rather than silently fetching
+anonymously and failing later with a 401.
+
+`--token-file <path>` reads the token from a file instead of argv (`--token` and
+`--token-file` are mutually exclusive). `$KNOMIT_OKF_TOKEN` is the fallback when
+neither flag is given — the CI path.
+
+### SSH — a key, resolved in this order
+
+<Steps>
+
+1. `--ssh-key <path>` (or `$KNOMIT_OKF_SSH_KEY`) — an explicit key. If it can't
+   be loaded this is a hard error, never a silent fallback: you asked for *this*
+   key.
+
+2. `ssh-agent` — used only if it actually has an identity loaded. An agent socket
+   existing with zero identities does not count as usable.
+
+3. `~/.ssh/id_ed25519`, then `id_rsa`, then `id_ecdsa` — the same defaults git
+   itself tries.
+
+</Steps>
+
+A passphrase-protected key reads `$KNOMIT_OKF_SSH_PASSPHRASE` only — there is no
+`--ssh-passphrase` flag, because a passphrase on argv would be visible to every
+user on the machine via `ps`.
+
+<Aside type="caution" title="known_hosts must already contain the host">
+go-git verifies it with no interactive "continue connecting (yes/no)?" prompt, so
+an unknown host is a hard failure:
+
+```sh
+ssh-keyscan git.example.com >> ~/.ssh/known_hosts
+```
+
+A host key that *mismatches* an existing entry is reported as a different failure
+and never gets that advice — appending the key that just failed to match would
+silence the check instead of satisfying it.
+</Aside>
+
+## Privacy
+
+A private KB's address must never travel just because someone exported it.
+
+- The `knomit-source` remote lives in `.git/config` and is **never pushed** — but
+  it holds the URL `clone` was given verbatim, so a credential embedded in that
+  URL is stored there. Pass `--token` instead; it is never persisted.
+- Source history lives at `refs/knomit-okf/source/*` and is **never pushed** by
+  the default refspec.
+- The KB URL is written into the committed `.knomit-okf.yaml` **only** with
+  `--publish-source`. Once published it carries to every output branch, including
+  one `sync -b` creates later — the address is a property of the repository, not
+  of one branch. An *unpublished* source stays unpublished on every branch.
+
+Use `--publish-source` when the KB is publicly reachable and you want strangers
+who clone your published repo to be able to `knomit-okf sync` it themselves.
+
+<Aside type="danger" title="Do not embed a token in the source URL">
+`https://user:TOKEN@host/kb.git` works — go-git uses the credentials itself, and
+`knomit-okf` never prints them — but `clone` records the URL you gave it as the
+`knomit-source` remote, so the token is written **verbatim into `.git/config`**
+and stays there for every later `sync`.
+
+Use `--token`, `--token-file`, or `$KNOMIT_OKF_TOKEN`: none of them touch the URL
+and none are persisted. If you already cloned with an embedded token, fix it with
+`git remote set-url knomit-source https://host/kb.git` and rotate the token.
+
+What gets *committed* is safe either way. Before the source URL reaches
+`.knomit-okf.yaml`, `knomit-okf` strips it — the whole userinfo for
+`http(s)://user:TOKEN@host/…`, and only the password for `ssh://user@host/…`,
+where the username is a login name rather than a secret. It prints "credentials
+stripped from the published source URL" whenever that changes anything.
+</Aside>
+
+## Gotchas
+
+- **Flags come before positional arguments.** Go's `flag` package stops parsing
+  at the first non-flag argument, so `clone <url> <dir> -b main` fails with a
+  usage error. Write `clone -b main <url> <dir>`.
+- **`knomit-okf` never pushes.** After a successful `clone` or `sync` you still
+  need `git push`. Your remote, your credentials.
+- **`git push --mirror` leaks the source history.** So does any `refs/*` refspec.
+  Push branches, not refs.
+- **`--publish-source` is a no-op on an up-to-date sync.** The tool
+  short-circuits before rendering when nothing changed, so the config is never
+  rewritten. Combine it with a run that actually re-renders, or use it on `clone`.
+- **`branches` can report one source as `exported by 2 branches`.** Copying an
+  output branch (`git branch -c`) copies its `.knomit-okf.yaml`, so both claim the
+  same source. The tool names the claimants rather than picking one. Delete the
+  stale copy to clear it.
+- **`--source` does not stick.** It overrides the URL for one run only. Use
+  `git remote set-url knomit-source <url>` to move a KB permanently.
+- **An ssh-agent with zero identities does not count.** Resolution falls through
+  to `~/.ssh/id_ed25519` and friends rather than failing — but if you expected the
+  agent to be used, check `ssh-add -l`.
+- **Uncommitted publisher edits don't force a re-render, and a damaged bundle
+  does.** `sync` compares the working tree against the index for the owned paths
+  only.
+- **`sync -b <other>` needs a clean working tree for *your* files.** Switching
+  output branches is a real git checkout, and go-git will not carry an
+  uncommitted change to a tracked file across it. The error names the files;
+  commit or `git stash` them. Untracked files are fine, and a dirty *bundle* file
+  is restored automatically.
+- **An owned root that is a symbolic link is refused.** git cannot represent a
+  symlinked directory holding tracked files, so this only ever comes from a local
+  hand-edit.
+- **A failed `clone` cleans up after itself.** A directory it created is removed;
+  one you created is emptied back to how it was found. Retry the command rather
+  than reaching for `rm -rf`.
+- **A failed `sync -b <new>` leaves the repository as it found it**, and says
+  `nothing was committed`. Your bundle is never removed from disk to make room for
+  one that was not built.
+- **`the repository was repacked mid-run (git maintenance)` is a note, not a
+  problem.** git's background maintenance packs loose objects and deletes them
+  while a sync is running; go-git indexes packfiles once and never rescans, so a
+  run holding the repository open could find an object neither loose nor in the
+  packs it knew about. The tool rescans and retries. Seeing that note is normal;
+  seeing the failure it replaced is not.
+- **History is walked to a 5000-commit bound.** Past it, creation dates, per-fact
+  `# History`, and `views/retired.md` lose their oldest entries. The run says so —
+  `! history walk stopped at the 5000-commit bound` — and that warning means the
+  bundle's dates are not fully trustworthy.
+
+## A publishing loop that works
+
+```sh
+# once
+knomit-okf clone -b main <kb-url> ~/pub/my-kb
+cd ~/pub/my-kb
+git remote add origin git@github.com:me/my-kb-okf.git
+git push -u origin main
+
+# whenever — cron, CI, or by hand
+cd ~/pub/my-kb
+knomit-okf sync && git push
+```
+
+`sync` exits 0 and does nothing when there is nothing to do, so running it on a
+timer costs a fetch and about 70ms.
+
+## Cheat sheet
+
+| I want to… | Command |
+|---|---|
+| Start publishing a KB | `knomit-okf clone -b main <kb-url> <dir>` |
+| Refresh the current branch | `knomit-okf sync` |
+| Export another source branch | `knomit-okf sync -b <branch>` |
+| See what's behind | `knomit-okf branches` |
+| Same, offline | `knomit-okf branches --no-fetch` |
+| Let strangers re-sync my repo | `knomit-okf sync --publish-source` |
+| Try a different KB once | `knomit-okf sync --source <url>` |
+| Move my KB for good | `git remote set-url knomit-source <url>` |
+| Use a private SSH KB | `knomit-okf clone --ssh-key <path> …` |
+| Use a private HTTPS KB | `knomit-okf clone --token $TOKEN …` (Bitbucket: add `--username x-token-auth`) |
+| Actually publish | `git push` — the tool never does |
+
+## Scope
+
+v1 is **per-repo and export-only**. [Lenses](/docs/lenses/) — federated
+multi-repo views — are explicitly out of scope, and there is no import path: OKF
+out, not OKF in.
+
+See also the [CLI reference](/docs/cli-reference/#knomit-okf--okf-export) for the
+flag tables in one place with the other three binaries.
