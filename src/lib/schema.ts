@@ -80,6 +80,28 @@ export function breadcrumbSchema(site: URL, crumbs: { name: string; url: string 
   };
 }
 
+/** A procedure with ordered steps. Used on /okf for the publish loop — one of
+ *  the few structured-data types still earning a rich result, and the steps are
+ *  derived from the same array the page renders so the two cannot disagree. */
+export function howToSchema(args: {
+  name: string;
+  description: string;
+  steps: { name: string; text: string }[];
+}) {
+  return {
+    '@context': ctx,
+    '@type': 'HowTo',
+    name: args.name,
+    description: args.description,
+    step: args.steps.map((s, i) => ({
+      '@type': 'HowToStep',
+      position: i + 1,
+      name: s.name,
+      text: s.text,
+    })),
+  };
+}
+
 export function faqPageSchema(items: { q: string; a: string }[]) {
   return {
     '@context': ctx,

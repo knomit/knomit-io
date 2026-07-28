@@ -157,6 +157,10 @@ const fm = frontmatter;
   .k-fact__prov {
     display: flex;
     align-items: center;
+    /* The commit/signer run plus the nowrap confidence pill exceed the card
+       below roughly 400px. Wrapping drops the pill to its own line instead of
+       letting .k-fact's overflow:hidden clip it away silently. */
+    flex-wrap: wrap;
     gap: 0.5rem;
     padding: 0.6rem 1rem;
     border-top: 1px solid var(--k-hairline-soft);
