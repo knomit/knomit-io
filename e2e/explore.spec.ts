@@ -111,25 +111,43 @@ test.describe('/explore live KB browser', () => {
   });
 
   test('filters the recent list via a path chip', async ({ page }) => {
+    // Rendered paths, not a row count. bundleApi's `recent` returns one page
+    // of at most 50 facts (`all.slice(offset, offset + limit)`), so once the
+    // filtered subtree is itself larger than a page, both the unfiltered and
+    // the filtered list render exactly 50 rows and "the count went down" is
+    // arithmetically impossible. That is not hypothetical: this assertion went
+    // red the day `kb/gotchas` passed 50 facts. Scope membership is the
+    // property actually under test and it holds at any KB size.
+    const paths = () => page.getByTestId('chrono-item')
+      .evaluateAll(els => els.map(el => el.getAttribute('data-path') ?? ''));
+
     await page.goto('/explore');
     await expect(page.getByTestId('chrono-item').first()).toBeVisible();
-    const before = await page.getByTestId('chrono-item').count();
+    // The premise: the unfiltered list spans more than the one topic we are
+    // about to scope to, so there is something for the filter to remove.
+    // (Only false if the 50 most recently committed facts in the whole KB were
+    // all gotchas — in which case this fails loudly instead of passing
+    // vacuously, which is the point of asserting it.)
+    expect((await paths()).some(p => !p.startsWith('kb/gotchas/'))).toBe(true);
 
     // A `path:` chip is deliberately NOT a "domain/entity/type/kind/origin"
     // chip: Library.tsx's `hasNonPathFilters` excludes it, so librarySort
     // stays 'recent' and the list keeps rendering as `chrono-item` rows —
     // unlike e.g. a `type:` chip, which flips `effectiveSort` to 'relevance'
-    // and swaps the whole list over to `dir-entry` rows regardless of
-    // whether the filter actually matched anything (a vacuous "count went
-    // to 0" either way). Scoping to `kb/gotchas` — one of the KB's fixed
-    // ontology topics, and a strict subset of the full `kb` root — narrows
-    // `api.recent`'s `path` argument and genuinely shrinks the list.
+    // and swaps the whole list over to `dir-entry` rows regardless of whether
+    // the filter actually matched anything. Scoping to `kb/gotchas` — one of
+    // the KB's fixed ontology topics, and a strict subset of the full `kb`
+    // root — narrows `api.recent`'s `path` argument.
     await page.locator('#filter-input').fill('path:kb/gotchas');
     await page.locator('#filter-input').press('Enter');
 
     await expect(page.getByTestId('left-panel')).toHaveAttribute('data-sort', 'recent');
-    await expect.poll(() => page.getByTestId('chrono-item').count())
-      .toBeLessThan(before);
+    // Every surviving row is inside the scope...
+    await expect.poll(async () => (await paths()).filter(p => !p.startsWith('kb/gotchas/')))
+      .toEqual([]);
+    // ...and the list did not simply empty out, which would satisfy that
+    // vacuously.
+    await expect(page.getByTestId('chrono-item').first()).toBeVisible();
   });
 
   test('falls back to the teaser when the bundle is unavailable', async ({ page }) => {
