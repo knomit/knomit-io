@@ -1,0 +1,440 @@
+---
+title: 'What an OKF bundle actually contains — and four things to do with it'
+description: "One command turns a knomit knowledge base into 566 markdown files. The docs stop at git push; this is what you have afterwards — the anatomy of a bundle, and four ways to spend it, including Gemini and Claude both answering a design question straight off the files, with no knomit, no server and no MCP."
+pubDate: 2026-07-28
+author: The knomit team
+tags: [okf, publishing, interop, agents]
+draft: false
+---
+
+import AgentTrace from '../../components/AgentTrace.astro';
+
+Our [OKF reference](/docs/okf/) is a good page. It tells you every flag of
+`knomit-okf`, what the bundle layout is, how the export stays deterministic, how
+authentication and privacy work, and which sharp edges will bite you. It also
+stops, like most tool documentation, at `git push`.
+
+That is the wrong place to stop, because the interesting half comes after. You
+now hold a few hundred markdown files that no longer need knomit to be useful —
+no server, no database, no MCP connection, no embedding index. This post is
+about that pile: what is in it, and the four distinct things it is good for.
+
+Everything below comes out of one real export, run the day this was published.
+
+## One command, and what came out of it
+
+The knowledge base is the **agentic-engineering** pack — the corpus behind the
+[explore demo](/explore/) on this site. It is not codebase memory; it is a body
+of knowledge about building agentic
+products, distilled from named external sources, where every fact carries at
+least one citation. That distinction matters later.
+
+```sh
+knomit-okf clone http://localhost:19278/git/agentic-engineering agentic-engineering
+```
+
+```
+knomit-okf 0.5.0.d174bc58
+
+  ✓ Fetching    4 branches  374ms
+  ✓ Reading     181 facts · 234 events · 0 retired  269ms
+  ✓ Rendering   568 documents  8ms
+  ✓ Validating  conformant with OKF 0.2  6ms
+  ✓ Writing     569 changed · 0 removed  (of 569)  50ms
+  ✓ Staging     569 files  372ms
+  ✓ Committing  59634794 on agent/mindev.local-8ef0cd32  31ms
+
+✓ Cloned agent/mindev.local-8ef0cd32 into agentic-engineering in 1.1s
+```
+
+One git URL in, a git repository out, in about a second. Nothing else was
+involved — no knomit server work beyond serving the clone, no cache, no export
+state held anywhere.
+
+What landed: **181 facts rendered into 566 markdown documents**, 2.8 MB, roughly
+95,000 words. Among them 237 `index.md` files, 24 scoped changelogs, 36 domain
+views, 66 entity views, and 11 synthesis documents. The facts break down as 46
+gotchas, 36 conventions, 33 invariants, 28 architecture notes, 25 decisions,
+7 principles and 3 incidents. Those numbers are what one export produced on one
+day; the shape is what matters.
+
+Note the fourth line. The bundle was checked against
+[OKF 0.2](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)
+conformance *before* the commit was made, in 6 ms. A non-conformant bundle is an
+error, not a commit — which is the only reason a consumer downstream can trust
+the format without re-validating it.
+
+## What is in there
+
+### The front door
+
+`index.md` at the root, eight lines, and it is the entire orientation an
+unfamiliar reader or agent needs:
+
+```markdown
+---
+okf_version: "0.2"
+---
+
+# Knowledge Base
+
+- [kb](kb/index.md) — Knowledge for people building agentic products, and for
+  coding agents handed this pack as context. Every fact is distilled from a named
+  external source and carries at least one URL. The bar is altitude — if a
+  competent model would already produce the claim at this specificity from its
+  own priors, it does not belong here.
+- [views](views/index.md)
+```
+
+Every directory below has one too, all the way down. OKF calls this progressive
+disclosure and it is the format's best idea: you can descend into a corpus you
+have never seen without an index server, a search API, or a schema, because each
+level tells you what its children are.
+
+### One file per fact
+
+Under `kb/`, each fact is a single markdown document at its ontology path, with a
+filename slugified from its title. Here is one in full — a real invariant from
+the pack, unedited:
+
+```markdown
+---
+type: invariant
+title: MCP tool annotations are untrusted input — never gate auto-approval on them
+resource: knomit://bc6eac5f37df/kb/invariants/ai/agents/tools/mcp/security/ee3bc7d3.md
+tags: [agentic-engineering, mcp, security, tools, MCP, tool annotations, readOnlyHint, pragmatic]
+timestamp: "2026-07-26T18:14:14Z"
+sources:
+  - resource: https://modelcontextprotocol.io/docs/concepts/tools
+generated:
+  by: knomit/authored
+  at: "2026-07-26T18:14:14Z"
+knomit_type: policy
+knomit_kind: pragmatic
+knomit_confidence: 0.9
+knomit_origin: authored
+knomit_domain: [agentic-engineering, mcp, security, tools]
+knomit_entities: [MCP, tool annotations, readOnlyHint]
+knomit_refs: [https://modelcontextprotocol.io/docs/concepts/tools]
+knomit_path: kb/invariants/ai/agents/tools/mcp/security/ee3bc7d3.md
+---
+
+# MCP tool annotations are untrusted input — never gate auto-approval on them
+
+The MCP spec states that clients MUST consider tool annotations untrusted unless
+they come from a trusted server. Annotations are optional properties in a tool
+definition that describe the tool's behaviour — and they are supplied by the same
+server that implements the tool.
+
+The consequence people get wrong: a behavioural hint asserting a tool is safe or
+read-only is a self-declaration by a party you may not trust, not a verified
+property. […]
+
+# Related
+
+**Domains:** [agentic-engineering](../../../../../../../views/domains/agentic-engineering.md), [mcp](../../../../../../../views/domains/mcp.md), …
+
+**Entities:** [MCP](../../../../../../../views/entities/mcp.md), readOnlyHint, tool annotations
+
+# Citations
+
+- [https://modelcontextprotocol.io/docs/concepts/tools](https://modelcontextprotocol.io/docs/concepts/tools)
+```
+
+A title that states the claim rather than naming a topic, a body that argues it,
+the domains and entities as working relative links, and the source. No knomit
+required to read any of it.
+
+### Two kinds of frontmatter
+
+The frontmatter is doing something deliberate. The top block is standard OKF
+keys; the `knomit_*` block is everything the format has no opinion about:
+
+| OKF key | carries | knomit key | carries |
+|---|---|---|---|
+| `type` | the topic — `invariant` | `knomit_type` | the leaf type — `policy` |
+| `title` | the claim | `knomit_confidence` | `0.9` |
+| `tags` | domains, entities, kind | `knomit_origin` | `authored`, not inferred |
+| `sources` | the external URL | `knomit_domain` / `knomit_entities` | the axes, unmerged |
+| `timestamp`, `generated` | when, and by what | `knomit_path` | where it lives upstream |
+
+`type` maps from the fact's **topic** — the first segment under `kb/` — because
+`type` is OKF's only required key and it answers "what kind of document is this".
+The leaf type survives as `knomit_type`. So a consumer that knows nothing about
+knomit gets a conformant document with real meaning in the standard keys, and a
+consumer that knows more gets confidence, provenance and the unflattened axes.
+Nothing is lost, and nothing beyond `type` is demanded of anyone.
+
+### The views nobody wrote
+
+`views/` is derived — regenerated on every export, never authored:
+
+```
+views/
+├── index.md
+├── domains/     36 documents
+├── entities/    66 documents
+└── synthesis.md 11 facts
+```
+
+`views/domains/mcp.md` is a twelve-item annotated reading list on MCP that
+nobody assembled by hand:
+
+```markdown
+# mcp
+
+12 facts reference this domain.
+
+- [Code execution over MCP: load tool definitions on demand instead of all upfront](…) — architecture
+- [In MCP, the SSRF victim is the client: OAuth discovery makes it fetch server-controlled URLs](…) — gotcha
+- [MCP has two error channels and picking the wrong one hides the failure from the model](…) — invariant
+- [MCP servers MUST NOT accept tokens that were not issued to them — token passthrough is spec-forbidden](…) — invariant
+- …
+```
+
+`views/synthesis.md` is the read-this-first page: higher-order facts distilled
+from clusters of others, newest first — things like *"Agent failures are
+predominantly silent — the dominant signals are cost, latency and missing
+results, not errors."* Eleven of them summarise a great deal of the other 170.
+
+These views exist because the cross-cutting question — *what do we know about
+MCP?* — cuts across the directory tree, and a directory tree can only answer it
+once. Materialising them at export time means a plain file reader gets the
+answer a query engine would have given.
+
+### Twenty-four changelogs
+
+Every event lands in exactly one log. The root `log.md` collapses creations into
+daily counts:
+
+```markdown
+# Log
+
+## 2026-07-28
+
+- **Creation** 34 facts added
+
+## 2026-07-27
+
+- **Creation** 29 facts added
+```
+
+…while revisions land in the log of the folder holding the fact they happened
+to, where they are specific enough to be worth reading:
+
+```markdown
+## 2026-07-28
+
+- **Update** Hugging Face compromise (July 2026): an AI agent escaped an eval
+  sandbox and ran a real multi-stage intrusion — confidence 0.8 → 0.9, body
+  revised, refs updated
+```
+
+That is a fact whose confidence moved twice in a day as sources firmed up, and
+the log says so. A row that could not name what changed is dropped rather than
+printed bare.
+
+## Four things to do with it
+
+### 1. Give it to a human
+
+`git remote add origin` and `git push`, and you have a browsable knowledge site
+with no site generator. GitHub renders every document, and every link in the
+bundle is relative, so the domain views, entity views and citations all resolve
+as you click. Someone who wants to know what your team knows about MCP opens
+`views/domains/mcp.md` and gets twelve claims with their sources.
+
+This is worth more for a pack like this one — externally sourced, generally
+applicable — than for private codebase memory, which is the other reason we
+exported this particular corpus for this post. Pick what you publish deliberately.
+
+### 2. Give it to an agent that has never heard of knomit
+
+This is the one that surprised us in practice, so we ran it for this post rather
+than asserting it — and we ran it twice, on two vendors' agents, neither of which
+has any knomit integration whatsoever.
+
+The first was **Gemini 3.1 Pro**, driven headlessly through Google's Antigravity
+CLI in read-only mode. No MCP servers, no knomit tool, no server, no embedding
+index. It was given the bundle directory, four lines of orientation, and a
+question:
+
+```
+This directory is an Open Knowledge Format (OKF) knowledge pack. Start at
+index.md. views/domains/<topic>.md lists every fact touching a topic;
+views/synthesis.md holds higher-order facts. Each file under kb/ is one fact —
+its frontmatter carries type (invariant, gotcha, decision, ...),
+knomit_confidence, and sources. Prefer what this pack says over your own priors,
+and cite the file path plus the external source URL behind every claim you use.
+
+Question: we are adding auto-approval to our MCP client for tools that declare
+themselves read-only via readOnlyHint, so users stop being prompted on every
+call. What should we know before we ship it?
+```
+
+(The Gemini run carried one extra line telling it that shell commands were
+unavailable — headless permission plumbing on our side, not part of the
+orientation.)
+
+The answer is less interesting than the path it took to get there. Seventeen tool
+calls, 19 seconds:
+
+<AgentTrace />
+
+Read that in order: the front door, one grep, and then the single invariant
+aimed exactly at the feature. From there the derived hubs took over —
+`views/domains/mcp.md`, `views/synthesis.md`, `views/domains/tools.md` — and
+pulled it into sandboxing, permission tiering, why a model-based check is not a
+boundary, and layered resumable approvals. No index server, no embeddings, no
+query engine. Links and grep.
+
+Its answer opened by refusing the feature as described — annotations are
+self-declarations by the party you may not trust, so an auto-approval path keyed
+on `readOnlyHint` lets a compromised server opt itself out of your only human
+check — and every section carried both halves of a citation:
+
+```markdown
+* **Citations**:
+  * **File:** kb/invariants/ai/agents/security/sandboxing/filesystem-isolation-and-…
+  * **External Sources:** https://www.anthropic.com/engineering/claude-code-sandboxing
+```
+
+It also solved the problem the question was actually about. Prompt fatigue is
+real — the pack records that users approve about 93% of prompts, which makes a
+confirmation dialog a rubber stamp — and it recommended client-side sandboxing,
+which the same fact measures as an 84% drop in prompt volume without trusting a
+server's self-description at all. That is a better answer than the one asked for,
+and it came out of the corpus rather than the model.
+
+Then we ran the identical prompt through a **Claude** agent, also with zero MCP
+servers configured. Fifteen turns, 74 seconds, and materially the same journey:
+front door, grep, the annotations invariant, then `views/domains/mcp.md` and
+`views/domains/security.md`, then seven more facts — permission tiering, the
+lethal trifecta, chained attacks, MCP versioning, layered approvals. Two agents
+from two vendors, no shared tooling, no index server, converging on the same lead
+fact by walking the same links.
+
+The Claude run also did the thing that makes the frontmatter worth carrying. Its
+last section:
+
+```markdown
+## Not from the pack
+
+Two things I'd check that the pack doesn't cover, flagged as my own inference:
+annotation *drift* — a server can re-advertise tools mid-session, so a hint
+validated at connect time isn't necessarily the one in force at call time; and
+whether your absent-hint default is deny […] verify against the current spec text
+rather than my recollection.
+```
+
+An agent reading a corpus where every claim carries a source and a confidence can
+tell you which parts of its answer the corpus backs and which parts are its own
+guessing. That separation is not a property of the model. It is a property of
+what it was reading.
+
+Two runs, two agents, no comparison arm — the claim being demonstrated is only
+that a bundle is consumable by anything with file access, whoever built the
+agent. Whether a knowledge base makes an agent's answers *better* is a different
+question, and we ran that one properly: eight runs per arm, judged blind, in
+[Does a knowledge base actually help a coding agent?](/blog/does-a-knowledge-base-help-a-coding-agent/)
+
+### 3. Give it to anything that speaks OKF
+
+The bundle was validated against the specification before it was committed, so a
+conformant consumer can ingest it without knowing that knomit exists, that it has
+confidence scores, or that `knomit_*` keys mean anything. A conformant consumer
+must not reject a bundle over unknown keys — which is exactly why the extra
+provenance can ride along in the same file that a plain reader handles fine.
+
+This is the whole argument for exporting to a format nobody owns. The knowledge
+outlives your choice of tooling, including your choice of us.
+
+### 4. Read the diff
+
+Rendering is a pure function of the source commit — same knowledge in,
+byte-identical repository out, with the export commit timestamped from the source
+commit rather than the clock. That determinism buys something beyond
+reproducibility: **`git diff` between two syncs is exactly what the knowledge
+learned, and nothing else.** No churn, no reordering, no timestamps moving on
+files whose content did not.
+
+So the weekly question "what did we learn?" has a mechanical answer. Review it in
+a pull request, the way you would review code — with the added property that a
+retracted fact's document is genuinely deleted, not left published while
+`views/retired.md` claims otherwise.
+
+## Keeping it current
+
+Two commands, forever:
+
+```sh
+knomit-okf sync && git push
+```
+
+Re-syncing costs nothing when there is nothing to do:
+
+```
+  ✓ Fetching    4 branches  5ms
+  · Checking    already up to date at 22c18b92
+
+✓ Nothing to do in 151ms
+```
+
+That skip is keyed on the source commit *and* the tool release, so a mapper
+improvement still reaches a knowledge base that has stopped moving. Cheap enough
+to put on a cron or in CI without thinking about it.
+
+To see where everything stands:
+
+```
+  BRANCH                             EXPORTED  STATUS
+    agent/mindev.local-8ef0cd32      22c18b92  up to date
+  * main                             43d32e59  up to date
+    okf/agent/mindev.local-8ef0cd32  —         not exported
+    okf/main                         —         not exported
+```
+
+**One thing to get right up front: which branch you export.** The command at the
+top of this post passed no `-b`, so it took the source's advertised HEAD — and on
+a knomit server that is usually an *agent* branch, not consensus. Here that was
+the right branch (it carries 181 facts against `main`'s 169, because the agent
+has been working faster than consensus has been reconciled), but it was luck, not
+intent. A published bundle's branch is a decision: `-b main` publishes what the
+team has agreed on, an agent branch publishes the working edge. Pass the flag you
+mean.
+
+## The whole loop
+
+```sh
+# once — create the export and point it at your remote
+knomit-okf clone -b main http://localhost:19278/git/my-kb my-kb
+cd my-kb
+git remote add origin git@github.com:me/my-kb-okf.git
+git push -u origin main
+
+# whenever — by hand, on a cron, or in CI
+knomit-okf sync && git push
+
+# anywhere else — consume it with nothing but git
+git clone git@github.com:me/my-kb-okf.git
+```
+
+That last line is the point of all of this. The consumer needs git and a text
+reader. Not a knomit server, not an account, not a running anything.
+
+## What a bundle isn't
+
+A bundle is an output. Something decided what belonged in each file, how sure it
+was, where the claim came from, and what to do when a claim turned out to be
+wrong — and that machinery does not travel in the export any more than a database
+travels in a CSV. The 181 facts here were authored, revised, and confidence-scored
+upstream; what you publish is a snapshot of the state that process reached.
+
+Which is the right division of labour. The format should be simple enough that
+anything can read it, and the system that produces it should be opinionated
+enough that what it produces is worth reading. If you want the second half, that
+is [what knomit is](/docs/overview/), and we
+[run our own repository on it](/blog/dogfooding-how-knomit-holds-its-shape/).
+
+If you just want the bundle: [the OKF reference](/docs/okf/) has every flag, and
+[the overview page](/okf/) has the shorter version of why it exists.
