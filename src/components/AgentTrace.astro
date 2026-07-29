@@ -1,0 +1,166 @@
+---
+/**
+ * A replay of a recorded agent run over an OKF bundle: every tool call and every
+ * timing below comes from the run's own event stream, in order. Nothing is
+ * simulated — the gaps between lines are the model's actual thinking time.
+ *
+ * Playback is compressed by SPEEDUP so the whole 19.5s run reads in a few
+ * seconds; the elapsed times shown in the gutter stay real. Animation is
+ * motion-safe: it runs on .is-visible (set by the BaseLayout reveal observer),
+ * and prefers-reduced-motion renders every line at once.
+ */
+interface Props {
+  class?: string;
+}
+const { class: className = '' } = Astro.props;
+
+const SPEEDUP = 3;
+
+/** [thinking seconds before the call, tool, argument] — verbatim from the run. */
+const raw: [number, string, string][] = [
+  [0.96, 'list_dir', '.'],
+  [0.59, 'view_file', 'index.md'],
+  [0.61, 'grep_search', '"readOnlyHint"'],
+  [0.63, 'list_dir', 'views'],
+  [0.51, 'list_dir', 'views/domains'],
+  [0.7, 'view_file', 'kb/invariants/…/mcp/security/mcp-tool-annotations-untrusted…md'],
+  [0.76, 'view_file', 'views/domains/mcp.md'],
+  [0.54, 'view_file', 'views/synthesis.md'],
+  [0.64, 'view_file', 'views/domains/tools.md'],
+  [0.63, 'grep_search', '"approval"'],
+  [1.48, 'view_file', 'kb/invariants/…/security/sandboxing/filesystem-and-network…md'],
+  [0.6, 'list_dir', 'kb/invariants/…/tools/mcp/security'],
+  [0.55, 'list_dir', 'kb/gotchas/…/tools/mcp/security'],
+  [0.61, 'view_file', 'kb/principles/…/security/a-model-based-check-is-a-friction…md'],
+  [0.65, 'grep_search', '"annotation"'],
+  [1.77, 'view_file', 'kb/architecture/…/permission-systems/tier-permissions-so…md'],
+  [1.79, 'view_file', 'kb/architecture/…/guardrails/layer-guardrails-and-make…md'],
+];
+/** Tool durations were 0.00–0.07s each; folded in so elapsed matches the run. */
+const toolTime = 0.03;
+
+let t = 0;
+const steps = raw.map(([think, tool, arg]) => {
+  t += think + toolTime;
+  return { tool, arg, at: t.toFixed(2), delay: (t / SPEEDUP).toFixed(2) };
+});
+const finalAt = t + 5.01;
+const finalDelay = (finalAt / SPEEDUP).toFixed(2);
+---
+
+<figure class={`agent-trace k-reveal ${className}`}>
+  <div class="agent-trace__bar">
+    <span></span>gemini-3.1-pro · read-only · 0 MCP servers
+  </div>
+  <div class="agent-trace__body">
+    {
+      steps.map((s) => (
+        <div class="agent-trace__line" style={`--delay:${s.delay}s`}>
+          <span class="agent-trace__at">{s.at}s</span>
+          <span class="agent-trace__tool">{s.tool}</span>
+          <span class="agent-trace__arg">{s.arg}</span>
+        </div>
+      ))
+    }
+    <div class="agent-trace__line agent-trace__line--done" style={`--delay:${finalDelay}s`}>
+      <span class="agent-trace__at">{finalAt.toFixed(2)}s</span>
+      <span class="agent-trace__tool">✓ answered</span>
+      <span class="agent-trace__arg">17 tool calls · every claim cited to a file and a URL</span>
+    </div>
+  </div>
+  <figcaption class="agent-trace__caption">
+    The run's own event stream, replayed at {SPEEDUP}× — the tool calls, their
+    order, and the elapsed times are all from the recording. The gaps are the
+    model thinking.
+  </figcaption>
+</figure>
+
+<style>
+  .agent-trace {
+    margin: 1.75rem 0;
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius);
+    background: var(--k-surface-1);
+    box-shadow: var(--k-shadow);
+    overflow: hidden;
+  }
+  .agent-trace__bar {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.6rem 0.95rem;
+    background: var(--k-surface-2);
+    border-bottom: 1px solid var(--k-hairline);
+    font-family: var(--k-font-mono);
+    font-size: 0.74rem;
+    color: var(--k-text-muted);
+  }
+  .agent-trace__bar span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--k-brand);
+    box-shadow: 0 0 8px var(--k-brand);
+    flex: none;
+  }
+  .agent-trace__body {
+    margin: 0;
+    padding: 0.9rem 1.1rem 1.1rem;
+    font-family: var(--k-font-mono);
+    font-size: 0.72rem;
+    line-height: 1.85;
+    color: var(--k-text-2);
+    overflow-x: auto;
+  }
+  .agent-trace__line {
+    display: grid;
+    grid-template-columns: 3.6rem 6.2rem 1fr;
+    gap: 0 0.9rem;
+    white-space: nowrap;
+    min-width: max-content;
+  }
+  .agent-trace__at {
+    color: var(--k-text-muted);
+    opacity: 0.75;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+  .agent-trace__tool {
+    color: var(--k-brand);
+  }
+  .agent-trace__arg {
+    color: var(--k-text-2);
+  }
+  .agent-trace__line--done .agent-trace__tool {
+    color: var(--k-ref);
+  }
+  .agent-trace__caption {
+    padding: 0 1.1rem 0.95rem;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: var(--k-text-muted);
+  }
+
+  /* Motion-safe: lines fade in on their real (compressed) schedule once the
+     figure scrolls into view. Without JS or with reduced motion, they are
+     simply all there. */
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.has-js) .agent-trace__line {
+      opacity: 0;
+    }
+    :global(.has-js) .agent-trace.is-visible .agent-trace__line {
+      animation: agent-trace-in 0.28s ease-out forwards;
+      animation-delay: var(--delay);
+    }
+  }
+  @keyframes agent-trace-in {
+    from {
+      opacity: 0;
+      transform: translateY(2px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+</style>
