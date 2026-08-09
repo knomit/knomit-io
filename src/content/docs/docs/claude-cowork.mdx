@@ -50,9 +50,9 @@ Optional arguments select a different repo, or bind the server to a
 }
 ```
 
-- `--repo` defaults to `core`. `--lens <name>` connects to
-  `/api/v1/lenses/<name>/mcp` instead, and is mutually exclusive with an
-  explicit `--repo`.
+- Exactly one of `--repo <name>` or `--lens <name>` is required — there is no
+  default repo to fall back to. `--lens` connects to
+  `/api/v1/lenses/<name>/mcp` instead, and the two are mutually exclusive.
 - There is no `--profile` flag. Profile is a per-repo server setting; the
   `?profile=` query parameter is deprecated and ignored.
 - If the server is not on the default port and the lockfile isn't found, pass the

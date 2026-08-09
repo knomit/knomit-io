@@ -28,10 +28,19 @@ fastest way to see everything below.
   lens.
 - In a lens context the right zone adds a **lens chip**, an **`N mounts`** pill,
   and a **`writes → <write repo>`** pill naming the write mount.
-- A **gear icon** opens remote-origin configuration (see [Remote sync](/docs/remote-sync/)).
-- A **"Manage repos"** menu creates, archives, restores, and purges repos at
-  runtime — no CLI, no restart. Lenses are created, edited, and deleted from the
-  same surface.
+- A **gear icon** enters and leaves **Manage**. One control at one anchor: from
+  browse it opens Manage, and from inside Manage it returns you to browsing.
+
+## Manage
+
+Manage is a **mode, not a dialog** — it replaces the browse surface rather than
+floating above it. It creates, archives, restores and purges repos at runtime,
+and creates, edits and deletes lenses, all with no CLI and no restart. Remotes
+are repaired, replaced or disconnected here too (see
+[Remote sync](/docs/remote-sync/)).
+
+It is also the ordinary destination on a fresh install: with **no repositories
+yet**, browse has nothing to show, and Manage is where the first repo is made.
 
 ## Browsing a lens
 
@@ -61,17 +70,44 @@ that exist. Lens management also has a detail view per lens.
 - **Library & search** — browse the ontology tree and run full-text + vector
   search across facts.
 - **Inspect a fact** — read its frontmatter, body, and provenance: the signed
-  commit, the refs it anchors to, and how its confidence evolved.
+  commit, the refs it anchors to, and how its confidence evolved. The header
+  carries **connection counts** in both directions (`↙` incoming, `↗` outgoing);
+  each opens a panel listing those refs. A count of zero renders as plain text
+  rather than a button, so the header doesn't reflow between a connected fact
+  and an isolated one.
+- **Read its references honestly** — the server classifies every ref, and the UI
+  renders each class differently: a resolvable fact is a clickable hop, a
+  **broken** one is flagged rather than linked, and refs into another repo,
+  into source code, or out to a URL are labelled as such. Whether a ref resolves
+  is judged at the commit you are *viewing*, so a hop is never offered into a
+  version where the target did not yet exist.
 - **Time-travel** — view the knowledge graph as-of any past commit; refs resolve
   to the versions that existed at that point in time.
 - **Ontology browser** — navigate topics and categories and see inheritance.
 - **Synthesis & tasks** — watch task progress stream live over server-sent
   events.
-- **Console** — a persistent panel that logs task, status, and remote events as
-  they arrive.
+- **Folder overview** — every folder, including the root, opens on a dashboard:
+  headline counts, **facets** for the domains, entities and types in scope, and
+  **highlights**, a top-ten of the facts the rest were built on.
+- **Status footer** — the live/history indicator, the anchored commit, and the
+  running build version.
 
 A panel that crashes renders a contained inline fallback; the rest of the app
 stays usable.
+
+### How highlights are ranked
+
+Highlights answer "what is load-bearing here", so they rank by **impact**: the
+number of distinct facts a fact was derived from. Observations and references
+are excluded — they are the substrate the distilled layer is built *from*, and
+including them would bury it — unless a folder holds nothing else, in which case
+it gets its own top-ten rather than an empty panel.
+
+Impact is deliberately **global**: a fact reports the same number from the repo
+root as from its own folder, which is what lets you verify it by opening that
+fact's connections. You can switch the ranking to confidence or recency; the
+server picks the default per repo, falling back to confidence where the corpus
+has no distilled layer for impact to separate.
 
 ## Keyboard
 

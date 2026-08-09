@@ -35,10 +35,9 @@ fall back to the default.
 $KNOMIT_HOME/
 ├── knomit.toml                 # optional config file
 ├── repos/
-│   ├── core.db                 # the default repo (SQLite cache; git is source of truth)
-│   ├── core.db-shm / -wal      # SQLite sidecars
-│   ├── core.sessions.db        # ephemeral: tool cursors + pipeline work-steal sessions
-│   ├── <name>.db               # any additional repo (auto-discovered by *.db glob)
+│   ├── <uid>.db                # one repo (SQLite cache; git is source of truth)
+│   ├── <uid>.db-shm / -wal     # SQLite sidecars
+│   ├── <uid>.sessions.db       # ephemeral: tool cursors + pipeline work-steal sessions
 │   └── archive/
 │       ├── <ksuid>.db          # archived (deleted-but-recoverable) repo
 │       └── <ksuid>.json        # archive manifest {id, name, origin, archivedAt}
@@ -48,7 +47,7 @@ $KNOMIT_HOME/
 │   └── knomit-bridge           # symlink the desktop app creates on launch
 ├── crashes/                    # crash-report bundles written by the post-mortem reporter
 ├── dumps/                      # goroutine dumps written on SIGUSR1 (server keeps running)
-├── control.db                  # machine-local control plane: lenses + per-repo MCP profile
+├── control.db                  # machine-local control plane: the repo registry, origins, lenses
 ├── running.marker              # clean-shutdown marker; present at boot ⇒ previous run crashed
 ├── known_hosts                 # SSH host-key pins for git remotes (default location)
 ├── id_ed25519 / .pub           # agent SSH key (signs commits; derives credential-encryption key)
@@ -59,30 +58,36 @@ $KNOMIT_HOME/
 see [Observability](/docs/observability/).
 
 <Aside type="note">
-`control.db` is a SQLite database holding lens definitions (tables `lenses`,
-`lens_reads`) and per-repo MCP profile settings (table `repo_settings`). It is
+`control.db` is a SQLite database holding the **repo registry** (tables `repos`,
+`repo_origins`) and lens definitions (`lenses`, `lens_reads`). It is
 machine-local operational config: deliberately **not** git-backed, and it does
-not sync. Lenses store per-machine repo *names*; repo settings are keyed by repo
-ID (the root commit hash).
+not sync. A home created before the registry moved here needs a one-time
+[`knomit migrate-registry`](/docs/cli-reference/#knomit-migrate-registry--adopt-the-controldb-repo-registry).
 </Aside>
 
-Repos are discovered by scanning `repos/` for `*.db` files at startup (and at
-runtime via `POST /api/v1/repos:rescan`); the filename minus `.db` is the repo
-name, and names must match `[a-z0-9_-]+`.
+A repo's **name and its filename are no longer the same thing.** Each database is
+`repos/<uid>.db`, where the uid is an opaque, immutable KSUID; `control.db` maps
+that uid to the display name. Renaming a repo therefore touches only a registry
+row, and two repos can swap names without a file moving. Startup opens what the
+registry lists — the `*.sessions.db` sidecars are filtered out, and there is no
+runtime rescan endpoint.
 
-<Aside type="note">
-The `*.sessions.db` sidecar is **not** opened as a repo — repo discovery globs
-`repos/*.db` and filters session DBs out. A rescan also skips any repo whose
-create or restore is still in flight: the `.db` file is on disk before the name
-is registered, and opening it there would double-open the same database.
-</Aside>
+### There is no default repo
 
-### The default repo
+**A fresh install has zero repos, and that is a healthy steady state** — startup
+opens what is already on disk and creates nothing. The web UI's "no repos"
+screen is the ordinary first-run view, not an error.
 
-The default repo is named **`core`** (`config.DefaultRepoName`), stored at
-`repos/core.db`. It is opened first on startup and initialized on first run.
-"core" is only the *repo* name — the MCP server name and the git committer
-identity are both still `knomit`.
+Nothing is privileged: there is no `core` repo, no `config.DefaultRepoName`, and
+archiving your last remaining repo is allowed (it stays restorable). A repo of
+your own may still be *called* `core`; the name simply carries no special
+meaning.
+
+The consequence for anything that resolves a repo is that it cannot fall back to
+a hardcoded name and must handle the empty set — which is why `knomit verify`
+requires `--repo` unless you pass `--all`, and `knomit-bridge` requires exactly
+one of `--repo` or `--lens`. Repos are born only through `POST /api/v1/repos`
+(the web UI's **Manage** mode); MCP cannot create them at all.
 
 ### Server discovery lockfile
 

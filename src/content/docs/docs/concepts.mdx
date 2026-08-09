@@ -84,6 +84,22 @@ corpus introspectable. The ontology is configurable; knomit ships with two:
 **Source Code Knowledge** (a codebase taxonomy with topics like `invariants`,
 `conventions`, `decisions`, and `gotchas`).
 
+### What else lives in the repo
+
+A knowledge base is an ordinary git repository, so it holds more than facts:
+
+- **`README.md`** is the repo's description. It is read at HEAD and surfaced in
+  the UI, and editing the description commits the file — so the description is
+  part of the repo's history and syncs with it.
+- **`LICENSE`** sits beside it, read-only.
+- **Any path segment beginning with `.`** — `.github/`, `.domains`,
+  `kb/.drafts/` — is **private**: excluded from fact discovery, so nothing under
+  it is indexed, searched, or returned as a fact.
+
+Private means "not discovered as a fact", not "rejected". A dot-path is not
+blocked at the storage layer, so these files live, sync and diff like any others
+— they simply never enter the corpus.
+
 ## How knowledge clusters
 
 Beyond what each fact says about itself, the corpus has emergent structure the
@@ -153,12 +169,30 @@ points to another fact, to a source file, or to any web resource:
 |------|---------|---------|
 | Local fact path | Fact in this knowledge base | `kb/technology/debugging/pool-fix.md` |
 | Repo-qualified | Fact in another repo mounted in this [lens](/docs/lenses/), addressed by 12-hex repo id | `kb://a1b2c3d4e5f6/kb/technology/debugging/pool-fix.md` |
-| Source anchor | Source file, optionally pinned to a commit | `src://knomit/internal/store/service.go@cfef409` |
+| Source anchor | Source file, pinned to a commit **and a blob** | `src://7b4887ce51d9/internal/store/service.go@<40-hex commit>:<40-hex blob>` |
 | Plain URL | Any web resource — article, paper, commit | `https://example.com/doc` |
 
 Refs are stored verbatim — never rewritten, resolved, or normalized. A ref is
 classified **local** when it does not start with `kb://` and does end in `.md`;
 everything else is external.
+
+### Why a source ref carries a blob
+
+The current `src://` form names three things: the source repo's id (its root
+commit, a different namespace from a knomit repo id), a full 40-hex commit, and
+the 40-hex **blob** of the file at that commit — optionally with `#L10-L24`.
+
+The blob is what makes the citation durable. With it, `git cat-file blob <blob>`
+retrieves exactly the bytes that were cited, even if the file was later renamed
+or deleted. The older `src://<source>/<path>@<commit>` form is still accepted,
+but it is weaker on purpose: `git show <commit>:<path>` fails outright if the
+path did not exist at that commit, which is the failure the blob removes.
+
+knomit stores no source objects and cannot verify a `src://` ref for you — the
+command that resolves it is the check. Get the three parts from the checkout you
+are citing: `git rev-list --max-parents=0 HEAD` for the repo id,
+`git rev-parse HEAD` for the commit, and `git rev-parse <commit>:<path>` for the
+blob.
 
 A `kb://` path is a stable identifier: pass it back as `knomit_explain`'s `file`,
 or store it in a fact's `refs` to cite across repos — the server never rewrites

@@ -37,14 +37,6 @@ Set `KNOMIT_RUNTIME_ADDR` (e.g. `localhost:6060`) to enable the gated **runtime
 diagnostics port** — pprof, Prometheus `/metrics`, expvar, and live process
 controls. See [Observability](/docs/observability/).
 
-### `knomit reset` — wipe a repo and reinitialize
-
-Destroys the repo's database and recreates it fresh.
-
-| Flag | Type | Default | Meaning |
-|------|------|---------|---------|
-| `--name` | string | `core` | Repo to reset |
-
 ### `knomit verify` — integrity check
 
 Walks the git object chain, SQLite tables, and search index, reporting structural
@@ -53,9 +45,28 @@ clean atomic snapshot. Exit codes: `0` clean, `1` issues found, `2` command erro
 
 | Flag | Type | Default | Meaning |
 |------|------|---------|---------|
-| `--repo` | string | `core` | Repo to verify |
+| `--repo` | string | — | Repo to verify. **Required unless `--all`** — there is no default repo to fall back to |
 | `--all` | bool | `false` | Verify all configured repos |
 | `--deep` | bool | `false` | Parse every fact (slower, stricter) |
+
+### `knomit migrate-registry` — adopt the control.db repo registry
+
+Converts a home created before the repo registry moved into `control.db`. Run it
+**once, with the server stopped**: it records each repo in `control.db`, renames
+the databases to `repos/<uid>.db`, re-keys lens membership from repo names to
+uids, and unpacks the archive directory. It refuses to run while
+`<home>/running.marker` says a server may be up.
+
+<Aside type="caution" title="Irreversible — copy your home first">
+Only `control.db` is backed up (to `control.db.bak`). Each repo database's
+`url` / `branch` / `auth_method` / `auth_token` columns are dropped by schema
+migration 000017 and cannot be recovered from the database afterwards. Copy the
+whole `KNOMIT_HOME` before running.
+</Aside>
+
+| Flag | Type | Default | Meaning |
+|------|------|---------|---------|
+| `--dry-run` | bool | `false` | Print the plan and return before the first write. Every read uses a `mode=ro` handle, so no file contents change |
 
 ### `knomit warm-models` — pre-download the embedding model
 
@@ -87,8 +98,8 @@ server-side. It maintains the `Mcp-Session-Id` header and handles SSE responses.
 
 | Flag / arg | Default | Meaning |
 |------------|---------|---------|
-| `--repo` | `core` | Repository name |
-| `--lens` | — | [Lens](/docs/lenses/) name; connects to the lens MCP endpoint. Mutually exclusive with an explicitly-set `--repo` — passing both is a fatal error |
+| `--repo` | — | Repository name. **Exactly one of `--repo` or `--lens` is required** — knomit has no default repo to fall back to |
+| `--lens` | — | [Lens](/docs/lenses/) name; connects to the lens MCP endpoint. Mutually exclusive with `--repo` — passing both is a fatal error |
 | `[base-url]` (positional) | `http://localhost:19278` | Server base URL |
 | `--log` | `/tmp/knomit-bridge.log` | Bridge log file (4 MB rotation, 3 backups, 7 days) |
 
