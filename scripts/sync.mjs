@@ -95,6 +95,72 @@ async function fromGitHub(srcPath) {
   return res.text();
 }
 
+/**
+ * The latest STABLE release, written to src/generated/release.json for the
+ * /download page.
+ *
+ * Fetched rather than hardcoded because GitHub's `releases/latest/download/`
+ * shortcut cannot be used here: it resolves an asset by exact filename, and
+ * knomit's asset names embed the version (Knomit-0.5.2-darwin-arm64.app.zip).
+ * A static href would therefore pin one release forever and rot silently at
+ * the next one. This site already rebuilds on a 3-hourly schedule, so reading
+ * the release at build time keeps /download correct within hours of a tag with
+ * no manual bump.
+ *
+ * `/releases/latest` is the right endpoint precisely because it EXCLUDES
+ * prereleases and drafts — the rolling `dev-latest` pre-release must never
+ * become the thing the front page offers.
+ *
+ * Failure is never fatal, matching every other artifact here: an unreachable
+ * or rate-limited API keeps the previously vendored release.json and warns. A
+ * build with no vendored copy at all still succeeds — the page renders its
+ * "releases on GitHub" fallback instead of a version it cannot name. That
+ * matters because this is the one artifact with no local-checkout path: a
+ * working tree has tags, but it does not have the built, signed assets.
+ */
+async function syncRelease() {
+  const dest = path.join(OUT_DIR, 'release.json');
+  const url = `https://api.github.com/repos/${REPO}/releases/latest`;
+  const headers = {
+    'User-Agent': 'knomit-site-sync',
+    Accept: 'application/vnd.github+json',
+  };
+  if (TOKEN) headers.Authorization = `Bearer ${TOKEN}`;
+
+  try {
+    const res = await fetch(url, { headers, signal: AbortSignal.timeout(15_000) });
+    if (!res.ok) throw new Error(`GitHub releases ${url} -> ${res.status} ${res.statusText}`);
+    const r = await res.json();
+    // Store only what the page renders. The full payload is ~40KB of API
+    // metadata, and pinning the shape here means an upstream field rename
+    // shows up as a missing key in one place rather than across the template.
+    const release = {
+      tag: r.tag_name,
+      // Assets are named with a bare version, no leading "v".
+      version: String(r.tag_name ?? '').replace(/^v/, ''),
+      url: r.html_url,
+      published: r.published_at,
+      assets: (r.assets ?? [])
+        // The .ed25519 sidecars are listed on the page as a verification
+        // detail, not as downloads in their own right.
+        .filter(a => !a.name.endsWith('.ed25519'))
+        .map(a => ({ name: a.name, url: a.browser_download_url, size: a.size })),
+    };
+    if (!release.tag || !release.assets.length) {
+      throw new Error('release payload had no tag or no downloadable assets');
+    }
+    await writeFile(dest, `${JSON.stringify(release, null, 2)}\n`, 'utf8');
+    console.log(`  ✓ release.json  (${release.tag}, ${release.assets.length} assets)`);
+  } catch (err) {
+    console.warn(`  ! ${err.message}`);
+    if (await exists(dest)) {
+      console.warn('  ~ using vendored release.json (could not refresh from GitHub)');
+      return;
+    }
+    console.warn('  ! no release metadata: /download will link to the releases page');
+  }
+}
+
 async function syncOne({ src, out, required }) {
   const dest = path.join(OUT_DIR, out);
   let content = null;
@@ -189,6 +255,7 @@ async function main() {
   }
 
   await syncUI();
+  await syncRelease();
 
   // Publish the spec under public/ so the REST API page (Scalar) can fetch it
   // at /openapi.yaml and offer it as a download.

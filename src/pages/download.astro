@@ -1,0 +1,289 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import SectionHeading from '../components/SectionHeading.astro';
+import Icon from '../components/Icon.astro';
+import { GITHUB_URL } from '../lib/site';
+import { release, platforms, mb } from '../lib/release';
+
+const plats = platforms(release);
+const releasesUrl = `${GITHUB_URL}/releases`;
+
+// Rendered as a plain date, no time: the hour a tag was cut is noise to
+// someone deciding whether to download it.
+const published = release
+  ? new Date(release.published).toLocaleDateString('en-GB', {
+      day: 'numeric', month: 'long', year: 'numeric',
+    })
+  : '';
+---
+
+<BaseLayout
+  title="Download knomit"
+  description="Download knomit for macOS and Linux: a signed, notarized desktop app that keeps itself up to date, or the server binary. Open source, local-first."
+>
+  <section class="k-section">
+    <div class="k-container">
+      <SectionHeading
+        as="h1"
+        eyebrow="Download"
+        title="Run knomit on your machine."
+        lead="A tray app that runs the server for you, or the bare server binary. Local-first: your knowledge base is a git repo on your own disk."
+      />
+
+      {release && (
+        <p class="dl-release k-mono">
+          <span class="dl-release__tag">{release.tag}</span>
+          <span class="k-muted">released {published}</span>
+          <a href={release.url} rel="noopener">Release notes <Icon name="arrow" size={14} /></a>
+        </p>
+      )}
+
+      {plats.length > 0 ? (
+        <div class="dl-grid" data-testid="download-grid">
+          {plats.map((p) => (
+            <div class="dl-card k-reveal" data-platform={p.id}>
+              <div class="dl-card__head">
+                <h2 class="dl-card__title">{p.name}</h2>
+                <span class="dl-card__arch k-mono k-muted">{p.arch}</span>
+              </div>
+
+              {p.desktop && (
+                <a class="k-btn dl-card__primary" href={p.desktop.url} data-testid="download-desktop">
+                  <Icon name="arrow" size={17} /> Desktop app
+                </a>
+              )}
+              {p.desktop && (
+                <p class="dl-card__meta k-mono k-muted">
+                  {p.desktop.name} · {mb(p.desktop.size)}
+                </p>
+              )}
+
+              {p.server && (
+                <a class="dl-card__secondary k-mono" href={p.server.url} data-testid="download-server">
+                  Server binary · {mb(p.server.size)}
+                </a>
+              )}
+
+              <p class="dl-card__note k-text-2">
+                {p.id === 'macos'
+                  ? 'Signed with a Developer ID and notarized by Apple. Drag it to Applications and open it — no right-click-Open, no trip through Privacy & Security.'
+                  : 'A single AppImage. Needs GTK 4 and WebKitGTK 6.0 on the host.'}
+              </p>
+            </div>
+          ))}
+        </div>
+      ) : (
+        /* No release metadata: the build could not reach the GitHub API and had
+           no vendored copy. Naming a version we cannot confirm would be worse
+           than sending people to the canonical list. */
+        <p class="dl-fallback">
+          <a class="k-btn" href={releasesUrl} rel="noopener">
+            Releases on GitHub <Icon name="arrow" size={17} />
+          </a>
+        </p>
+      )}
+
+      <p class="dl-source k-text-2">
+        Prefer to build it yourself? The <a href="/docs/quick-start/">quick start</a> covers
+        cloning and building from source, and everything here is
+        <a href={GITHUB_URL} rel="noopener">open on GitHub</a>.
+      </p>
+    </div>
+  </section>
+
+  <section class="k-section k-grid-bg">
+    <div class="k-container dl-prose">
+      <h2 class="dl-h2">Installing</h2>
+
+      <h3 class="dl-h3">Desktop</h3>
+      <p class="k-text-2">
+        The desktop app boots a full knomit server inside itself on a loopback port and
+        shows the web UI in a native window. It also publishes a lockfile that
+        <code>knomit-bridge</code> discovers, so MCP clients find the running server without
+        being told a port. See the <a href="/docs/desktop/">desktop guide</a>.
+      </p>
+      <p class="k-text-2">
+        On Linux, make the AppImage executable and run it. On a host without FUSE, prefix it
+        with <code>APPIMAGE_EXTRACT_AND_RUN=1</code>.
+      </p>
+      <pre class="dl-pre"><code>chmod +x Knomit-{release?.version ?? '<version>'}-linux-amd64.AppImage
+./Knomit-{release?.version ?? '<version>'}-linux-amd64.AppImage</code></pre>
+
+      <h3 class="dl-h3">Server</h3>
+      <p class="k-text-2">
+        Extract and run. The native libraries resolve from the bundled <code>lib/</code>
+        automatically. The embedding model — around 600 MB — downloads on first run.
+      </p>
+      <pre class="dl-pre"><code>tar xzf knomit-{release?.version ?? '<version>'}-&lt;platform&gt;.tar.gz
+cd knomit-{release?.version ?? '<version>'}-&lt;platform&gt;
+./knomit serve</code></pre>
+      <p class="k-text-2">
+        The server tarballs carry the same Developer ID signature as the app, but a tarball
+        cannot hold a notarization ticket — <code>notarytool</code> accepts only .zip, .pkg
+        and .dmg. Gatekeeper resolves those against Apple online, which needs nothing from
+        you on a connected machine.
+      </p>
+
+      <h2 class="dl-h2">Updates</h2>
+      <p class="k-text-2">
+        <strong>macOS builds keep themselves current.</strong> They poll a signed feed every
+        six hours and post a notification when a new version exists. knomit never opens a
+        window to tell you, and a check that finds nothing is silent. Installing happens only
+        when you press <strong>Install &amp; Restart</strong> — an update may migrate your
+        knowledge base, and migrations do not reverse. You can also check on demand from the
+        tray menu.
+      </p>
+      <p class="k-text-2">
+        <strong>Linux does not self-update yet.</strong> Download a newer AppImage to upgrade.
+        The updater's binary-swap step resolves paths inside the AppImage's temporary mount
+        rather than the AppImage file itself, so it stays disabled there until that is fixed
+        upstream.
+      </p>
+
+      <h2 class="dl-h2">Verifying a download</h2>
+      <p class="k-text-2">
+        Every artifact ships a detached <code>.ed25519</code> signature over its SHA-256
+        digest, alongside it on the
+        <a href={release?.url ?? releasesUrl} rel="noopener">release page</a>. The macOS
+        updater checks that signature against a key pinned at build time and refuses anything
+        that does not match. To check by hand, compare the digest against the signed one:
+      </p>
+      <pre class="dl-pre"><code>shasum -a 256 &lt;artifact&gt;</code></pre>
+    </div>
+  </section>
+</BaseLayout>
+
+{/* Progressive enhancement: lead with the visitor's own platform. Without JS
+    both cards render equally and in source order, which is a correct page —
+    this only reorders. Platform detection is a hint, never a gate: the other
+    platform's card stays fully visible and downloadable, because a reader on
+    Linux downloading a macOS build for a colleague is a real thing to do. */}
+<script is:inline>
+  (function () {
+    var grid = document.querySelector('[data-testid="download-grid"]');
+    if (!grid) return;
+    var ua = navigator.userAgent || '';
+    var plat = (navigator.userAgentData && navigator.userAgentData.platform) || ua;
+    var want = /mac/i.test(plat) ? 'macos' : /linux|x11|cros/i.test(plat) ? 'linux' : '';
+    if (!want) return;
+    var card = grid.querySelector('[data-platform="' + want + '"]');
+    if (!card) return;
+    grid.prepend(card);
+    card.setAttribute('data-yours', 'true');
+  })();
+</script>
+
+<style>
+  .dl-release {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.85rem;
+    margin-top: 1.5rem;
+    font-size: 0.85rem;
+  }
+  .dl-release__tag {
+    color: var(--k-brand);
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius);
+    padding: 0.15rem 0.5rem;
+  }
+  .dl-release a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.3rem;
+  }
+
+  .dl-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.25rem;
+    margin-top: 2rem;
+  }
+  .dl-card {
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius);
+    background: var(--k-surface-1);
+    padding: 1.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
+  /* The visitor's own platform, marked by the inline script above. A hairline
+     accent, not a size or colour change — the other card must not read as
+     unavailable. */
+  .dl-card[data-yours='true'] {
+    border-color: color-mix(in srgb, var(--k-brand) 45%, var(--k-hairline));
+  }
+  .dl-card__head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0.75rem;
+  }
+  .dl-card__title {
+    font-size: 1.15rem;
+    margin: 0;
+  }
+  .dl-card__arch {
+    font-size: 0.78rem;
+  }
+  .dl-card__primary {
+    justify-content: center;
+    margin-top: 0.25rem;
+  }
+  .dl-card__meta {
+    font-size: 0.72rem;
+    margin: 0;
+    word-break: break-all;
+  }
+  .dl-card__secondary {
+    font-size: 0.8rem;
+    color: var(--k-text-2);
+    border-top: 1px solid var(--k-hairline);
+    padding-top: 0.75rem;
+  }
+  .dl-card__secondary:hover {
+    color: var(--k-brand);
+  }
+  .dl-card__note {
+    font-size: 0.85rem;
+    margin: 0;
+  }
+
+  .dl-fallback,
+  .dl-source {
+    margin-top: 2rem;
+  }
+  .dl-source {
+    font-size: 0.9rem;
+  }
+
+  .dl-prose {
+    max-width: 46rem;
+  }
+  .dl-h2 {
+    font-size: var(--k-step-h3);
+    margin: 2.5rem 0 0.75rem;
+  }
+  .dl-prose > .dl-h2:first-child {
+    margin-top: 0;
+  }
+  .dl-h3 {
+    font-size: 1rem;
+    margin: 1.75rem 0 0.5rem;
+    color: var(--k-text-1);
+  }
+  .dl-prose p {
+    margin: 0 0 0.9rem;
+  }
+  .dl-pre {
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius);
+    background: var(--k-surface-1);
+    padding: 0.9rem 1rem;
+    overflow-x: auto;
+    font-size: 0.82rem;
+    margin: 0 0 1.25rem;
+  }
+</style>
