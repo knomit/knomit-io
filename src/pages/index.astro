@@ -8,6 +8,9 @@ import FeatureGrid from '../components/FeatureGrid.astro';
 import Steps from '../components/Steps.astro';
 import BlogCard from '../components/BlogCard.astro';
 import Icon from '../components/Icon.astro';
+import { Image } from 'astro:assets';
+import appOverview from '../assets/product/app-overview.png';
+import appFact from '../assets/product/app-fact.png';
 import { GITHUB_URL, SITE_DESCRIPTION_SHORT } from '../lib/site';
 import { getPublishedPosts, postHref } from '../lib/blog';
 import { FAQ_ITEMS } from '../lib/faq';
@@ -138,6 +141,48 @@ const steps = [
       <div class="hero__art">
         <KnowledgeGraph />
       </div>
+    </div>
+  </section>
+
+  <!-- The product itself. Real captures of the running app against the public
+       agentic-engineering knowledge base — the same corpus /explore browses,
+       so the numbers here and there agree. -->
+  <section class="k-section shots">
+    <div class="k-container">
+      <SectionHeading
+        eyebrow="The app"
+        title="A reading tool for a knowledge base."
+        lead="knomit ships a desktop app and a web UI over the same server. This is it, running against a real, public corpus of 241 facts."
+      />
+      <figure class="shot k-reveal">
+        <Image
+          src={appOverview}
+          alt="The knomit app showing an ontology tree, facet counts for domains, entities and types, and a list of highlighted facts ranked by impact."
+          widths={[720, 1080, 1440]}
+          sizes="(max-width: 1100px) 100vw, 1080px"
+          loading="lazy"
+        />
+        <figcaption>
+          The overview: what a folder contains, what it is about, and which facts
+          the rest were built on.
+        </figcaption>
+      </figure>
+      <figure class="shot k-reveal">
+        <Image
+          src={appFact}
+          alt="A single knomit fact open, showing its type, origin, confidence, source count, path, connection counts and version."
+          widths={[720, 1080, 1440]}
+          sizes="(max-width: 1100px) 100vw, 1080px"
+          loading="lazy"
+        />
+        <figcaption>
+          One fact: typed and dated, with its confidence, how many independent
+          sources back it, and the nine facts it was distilled from.
+        </figcaption>
+      </figure>
+      <p class="shots__cta">
+        <a href="/explore" class="k-btn k-btn--ghost">Browse this knowledge base <Icon name="arrow" size={17} /></a>
+      </p>
     </div>
   </section>
 
@@ -412,6 +457,31 @@ const steps = [
     max-width: 560px;
     margin-inline: auto;
     width: 100%;
+  }
+
+  /* Product shots */
+  .shot {
+    margin: 2.5rem 0 0;
+  }
+  .shot img {
+    display: block;
+    width: 100%;
+    height: auto;
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius);
+    /* The captures are dark-UI on near-black, so a plain image on the page
+       background has no edge at all. The hairline plus a soft lift is what
+       separates the app from the page it sits on. */
+    box-shadow: 0 18px 48px rgb(0 0 0 / 45%);
+  }
+  .shot figcaption {
+    margin-top: 0.85rem;
+    color: var(--k-text-2);
+    font-size: 0.92rem;
+    max-width: 46rem;
+  }
+  .shots__cta {
+    margin-top: 2.5rem;
   }
 
   /* Facts section */
