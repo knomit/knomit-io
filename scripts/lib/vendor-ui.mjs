@@ -12,11 +12,22 @@ import path from 'node:path';
 
 const DEFAULT_FS = { mkdir: fsMkdir, writeFile: fsWriteFile, rm: fsRm, rename: fsRename };
 
-/** Seed components: the four /explore surfaces plus the shell's time-travel hook. */
+/**
+ * Seed components: the /explore surfaces, plus the hooks and chrome that only
+ * upstream's App.tsx imports (we compose our own shell, so nothing else can
+ * reach them).
+ *
+ * Keep this list MINIMAL. Every seed is a hardcoded name that upstream can
+ * rename or delete without warning, and when that happens the build fails at
+ * `vendor-ui: could not read seed` — which is exactly how v0.5.2 broke the
+ * site by deleting EdgesRail.tsx. Anything reachable from a seed is discovered
+ * and needs no entry here: RightPanel alone pulls FactBand, FacetPanel,
+ * HighlightsPanel, ConnectionsPanel and (through it) EdgeRow.
+ */
 export const SEEDS = [
-  'LeftPanel.tsx', 'RightPanel.tsx', 'EdgesRail.tsx', 'FilterBar.tsx',
+  'LeftPanel.tsx', 'RightPanel.tsx', 'FilterBar.tsx',
   'TrailBreadcrumb.tsx', 'ErrorBoundary.tsx', 'useTimeTravel.ts',
-  'useNavigationManager.ts',
+  'useNavigationManager.ts', 'useFactEdges.ts', 'StatusFooter.tsx',
 ];
 
 const CANDIDATE_SUFFIXES = ['', '.tsx', '.ts', '.css'];

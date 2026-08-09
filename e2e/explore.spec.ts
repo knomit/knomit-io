@@ -6,22 +6,35 @@ import type { Page } from '@playwright/test';
 // `chrono-item`, `dir-entry` (with `data-name`) come from Library.tsx;
 // `sort-path`/`sort-recent`/`sort-relevance` from LibraryHeader.tsx;
 // `fact-body` from FactBody.tsx; `#filter-input` from FilterBar.tsx;
-// `retract-btn` from RightPanel.tsx. `edges-rail-slot` is ours (added in
-// ExploreBrowser.tsx, Task 6) — EdgesRail itself has no root test id.
+// `retract-btn` from RightPanel.tsx; `connections-in`/`connections-out` from
+// ConnectionsMenu.tsx. The last two replaced our own `edges-rail-slot` when
+// v0.5.2 retired EdgesRail: connections are edge-count cells in the fact
+// header now, so upstream owns the hook and we no longer add one.
 
-// The vendored Library defaults to librarySort 'recent', which renders
-// `chrono-item` rows. The `dir-entry` tree only mounts under the Path or
-// Relevance sorts (Library.tsx: `effectiveSort === 'path' || 'relevance'`),
-// so tree tests must switch sorts first.
+// The vendored Library defaults to librarySort 'path' as of v0.5.2 (state.ts
+// `init`; it was 'recent' before), so the landing view is the `dir-entry`
+// ontology tree with the folder overview — highlights and facets — beside it,
+// and NO fact open. `chrono-item` rows only render under the Recent sort, so
+// any test that wants them has to ask for it.
+//
+// Both helpers switch sorts explicitly rather than relying on the default.
+// That default has now changed once under `npm run sync`, silently breaking
+// eight assertions at a distance; asking for the mode a test needs costs one
+// click and cannot rot the same way.
 async function showTree(page: Page) {
   await page.getByTestId('sort-path').click();
   await expect(page.getByTestId('dir-entry').first()).toBeVisible();
 }
 
-/** Open the first fact in the default Recent list. */
+async function showRecent(page: Page) {
+  await page.getByTestId('sort-recent').click();
+  await expect(page.getByTestId('chrono-item').first()).toBeVisible();
+}
+
+/** Switch to Recent and open its first row. */
 async function openFirstFact(page: Page) {
+  await showRecent(page);
   const row = page.getByTestId('chrono-item').first();
-  await expect(row).toBeVisible();
   await row.click();
   await expect(page.getByTestId('fact-body')).toBeVisible();
 }
@@ -31,7 +44,12 @@ test.describe('/explore live KB browser', () => {
     await page.goto('/explore');
     await expect(page.getByTestId('explore-browser')).toBeVisible();
     await expect(page.getByTestId('left-panel')).toBeVisible();
-    await expect(page.getByTestId('chrono-item').first()).toBeVisible();
+    // The default landing view: the ontology tree, not the chronological list.
+    await expect(page.getByTestId('dir-entry').first()).toBeVisible();
+    // Its companion, and the reason Path is a good landing view — the folder
+    // overview carries the facets and the highlights, both new in v0.5.2.
+    await expect(page.getByTestId('facet-panel')).toBeVisible();
+    await expect(page.getByTestId('highlight-row').first()).toBeVisible();
   });
 
   test('descends the ontology tree under the Path sort', async ({ page }) => {
@@ -53,23 +71,26 @@ test.describe('/explore live KB browser', () => {
     await expect(page.getByTestId('fact-body')).not.toBeEmpty();
   });
 
-  test('shows the connections rail only while a fact is open', async ({ page }) => {
+  test('shows the connection counts only while a fact is open', async ({ page }) => {
     await page.goto('/explore');
-    // Library.tsx's Recent-mode effect auto-opens the first fact as soon as
-    // it loads (`AMEND_NAV` when the list is non-empty and nothing else is
-    // open yet), so a fact — and the rail — is already open by the time the
-    // page settles; there's no reachable "just loaded, nothing open" DOM
-    // state to assert against. Use ExploreBrowser's own Escape shortcut
-    // (`CLEAR_FILTERS`, which explicitly nulls `factPath`) to close it, then
-    // confirm the rail goes with it and comes back on reopen.
-    await expect(page.getByTestId('chrono-item').first()).toBeVisible();
-    await expect(page.getByTestId('edges-rail-slot')).toBeVisible();
-
-    await page.getByTestId('explore-browser').press('Escape');
-    await expect(page.getByTestId('edges-rail-slot')).toHaveCount(0);
+    // Nothing is open on arrival (Path sort opens no fact), so the absent
+    // case is reachable directly — assert it before opening anything.
+    //
+    // Visibility, never the count's VALUE: a cell renders for a fact with no
+    // edges too (ConnectionsMenu returns an inert div rather than vanishing,
+    // so the header doesn't reflow), and which fact lands first depends on
+    // what the KB most recently committed. Asserting a number here would tie
+    // the suite to KB contents.
+    await expect(page.getByTestId('dir-entry').first()).toBeVisible();
+    await expect(page.getByTestId('connections-out')).toHaveCount(0);
 
     await openFirstFact(page);
-    await expect(page.getByTestId('edges-rail-slot')).toBeVisible();
+    await expect(page.getByTestId('connections-out')).toBeVisible();
+
+    // ExploreBrowser's own Escape shortcut (`CLEAR_FILTERS`, which explicitly
+    // nulls `factPath`) closes the fact; the cells go with it.
+    await page.getByTestId('explore-browser').press('Escape');
+    await expect(page.getByTestId('connections-out')).toHaveCount(0);
   });
 
   test('exposes no write controls', async ({ page }) => {
@@ -112,24 +133,28 @@ test.describe('/explore live KB browser', () => {
 
   test('filters the recent list via a path chip', async ({ page }) => {
     await page.goto('/explore');
-    await expect(page.getByTestId('chrono-item').first()).toBeVisible();
-    const before = await page.getByTestId('chrono-item').count();
+    await showRecent(page);
 
-    // A `path:` chip is deliberately NOT a "domain/entity/type/kind/origin"
-    // chip: Library.tsx's `hasNonPathFilters` excludes it, so librarySort
-    // stays 'recent' and the list keeps rendering as `chrono-item` rows —
-    // unlike e.g. a `type:` chip, which flips `effectiveSort` to 'relevance'
-    // and swaps the whole list over to `dir-entry` rows regardless of
-    // whether the filter actually matched anything (a vacuous "count went
-    // to 0" either way). Scoping to `kb/gotchas` — one of the KB's fixed
-    // ontology topics, and a strict subset of the full `kb` root — narrows
-    // `api.recent`'s `path` argument and genuinely shrinks the list.
+    // A `path:` chip narrows `api.recent`'s path argument, and — unlike a
+    // content chip — leaves librarySort alone, so the list keeps rendering as
+    // `chrono-item` rows rather than switching shape underneath the assertion.
     await page.locator('#filter-input').fill('path:kb/gotchas');
     await page.locator('#filter-input').press('Enter');
-
     await expect(page.getByTestId('left-panel')).toHaveAttribute('data-sort', 'recent');
-    await expect.poll(() => page.getByTestId('chrono-item').count())
-      .toBeLessThan(before);
+
+    // Assert the SCOPING, never a row count. This test used to compare counts
+    // before and after, which silently stopped testing anything once the KB
+    // grew: rows are capped at one 50-fact page, and `kb/gotchas` passed 50
+    // facts, so both sides clamped to 50 and "fewer rows" became unprovable.
+    // Every rendered row being under the chip's path is true at any KB size.
+    await expect.poll(async () =>
+      (await page.getByTestId('chrono-item').evaluateAll(
+        els => els.map(e => e.getAttribute('data-path')))
+      ).every(p => p?.startsWith('kb/gotchas/')),
+    ).toBe(true);
+    // …and that it actually matched something, so an empty list can't pass
+    // the check above vacuously.
+    await expect(page.getByTestId('chrono-item').first()).toBeVisible();
   });
 
   test('falls back to the teaser when the bundle is unavailable', async ({ page }) => {
@@ -187,9 +212,13 @@ test.describe('/explore guided tour', () => {
     await expect(bar).toContainText('2/8');
     await expect(page.getByTestId('left-panel')).toHaveAttribute('data-sort', 'path');
 
-    // 3 — a real filter chip lands, and the sort flips to relevance.
+    // 3 — a real filter chip lands, and the reader's order SURVIVES it.
+    // Not relevance: v0.5.2 made `searchActive` free-text-only, because
+    // relevance needs something to rank against and a chip is not it
+    // (Library.tsx). A chip now narrows the list in place.
     await next();
-    await expect(page.getByTestId('left-panel')).toHaveAttribute('data-sort', 'relevance');
+    await expect(page.getByTestId('left-panel')).toHaveAttribute('data-sort', 'recent');
+    await expect(frame).toContainText('type:synthesis');
 
     // 4 — a fact is open. Remember which: step 7 has to come back to it.
     await next();
@@ -197,10 +226,10 @@ test.describe('/explore guided tour', () => {
     await expect(frame).toHaveAttribute('data-tour-highlight', 'fact');
     const synthesisTitle = (await page.getByTestId('fact-title').textContent())!.trim();
 
-    // 5 — hopped down an edge; the rail is the highlight.
+    // 5 — hopped down an edge; the connection cells are the highlight.
     await next();
     await expect(frame).toHaveAttribute('data-tour-highlight', 'edges');
-    await expect(page.getByTestId('edges-rail-slot')).toBeVisible();
+    await expect(page.getByTestId('connections-out')).toBeVisible();
 
     // 6 — time-travel: the filter input is replaced by the trail breadcrumb,
     // which is how we know the anchor really left live.
@@ -232,8 +261,10 @@ test.describe('/explore guided tour', () => {
 
   test('starting the tour keeps the open fact until the view actually changes', async ({ page }) => {
     await page.goto('/explore');
-    // Library auto-opens the first fact in chronological mode.
-    await expect(page.getByTestId('fact-title')).toBeVisible();
+    // Put the page in the state this test is about: Recent, with a fact open.
+    // That is also what makes step 1's guard load-bearing — librarySort is
+    // already 'recent', so the step's SET_LIBRARY_SORT must NOT fire.
+    await openFirstFact(page);
     const opened = await page.getByTestId('fact-title').textContent();
 
     await page.getByTestId('tour-start').click();

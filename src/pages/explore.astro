@@ -268,21 +268,9 @@ import { GITHUB_URL } from '../lib/site';
     min-width: 0;
     overflow: hidden;
   }
-  .explore-frame__rail {
-    flex-shrink: 0;
-    display: flex;
-    min-height: 0;
-  }
-  /* EdgesRail's vendored root is a hardcoded inline `width: 300`. We can't
-     edit it — that's the invariant this whole design protects — but we can
-     override it from our own stylesheet, which is not the same thing as
-     hand-editing the file: `npm run sync` regenerates the component and this
-     rule keeps applying. It's already `box-sizing: border-box`, so 100% of
-     the wrapper is exactly right. Without this the rail stays 300px however
-     wide the user drags its splitter. */
-  .explore-frame__rail > * {
-    width: 100% !important;
-  }
+  /* No rail rules: v0.5.2 retired EdgesRail and its fixed 300px column.
+     Connections now render inside the fact panel as ConnectionsCell popovers,
+     so they inherit .explore-frame__content's width and need no override. */
   /* Write controls. The shell deliberately does NOT set serverReadOnly (see
      ExploreBrowser.tsx for why — it would also disable click-to-filter), so
      the vendored panels render their edit affordances as if writes were
@@ -385,7 +373,7 @@ import { GITHUB_URL } from '../lib/site';
      as long as the step does. */
   .explore-frame[data-tour-highlight='library'] [data-testid='library-header'],
   .explore-frame[data-tour-highlight='fact'] [data-testid='fact-title'],
-  .explore-frame[data-tour-highlight='edges'] [data-testid='edges-rail-slot'],
+  .explore-frame[data-tour-highlight='edges'] [data-testid='connections-out'],
   .explore-frame[data-tour-highlight='filter'] #filter-input,
   .explore-frame[data-tour-highlight='version'] [data-testid='version-walker'] {
     position: relative;
@@ -431,7 +419,7 @@ import { GITHUB_URL } from '../lib/site';
   @media (prefers-reduced-motion: reduce) {
     .explore-tour-cursor { transition: none; }
     .explore-frame[data-tour-highlight] :is([data-testid='library-header'],
-      [data-testid='fact-title'], [data-testid='edges-rail-slot'],
+      [data-testid='fact-title'], [data-testid='connections-out'],
       [data-testid='version-walker'], #filter-input) {
       animation: none;
     }
@@ -496,14 +484,12 @@ import { GITHUB_URL } from '../lib/site';
       flex-direction: column;
       flex: 0 0 auto;
     }
+    /* Taller than the library above it, and taller than it used to be: the
+       fact panel absorbed the connections that the 36vh rail used to hold
+       below it, so the height the rail is no longer taking belongs here. */
     .explore-frame__content {
       width: 100%;
-      height: 46vh;
-      flex: 0 0 auto;
-    }
-    .explore-frame__rail {
-      width: 100% !important;
-      height: 36vh;
+      height: 62vh;
       flex: 0 0 auto;
     }
   }

@@ -61,19 +61,10 @@ export interface TourStep {
   run: (d: TourDeps) => void | Promise<void>;
 }
 
-/** Last path segment, which is what the vendored rows render. */
-const leaf = (p: string) => p.split('/').pop() ?? p;
-
 /** First descendant of `root` whose trimmed text is exactly `text`. */
 function byExactText(root: ParentNode, sel: string, text: string): Element | null {
   return [...root.querySelectorAll(sel)]
     .find(e => e.children.length === 0 && e.textContent?.trim() === text) ?? null;
-}
-
-/** First descendant containing `needle`, preferring the deepest match. */
-function byContains(root: ParentNode, sel: string, needle: string): Element | null {
-  const hits = [...root.querySelectorAll(sel)].filter(e => e.textContent?.includes(needle));
-  return hits.length ? hits[hits.length - 1] : null;
 }
 
 export function buildSteps(t: BundleTour): TourStep[] {
@@ -106,7 +97,10 @@ export function buildSteps(t: BundleTour): TourStep[] {
     {
       label: 'Facts are typed',
       clickTarget: (f) => f.querySelector('#filter-input'),
-      body: 'Every fact carries a type. Filtering to synthesis leaves only the facts distilled from other facts — and the list switches to relevance order, because a filter is a query.',
+      // Was "…and the list switches to relevance order, because a filter is a
+      // query". v0.5.2 reversed that: relevance needs text to rank against, so
+      // a chip is a filter and the reader's own order survives it.
+      body: 'Every fact carries a type. Filtering to synthesis leaves only the facts distilled from other facts — and the order you were reading in survives, because a chip narrows the list rather than re-ranking it.',
       highlight: 'library',
       run: ({ dispatch }) => {
         dispatch({ type: 'SET_LIBRARY_SORT', sort: 'recent' });
@@ -122,9 +116,12 @@ export function buildSteps(t: BundleTour): TourStep[] {
     },
     {
       label: 'Built from',
-      clickTarget: (f, t) => byContains(
-        f.querySelector('[data-testid="edges-rail-slot"]') ?? f, 'div', leaf(t.target)),
-      body: 'The connections rail lists what a synthesis was distilled from. We followed one — this is a fact it cites, and the rail now shows the synthesis among the facts referencing it.',
+      // The cell, not a row inside the panel it opens. Connections are counts
+      // in the fact header now (`↗3`), and the panel listing them is a
+      // transient popover the tour never opens — the hop happens in `run`, so
+      // the cursor only has to point at the control the reader would click.
+      clickTarget: (f) => f.querySelector('[data-testid="connections-out"]'),
+      body: 'The ↗ count in a fact\'s header is what it was distilled from. We followed one — this is a fact it cites, and its ↙ count now includes the synthesis we came from.',
       highlight: 'edges',
       run: ({ tt, tour, headCommit }) => tt.hopEdge(tour.target, headCommit),
     },
@@ -141,8 +138,9 @@ export function buildSteps(t: BundleTour): TourStep[] {
     },
     {
       label: 'Both directions',
-      clickTarget: (f, t) => byContains(
-        f.querySelector('[data-testid="edges-rail-slot"]') ?? f, 'div', leaf(t.synthesis)),
+      // The incoming cell this time: the step is about reading the edge the
+      // other way, and ↙ is the count that carries it.
+      clickTarget: (f) => f.querySelector('[data-testid="connections-in"]'),
       body: 'Back up the edge you came down — the same connection read the other way — and back to now. Citations resolve in both directions, so you can ask what a fact rests on and what rests on it.',
       highlight: 'edges',
       run: async ({ tt, tour, headCommit, dispatch }) => {
