@@ -4,11 +4,29 @@ description: Browse, search, inspect provenance, time-travel, and watch tasks st
 ---
 
 import { Aside } from '@astrojs/starlight/components';
+import { Image } from 'astro:assets';
+import appOverview from '../../../assets/product/app-overview.png';
+import appFact from '../../../assets/product/app-fact.png';
 
 The server embeds a React single-page app at `/` — browse facts, search, inspect
 provenance, time-travel through history, and monitor tasks in real time over SSE.
 It browses either a single repo or a [lens](/docs/lenses/): one write repo plus
 any number of read mounts, federated into one virtual knowledge base.
+
+<figure class="ui-shot">
+  <Image
+    src={appOverview}
+    alt="The knomit web UI: an ontology tree on the left, and on the right a folder overview with headline counts, facet columns for domains, entities and types, and a list of highlighted facts ranked by impact."
+    widths={[720, 1080, 1440]}
+    sizes="(max-width: 1100px) 100vw, 1080px"
+    loading="lazy"
+  />
+  <figcaption>
+    Arriving at the ontology root: the tree on the left, and the folder overview
+    on the right. Captured against the same public knowledge base
+    [/explore](/explore) browses.
+  </figcaption>
+</figure>
 
 <Aside type="tip" title="See it without installing">
 [/explore](/explore) runs the library, search, and provenance panels
@@ -66,6 +84,21 @@ number of checkbox read rows, each with a branch picker offering only branches
 that exist. Lens management also has a detail view per lens.
 
 ## What you can do
+
+<figure class="ui-shot">
+  <Image
+    src={appFact}
+    alt="A single fact open in the knomit web UI. Its header shows the type, origin, confidence, source count, repo-relative path, incoming and outgoing connection counts, and the version number."
+    widths={[720, 1080, 1440]}
+    sizes="(max-width: 1100px) 100vw, 1080px"
+    loading="lazy"
+  />
+  <figcaption>
+    One fact open. The header reads left to right: type and origin, confidence,
+    how many independent sources back it, its path — then the connection counts,
+    the version, and the retract control.
+  </figcaption>
+</figure>
 
 - **Library & search** — browse the ontology tree and run full-text + vector
   search across facts.

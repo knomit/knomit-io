@@ -63,6 +63,13 @@ test.describe('/download', () => {
     await expect(heroCta).toHaveCount(1);
     await expect(heroCta).not.toHaveClass(/k-btn--ghost/);
 
+    // The row must not wrap. The hero column is ~520px, so a third button
+    // pushes one onto a second line and the primary action stops reading as
+    // primary. One row of buttons is ~46px; two are ~110px, so 70px separates
+    // them with room for padding changes on either side.
+    const row = (await page.locator('.hero__cta').boundingBox())!;
+    expect(row.height, 'hero CTA row wrapped onto a second line').toBeLessThan(70);
+
     // The header carries two: the desktop actions button and the burger
     // menu's link. Both are always in the DOM and CSS picks one by viewport,
     // so assert on what a visitor can actually see rather than on the count.
