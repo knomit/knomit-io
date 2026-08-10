@@ -4,14 +4,15 @@ import { BUNDLE_URL } from '../generated/kb-bundle-url';
 import { setBundle, assertSchema } from '../lib/bundleApi';
 import type { Bundle } from '../lib/bundleTypes';
 import {
-  reducer, init, isLive, edgeAnchorCommit, factHistoryAnchor, selectTrail,
+  reducer, init, isLive, selectTrail,
 } from '../generated/kb-ui/state';
 import { LeftPanel } from '../generated/kb-ui/LeftPanel';
 import { RightPanel } from '../generated/kb-ui/RightPanel';
-import { EdgesRail } from '../generated/kb-ui/EdgesRail';
 import { FilterBar } from '../generated/kb-ui/FilterBar';
+import { StatusFooter } from '../generated/kb-ui/StatusFooter';
 import { ErrorBoundary } from '../generated/kb-ui/ErrorBoundary';
 import { useNavigationManager } from '../generated/kb-ui/useNavigationManager';
+import { useFactEdges } from '../generated/kb-ui/useFactEdges';
 import { useTimeTravel } from '../generated/kb-ui/useTimeTravel';
 import { useTour, TourBar, TourInvite, TourLauncher, TourCursor, scrollWithin } from './ExploreTour';
 
@@ -30,23 +31,25 @@ const LEFT_PANEL_DEFAULT_FRACTION = 0.24;
 const LEFT_PANEL_FALLBACK = 340; // used only until the frame's width is measured
 const LEFT_PANEL_STORAGE_KEY = 'knomit.explore.leftPanelWidth';
 
-// Connections rail. Upstream has no splitter here — its rail is a fixed 300px
-// column — but full-bleed makes that ratio wrong: at 1600px a fixed rail plus a
-// fractional library squeezed the fact panel to roughly the same width as both
-// neighbours, so the page read as three equal columns with the actual content
-// no better off than its chrome. The rail is now draggable on the same terms as
-// the library. The vendored root's inline `width: 300` is overridden from
-// explore.astro's stylesheet, not by editing the component.
-const RAIL_MIN = 220;
-const RAIL_MAX_FRACTION = 0.4;
-const RAIL_DEFAULT = 320;
-const RAIL_STORAGE_KEY = 'knomit.explore.railWidth';
+// The connections rail is gone as of v0.5.2. Upstream retired the third column
+// (EdgesRail) and moved connections INTO the fact panel: RightPanel renders a
+// ConnectionsCell per direction, which opens ConnectionsPanel as a popover, fed
+// by the useFactEdges hook the shell owns. So there is no rail to size here and
+// no rail splitter to drag — the frame is now two columns, and the RAIL_*
+// constants and their drag handler went with it.
 
 /** Scroll targets for the tour's highlight keys. The ring is drawn in CSS. */
 const HIGHLIGHT_SELECTOR: Record<string, string> = {
   library: '[data-testid="library-header"]',
+  // The folder dashboard — facets and highlights. Present only while no fact
+  // is open, which is why the step that uses it clears the selection first.
+  overview: '[data-testid="stats-view"]',
   fact: '[data-testid="fact-title"]',
-  edges: '[data-testid="edges-rail-slot"]',
+  // Was the rail slot; now the outgoing-connections cell inside the fact panel.
+  // ConnectionsMenu renders `connections-<dir>` for both directions, and
+  // outgoing is the one the tour's narration is about (the refs a fact was
+  // built from).
+  edges: '[data-testid="connections-out"]',
   filter: '#filter-input',
   version: '[data-testid="version-walker"]',
 };
@@ -59,11 +62,6 @@ const prefersReducedMotion =
 function clampLeftPanelWidth(px: number, containerWidth: number): number {
   const max = Math.max(LEFT_PANEL_MIN, Math.floor(containerWidth * LEFT_PANEL_MAX_FRACTION));
   return Math.max(LEFT_PANEL_MIN, Math.min(max, Math.round(px)));
-}
-
-function clampRailWidth(px: number, containerWidth: number): number {
-  const max = Math.max(RAIL_MIN, Math.floor(containerWidth * RAIL_MAX_FRACTION));
-  return Math.max(RAIL_MIN, Math.min(max, Math.round(px)));
 }
 
 function readStoredWidth(key: string): number | null {
@@ -210,7 +208,6 @@ function Browser({ bundle }: { bundle: Bundle }) {
   // breakpoint via CSS; see explore.astro). Measured against the FRAME's own
   // width, not the window's — see the constants comment above.
   const [leftPanelWidth, setLeftPanelWidth] = useState<number>(LEFT_PANEL_FALLBACK);
-  const [railWidth, setRailWidth] = useState<number>(RAIL_DEFAULT);
   useEffect(() => {
     const el = frameRef.current;
     if (!el) return;
@@ -218,7 +215,6 @@ function Browser({ bundle }: { bundle: Bundle }) {
     const storedLeft = readStoredWidth(LEFT_PANEL_STORAGE_KEY);
     setLeftPanelWidth(clampLeftPanelWidth(
       storedLeft ?? Math.round(containerWidth * LEFT_PANEL_DEFAULT_FRACTION), containerWidth));
-    setRailWidth(clampRailWidth(readStoredWidth(RAIL_STORAGE_KEY) ?? RAIL_DEFAULT, containerWidth));
     // Run once on mount, after the frame has its real layout width.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -227,34 +223,10 @@ function Browser({ bundle }: { bundle: Bundle }) {
       const el = frameRef.current;
       if (!el) return;
       setLeftPanelWidth(w => clampLeftPanelWidth(w, el.clientWidth));
-      setRailWidth(w => clampRailWidth(w, el.clientWidth));
     };
     window.addEventListener('resize', onResize);
     return () => window.removeEventListener('resize', onResize);
   }, []);
-  // Dragging the rail's splitter moves its LEFT edge, so a rightward drag
-  // shrinks it — the opposite sign to the library's.
-  const startRailDrag = (e: React.MouseEvent) => {
-    e.preventDefault();
-    const el = frameRef.current;
-    if (!el) return;
-    const containerWidth = el.clientWidth;
-    const startX = e.clientX;
-    const startWidth = railWidth;
-    const onMove = (ev: MouseEvent) => {
-      setRailWidth(clampRailWidth(startWidth - (ev.clientX - startX), containerWidth));
-    };
-    const onUp = () => {
-      document.removeEventListener('mousemove', onMove);
-      document.removeEventListener('mouseup', onUp);
-      setRailWidth(w => {
-        try { localStorage.setItem(RAIL_STORAGE_KEY, String(w)); } catch { /* quota / disabled */ }
-        return w;
-      });
-    };
-    document.addEventListener('mousemove', onMove);
-    document.addEventListener('mouseup', onUp);
-  };
   const startSplitterDrag = (e: React.MouseEvent) => {
     e.preventDefault();
     const el = frameRef.current;
@@ -339,7 +311,17 @@ function Browser({ bundle }: { bundle: Bundle }) {
     mainRef.current?.scrollIntoView({ behavior: prefersReducedMotion ? 'auto' : 'smooth', block: 'start' });
   }, [state.factPath]);
 
-  const edge = factHistoryAnchor(state);
+  // Connections for the open fact. The shell owns the fetch and hands the
+  // result down, exactly as upstream's App does — RightPanel renders the cells
+  // and the popover, but does not load them.
+  const edges = useFactEdges(state);
+
+  // 12-hex repo id → display name, for the References labels in FactBody.
+  // Always empty here: a bundle is one repo and carries no id, so a
+  // kb://<id>/… ref can never be resolved to a mounted repo's name and stays
+  // rendered as its hash. Passed explicitly rather than omitted so the reason
+  // is visible at the call site.
+  const repoNames = useMemo(() => ({}), []);
 
   return (
     <div
@@ -395,39 +377,38 @@ function Browser({ bundle }: { bundle: Bundle }) {
         <div className="explore-frame__body">
           <div className="explore-frame__content">
             <ErrorBoundary variant="inline" label="This fact could not be displayed">
-              <RightPanel state={state} dispatch={dispatch} onScrub={tt.scrub} onHopRef={tt.hopEdge} />
+              <RightPanel
+                state={state} dispatch={dispatch} navigate={navigate}
+                onScrub={tt.scrub} onHopRef={tt.hopEdge}
+                repoNames={repoNames}
+                refCommits={edges.refCommits}
+                incoming={edges.incoming}
+                outgoing={edges.outgoing}
+                edgesError={edges.error}
+                onHopEdge={tt.hopEdge}
+              />
             </ErrorBoundary>
           </div>
-          {state.factPath && (
-            <>
-              <div
-                className="explore-frame__splitter explore-frame__splitter--rail"
-                data-testid="rail-splitter"
-                onMouseDown={startRailDrag}
-                title="Drag to resize"
-              />
-              {/* Our own wrapper, so the E2E spec has a stable hook without
-                  adding a test id to a vendored component. Its width also
-                  drives the vendored rail, via the `> *` override in
-                  explore.astro. */}
-              <div
-                className="explore-frame__rail"
-                data-testid="edges-rail-slot"
-                style={{ width: railWidth }}
-              >
-                <ErrorBoundary variant="inline" label="Connections could not be displayed">
-                  <EdgesRail
-                    repo={edge.repo} branch={edge.branch} factPath={edge.path}
-                    anchorCommit={edgeAnchorCommit(state)} history={!isLive(state)}
-                    onHop={tt.hopEdge}
-                  />
-                </ErrorBoundary>
-              </div>
-            </>
-          )}
         </div>
       </div>
       </div>
+      {/* Both key hints are honest here: `/` focuses the filter field while
+          live, and `h` returns from an anchored read — the frame's own keydown
+          handler binds exactly those, so the footer never advertises a
+          shortcut this page does not implement. */}
+      <ErrorBoundary variant="inline" label="The status bar hit an error">
+        <StatusFooter
+          state={state}
+          // No build version: the tag names the version of a RUNNING knomit
+          // server, and there is none here — /explore is a static bundle. The
+          // two candidates both lie. bundle.ref is the KB's branch, and the
+          // spec's info.version (2.1.0) is the API contract's version, not a
+          // build. VersionTag renders nothing for null, which is correct.
+          version={null}
+          searchKey={isLive(state)}
+          historyKey={!isLive(state)}
+        />
+      </ErrorBoundary>
     </div>
   );
 }

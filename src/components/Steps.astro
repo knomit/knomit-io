@@ -44,6 +44,18 @@ const { steps } = Astro.props;
     gap: 1.1rem;
     padding: 1.1rem 0;
     position: relative;
+    /* Grid items default to min-width:auto, which refuses to shrink below the
+       content's intrinsic minimum. The step's <pre> is `white-space: pre`, so
+       that minimum was ~554px: the 1fr track never shrank, this <li> grew to
+       619px inside a 543px list, and the whole PAGE scrolled sideways — 260px
+       of overflow at a 380px viewport, on the homepage. */
+    min-width: 0;
+  }
+  /* Same reason, one level down: this is the 1fr track's own item, and it is
+     what actually has to be narrow enough for the code block below to use the
+     `overflow-x: auto` it already declares. */
+  .k-step__content {
+    min-width: 0;
   }
   .k-step:not(:last-child) .k-step__marker::after {
     content: '';

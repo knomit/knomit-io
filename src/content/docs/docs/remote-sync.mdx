@@ -1,6 +1,6 @@
 ---
 title: Remote sync
-description: Sync each repo with a git remote over SSH, token, or basic auth — the consensus model, credential encryption, the local-origin gate, and runtime connect sessions.
+description: "Sync a repo with a git remote over SSH, token or basic auth: the consensus model, credential encryption, and the origin gate."
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -67,10 +67,21 @@ untrusted. See [Configuration](/docs/configuration/).
 
 Auth tokens are **never stored in plaintext**. They are encrypted with
 AES-256-GCM using a key derived (HKDF-SHA256) from the agent's SSH private key
-(`id_ed25519`), and stored base64-encoded in the repo DB. If the SSH key is
-unreadable at boot, the encryptor is unavailable and setting a remote
-**refuses** to persist any auth token rather than writing it in the clear.
-(Legacy plaintext values are still read, with a warning.)
+(`id_ed25519`), and stored base64-encoded in `control.db`'s `repo_origins`
+table — one machine-local control plane for every repo, not a copy per repo
+database. If the SSH key is unreadable at boot, the encryptor is unavailable and
+setting a remote **refuses** to persist any auth token rather than writing it in
+the clear. (Legacy plaintext values are still read, with a warning.)
+
+<Aside type="caution" title="`control.db` is the only copy">
+Since the origin moved out of the repo databases, `control.db` holds the sole
+record of a remote's URL and credential. Losing it loses your remote
+configuration — and because the key is derived from the agent SSH key, rotating
+or replacing `id_ed25519` leaves the stored token undecryptable. knomit does not
+fail loudly there: it logs a warning and tries the stored bytes as plaintext, so
+the symptom is a puzzling `401` from the remote rather than a clear key error.
+Re-enter the credential to recover.
+</Aside>
 
 This is one of several guarantees that hold at the sync boundary — the local
 origin gate and host-key pinning above are the others. See

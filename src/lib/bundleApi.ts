@@ -3,9 +3,10 @@ import { BUNDLE_SCHEMA_VERSION } from './bundleTypes';
 import { buildIndex, tokenize, type KbIndex } from './kbIndex';
 import {
   parseSearchQuery,
-  type Fact, type DirChild, type BrowseResponse, type HistoryResponse,
+  type Fact, type FactRef, type DirChild, type BrowseResponse, type HistoryResponse,
   type CommitDetail, type CommitFile, type SearchResult, type RefGroup,
   type RefVersion, type RecentResponse, type Stats, type ActivityStats,
+  type Highlight, type RankAxis,
   type LensFactEntry, type LensSource, type LensStats, type LensBrowseResponse,
 } from '../generated/kb-ui/upstreamApi';
 
@@ -33,11 +34,43 @@ function treeAt(b: Bundle, commit?: string): Record<string, string> {
   return b.trees[commit ?? b.head] ?? {};
 }
 
-function toFact(path: string, blob: BundleFact, commit: string, ts: number): Fact {
+/**
+ * Classify one raw ref the way the server's fact.ClassifyRef does, against the
+ * tree at the commit being VIEWED.
+ *
+ * Per-commit, not per-HEAD, deliberately: FactBody renders 'fact' as a
+ * clickable hop on the promise that "the server already confirmed this
+ * resolves at the version being viewed", and shows 'broken' as "no fact at
+ * this path in the version being viewed". Classifying against HEAD would make
+ * a ref clickable while time-travelling to a commit whose target did not exist
+ * yet, and the hop would then 404 inside the demo.
+ *
+ * `kb://<id>/...` is always foreign here: a bundle holds exactly one repo and
+ * carries no repo id, so it can never recognise one of these as its own. That
+ * is correct for the KB we ship — its qualified refs point at knomit's core
+ * repo — but it is the one classification that would need revisiting if a
+ * bundle ever gained self-referential qualified refs.
+ */
+function classifyRef(raw: string, tree: Record<string, string>): FactRef {
+  if (/^kb:\/\//i.test(raw)) return { raw, kind: 'foreign' };
+  if (/^src:\/\//i.test(raw)) return { raw, kind: 'source_code' };
+  // Any other scheme is a URL. Matches upstream's fallback test, and covers
+  // file:// — which FactBody renders inert rather than as a link.
+  if (/^[a-z][a-z0-9+.-]*:/i.test(raw)) return { raw, kind: 'url' };
+  // Schemeless: a repo-relative fact path. Whether it resolves is what
+  // separates a hop from a warning.
+  return { raw, kind: tree[raw] ? 'fact' : 'broken', path: raw };
+}
+
+function toFact(
+  path: string, blob: BundleFact, commit: string, ts: number,
+  tree: Record<string, string>,
+): Fact {
   return {
     path, title: blob.title, kind: blob.kind, type: blob.type, origin: blob.origin,
     body: blob.body, domain: blob.domain, confidence: blob.confidence,
-    sources: blob.sources, entities: blob.entities, refs: blob.refs,
+    sources: blob.sources, entities: blob.entities,
+    refs: blob.refs.map(r => classifyRef(r, tree)),
     parse_error: blob.parse_error,
     commit_hash: commit,
     commit_date: new Date(ts * 1000).toISOString(),
@@ -50,11 +83,12 @@ function commitTs(b: Bundle, sha: string): number {
 
 /** Read a fact at a tree, or null when the path is absent from it. */
 function readAt(b: Bundle, path: string, commit: string): Fact | null {
-  const sha = treeAt(b, commit)[path];
+  const tree = treeAt(b, commit);
+  const sha = tree[path];
   if (!sha) return null;
   const blob = b.blobs[sha];
   if (!blob) return null;
-  return toFact(path, blob, commit, commitTs(b, commit));
+  return toFact(path, blob, commit, commitTs(b, commit), tree);
 }
 
 /** Commits are newest-first, so index+1 is the parent. */
@@ -117,6 +151,128 @@ function scopedFacts(b: Bundle, dirPath: string): Array<{ path: string; fact: Bu
   if (!dirPath) return headFacts(b);   // '' means unscoped (root), not "no paths match"
   const prefix = `${dirPath}/`;
   return headFacts(b).filter(({ path }) => path.startsWith(prefix));
+}
+
+// ---------------------------------------------------------------------------
+// Highlights — a port of internal/store/highlights.go against the bundle.
+//
+// The server computes these from the temporal graph's DERIVED_FROM edges. The
+// bundle has no graph, but it has every fact's refs at HEAD, and a
+// DERIVED_FROM edge is exactly a ref that resolves to a live fact in this repo
+// — so the same numbers fall out of the ref lists.
+// ---------------------------------------------------------------------------
+
+/** Top-N per scope. Mirrors store.MaxHighlights. */
+const MAX_HIGHLIGHTS = 10;
+
+/**
+ * Types that never appear in highlights. Mirrors store.highlightExcludedTypes:
+ * observations and references are the substrate the distilled layer is built
+ * FROM, and surfacing them buries it.
+ */
+const HIGHLIGHT_EXCLUDED_TYPES = ['observation', 'reference'];
+
+/** Ratio above which impact ranking beats confidence. Mirrors store.separationThreshold. */
+const SEPARATION_THRESHOLD = 3.0;
+
+/**
+ * Out-degree per HEAD path: the count of DISTINCT live fact paths each fact
+ * cites.
+ *
+ * DISTINCT and GLOBAL, both load-bearing. Distinct, because the server counts
+ * target paths rather than edge rows (it writes one edge per ref per source
+ * commit, so re-indexing an unchanged blob would otherwise double the number).
+ * Global, because impact is never path-scoped — the same fact must report the
+ * same number from the repo root and from its own folder, which is what makes
+ * it verifiable by opening that fact's connections panel.
+ *
+ * Memoised per bundle: derived purely from HEAD, so it cannot change until
+ * setBundle installs a different one.
+ */
+let impactMemo: { for: Bundle; byPath: Map<string, number> } | null = null;
+
+function impactByPath(b: Bundle): Map<string, number> {
+  if (impactMemo?.for === b) return impactMemo.byPath;
+  const tree = treeAt(b);
+  const byPath = new Map<string, number>();
+  for (const { path, fact } of headFacts(b)) {
+    const targets = new Set<string>();
+    for (const raw of fact.refs) {
+      // Same resolution rule as classifyRef's 'fact' case — a schemeless ref
+      // that lands on a live path. Foreign, source and url refs are not
+      // DERIVED_FROM edges and must not count.
+      if (!/^[a-z][a-z0-9+.-]*:/i.test(raw) && tree[raw]) targets.add(raw);
+    }
+    byPath.set(path, targets.size);
+  }
+  impactMemo = { for: b, byPath };
+  return byPath;
+}
+
+/**
+ * Which axis the server would recommend for this repo. Mirrors
+ * store.AxisFromSeparation.
+ *
+ * Repo-scoped with no path prefix, deliberately: per-folder ratios are noisy
+ * on small samples, and a folder dipping below the threshold would flip the
+ * control while the user navigates.
+ */
+function defaultAxis(b: Bundle): Exclude<RankAxis, 'recent'> {
+  const impact = impactByPath(b);
+  let topFacts = 0, topEdges = 0, obsFacts = 0, obsEdges = 0;
+  for (const { path, fact } of headFacts(b)) {
+    const d = impact.get(path) ?? 0;
+    if (!HIGHLIGHT_EXCLUDED_TYPES.includes(fact.type ?? '')) { topFacts++; topEdges += d; }
+    if (fact.type === 'observation') { obsFacts++; obsEdges += d; }
+  }
+  if (topFacts <= 0) return 'confidence';
+  const topMean = topEdges / topFacts;
+  if (topMean <= 0) return 'confidence';
+  // Observations carrying zero out-degree is infinite separation, not a
+  // divide-by-zero — impact is unambiguously the better axis there.
+  if (obsFacts <= 0) return 'impact';
+  const obsMean = obsEdges / obsFacts;
+  if (obsMean === 0) return 'impact';
+  return topMean / obsMean >= SEPARATION_THRESHOLD ? 'impact' : 'confidence';
+}
+
+function rankHighlights(
+  b: Bundle, rows: Array<{ path: string; fact: BundleFact }>, axis: RankAxis,
+): Highlight[] {
+  const impact = impactByPath(b);
+  const out = rows.map(({ path, fact }) => ({
+    path, title: fact.title, type: fact.type ?? '', confidence: fact.confidence,
+    impact: impact.get(path) ?? 0,
+    // No commit_hash on the wire: highlights list live facts and open live,
+    // like a Library row.
+    committed_at: lastTouched(b, path),
+  }));
+  const cmp =
+    axis === 'confidence' ? (x: Highlight, y: Highlight) =>
+      y.confidence - x.confidence || y.committed_at - x.committed_at :
+    axis === 'recent' ? (x: Highlight, y: Highlight) =>
+      y.committed_at - x.committed_at || y.confidence - x.confidence :
+    (x: Highlight, y: Highlight) => y.impact - x.impact || y.confidence - x.confidence;
+  // localeCompare on path is a final tie-break the server gets from SQLite's
+  // row order; without it the list can reshuffle between renders on ties.
+  return out.sort((x, y) => cmp(x, y) || x.path.localeCompare(y.path)).slice(0, MAX_HIGHLIGHTS);
+}
+
+/**
+ * Top-N facts in scope, ranked by `axis`.
+ *
+ * Excluded types never appear UNLESS they are all the scope has. The exclusion
+ * stops the substrate burying the distilled layer; in a folder holding only
+ * observations there is no distilled layer to bury, so it would merely delete
+ * the section. The fallback fires only on an EMPTY result, so one eligible
+ * fact anywhere in scope is enough to keep the excluded types out — it can
+ * never dilute a list that has something to show.
+ */
+function highlightsFor(b: Bundle, path: string, axis: RankAxis): Highlight[] {
+  const scoped = scopedFacts(b, path);
+  const eligible = scoped.filter(
+    ({ fact }) => !HIGHLIGHT_EXCLUDED_TYPES.includes(fact.type ?? ''));
+  return rankHighlights(b, eligible.length ? eligible : scoped, axis);
 }
 
 /** Newest commit that touched each HEAD path. */
@@ -507,7 +663,7 @@ export const api = {
 
   recent: async (
     _repo: string, _branch: string, path: string, query = '', limit = 50, offset = 0,
-    opts?: { typeFilter?: string; excludeType?: string; kinds?: string[]; excludeKinds?: string[];
+    opts?: { types?: string[]; excludeType?: string; kinds?: string[]; excludeKinds?: string[];
              origins?: string[]; domains?: string[]; entities?: string[]; eps?: string[] },
   ): Promise<RecentResponse> => {
     const { b } = state();
@@ -518,7 +674,10 @@ export const api = {
     const q = query.trim().toLowerCase();
     const all = scopedFacts(b, path)
       .filter(({ fact }) => !q || fact.title.toLowerCase().includes(q))
-      .filter(({ fact }) => !opts?.typeFilter || fact.type === opts.typeFilter)
+      // OR-combined, matching the server: `types` is a multi-value facet, so a
+      // fact qualifies if it matches ANY of them (unlike domains/entities
+      // below, which are AND-combined).
+      .filter(({ fact }) => !opts?.types?.length || opts.types.includes(fact.type ?? ''))
       .filter(({ fact }) => !opts?.excludeType || fact.type !== opts.excludeType)
       .filter(({ fact }) => !opts?.kinds?.length || opts.kinds.includes(fact.kind ?? ''))
       .filter(({ fact }) => !opts?.excludeKinds?.length || !opts.excludeKinds.includes(fact.kind ?? ''))
@@ -533,20 +692,31 @@ export const api = {
     return { facts: all.slice(offset, offset + limit), total: all.length };
   },
 
-  stats: async (_repo: string, _branch: string, path: string): Promise<Stats> => {
+  // `types` feeds FacetPanel alongside domains/entities; `highlights` and
+  // `default_axis` feed HighlightsPanel. RightPanel calls this with an axis
+  // only once the user picks one — an absent axis means "use the server's
+  // recommendation", which is what default_axis carries back.
+  stats: async (
+    _repo: string, _branch: string, path: string, axis?: RankAxis,
+  ): Promise<Stats> => {
     const { b } = state();
     const facts = scopedFacts(b, path);
     const domains: Record<string, number> = {};
     const entities: Record<string, number> = {};
+    const types: Record<string, number> = {};
     let sum = 0;
     for (const { fact } of facts) {
       for (const d of fact.domain) domains[d] = (domains[d] ?? 0) + 1;
       for (const e of fact.entities) entities[e] = (entities[e] ?? 0) + 1;
+      if (fact.type) types[fact.type] = (types[fact.type] ?? 0) + 1;
       sum += fact.confidence;
     }
+    const recommended = defaultAxis(b);
     return {
-      total: facts.length, domains, entities,
+      total: facts.length, domains, entities, types,
       avg_confidence: facts.length ? sum / facts.length : 0,
+      highlights: highlightsFor(b, path, axis ?? recommended),
+      default_axis: recommended,
     };
   },
 

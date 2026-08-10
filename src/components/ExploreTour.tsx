@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch } from 'react';
 import type { AppState, Action } from '../generated/kb-ui/state';
+import { init } from '../generated/kb-ui/state';
 import type { BundleTour } from '../lib/bundleTypes';
 
 /**
@@ -32,7 +33,11 @@ export interface TourDeps {
   };
 }
 
-export type HighlightKey = 'library' | 'fact' | 'edges' | 'filter' | 'version';
+// Each key needs a selector in ExploreBrowser's HIGHLIGHT_SELECTOR and a rule
+// in explore.astro (both the ring and its reduced-motion counterpart), or the
+// step silently rings nothing.
+export type HighlightKey =
+  'library' | 'overview' | 'fact' | 'edges' | 'filter' | 'version';
 
 export interface TourStep {
   /** Short label for the progress readout. */
@@ -61,53 +66,68 @@ export interface TourStep {
   run: (d: TourDeps) => void | Promise<void>;
 }
 
-/** Last path segment, which is what the vendored rows render. */
-const leaf = (p: string) => p.split('/').pop() ?? p;
-
 /** First descendant of `root` whose trimmed text is exactly `text`. */
 function byExactText(root: ParentNode, sel: string, text: string): Element | null {
   return [...root.querySelectorAll(sel)]
     .find(e => e.children.length === 0 && e.textContent?.trim() === text) ?? null;
 }
 
-/** First descendant containing `needle`, preferring the deepest match. */
-function byContains(root: ParentNode, sel: string, needle: string): Element | null {
-  const hits = [...root.querySelectorAll(sel)].filter(e => e.textContent?.includes(needle));
-  return hits.length ? hits[hits.length - 1] : null;
-}
-
 export function buildSteps(t: BundleTour): TourStep[] {
   return [
+    // The first step must DESCRIBE the view the visitor is already looking at,
+    // not switch them out of it. That is why ontology leads and chronological
+    // follows: v0.5.2 made Path the Library's default sort, and a tour whose
+    // opening move yanks the reader into a different ordering is explaining
+    // something they never saw.
     {
-      label: 'Chronological',
-      body: 'The library opens in chronological order — most recently committed first. This is the view you want when you are asking what the knowledge base has learned lately.',
+      label: 'Ontology first',
+      body: 'The library opens on the ontology — topic, then category, then the fact itself. Nothing was re-filed to produce this: the path is where the fact already lives in the repo, and a fact placed higher up applies to everything beneath it.',
       highlight: 'library',
       // Only dispatch when the sort actually differs. SET_LIBRARY_SORT nulls
       // factPath by design — upstream clears the selection so the right panel
       // can't strand it in a view it doesn't belong to — so firing it as a
-      // no-op "assert the default" closed whichever fact was open and dropped
-      // the visitor onto the repo stats view the moment they started the tour.
+      // no-op "assert the default" would close whichever fact was open and
+      // drop the visitor onto the overview the moment they started the tour.
       // The tour is restartable, so the sort still has to be corrected when it
-      // genuinely isn't chronological; losing the selection is acceptable then,
+      // genuinely isn't the ontology; losing the selection is acceptable then,
       // because the view really is changing.
       run: ({ dispatch, getState }) => {
-        if (getState().librarySort !== 'recent') {
-          dispatch({ type: 'SET_LIBRARY_SORT', sort: 'recent' });
+        if (getState().librarySort !== 'path') {
+          dispatch({ type: 'SET_LIBRARY_SORT', sort: 'path' });
         }
       },
     },
     {
-      label: 'Ontological',
-      clickTarget: (f) => f.querySelector('[data-testid="sort-path"]'),
-      body: 'The same corpus, organised instead by ontology — topic, then category, then the fact itself. Nothing was re-filed to produce this; the path is where the fact already lives in the repo.',
+      label: 'What a folder holds',
+      clickTarget: (f) => f.querySelector('[data-testid="highlight-row"]')
+        ?? f.querySelector('[data-testid="facet-panel"]'),
+      body: 'A folder shows its shape before its contents: how many facts it holds, which domains, entities and types they cover, and which of them the rest were built on. That last ranking counts citations, so it is checkable — open one and its connections are there.',
+      highlight: 'overview',
+      // CLEAR_FILTERS, not a no-op: it nulls factPath, which is what
+      // guarantees the overview is what the right panel is showing. Step 1's
+      // guard deliberately does NOT dispatch when the sort already matched, so
+      // a visitor who had walked the tree and opened a leaf would otherwise
+      // reach this step with a fact on screen and the ring pointing at nothing.
+      run: ({ dispatch }) => dispatch({ type: 'CLEAR_FILTERS' }),
+    },
+    {
+      label: 'Chronological',
+      clickTarget: (f) => f.querySelector('[data-testid="sort-recent"]'),
+      body: 'The same corpus ordered by when it was learned, most recent first. This is the view for asking what the knowledge base has picked up lately, rather than where something belongs.',
       highlight: 'library',
-      run: ({ dispatch }) => dispatch({ type: 'SET_LIBRARY_SORT', sort: 'path' }),
+      run: ({ dispatch }) => dispatch({ type: 'SET_LIBRARY_SORT', sort: 'recent' }),
     },
     {
       label: 'Facts are typed',
       clickTarget: (f) => f.querySelector('#filter-input'),
-      body: 'Every fact carries a type. Filtering to synthesis leaves only the facts distilled from other facts — and the list switches to relevance order, because a filter is a query.',
+      // Was "…and the list switches to relevance order, because a filter is a
+      // query". v0.5.2 reversed that: relevance needs text to rank against, so
+      // a chip is a filter and the reader's own order survives it.
+      body: 'Every fact carries a type. Filtering to synthesis leaves only the facts distilled from other facts — and the order you were reading in survives, because a chip narrows the list rather than re-ranking it.',
       highlight: 'library',
+      // The sort dispatch stays even though the previous step just set it: a
+      // step should put the app into the state its own narration describes,
+      // rather than inheriting it, so the tour survives being restarted.
       run: ({ dispatch }) => {
         dispatch({ type: 'SET_LIBRARY_SORT', sort: 'recent' });
         dispatch({ type: 'ADD_FILTER', chip: { category: 'type', value: 'synthesis' } });
@@ -122,9 +142,12 @@ export function buildSteps(t: BundleTour): TourStep[] {
     },
     {
       label: 'Built from',
-      clickTarget: (f, t) => byContains(
-        f.querySelector('[data-testid="edges-rail-slot"]') ?? f, 'div', leaf(t.target)),
-      body: 'The connections rail lists what a synthesis was distilled from. We followed one — this is a fact it cites, and the rail now shows the synthesis among the facts referencing it.',
+      // The cell, not a row inside the panel it opens. Connections are counts
+      // in the fact header now (`↗3`), and the panel listing them is a
+      // transient popover the tour never opens — the hop happens in `run`, so
+      // the cursor only has to point at the control the reader would click.
+      clickTarget: (f) => f.querySelector('[data-testid="connections-out"]'),
+      body: 'The ↗ count in a fact\'s header is what it was distilled from. We followed one — this is a fact it cites, and its ↙ count now includes the synthesis we came from.',
       highlight: 'edges',
       run: ({ tt, tour, headCommit }) => tt.hopEdge(tour.target, headCommit),
     },
@@ -141,8 +164,9 @@ export function buildSteps(t: BundleTour): TourStep[] {
     },
     {
       label: 'Both directions',
-      clickTarget: (f, t) => byContains(
-        f.querySelector('[data-testid="edges-rail-slot"]') ?? f, 'div', leaf(t.synthesis)),
+      // The incoming cell this time: the step is about reading the edge the
+      // other way, and ↙ is the count that carries it.
+      clickTarget: (f) => f.querySelector('[data-testid="connections-in"]'),
       body: 'Back up the edge you came down — the same connection read the other way — and back to now. Citations resolve in both directions, so you can ask what a fact rests on and what rests on it.',
       highlight: 'edges',
       run: async ({ tt, tour, headCommit, dispatch }) => {
@@ -267,12 +291,23 @@ export function useTour(deps: TourDeps | null, frameRef: { current: HTMLElement 
     const d = depsRef.current;
     if (!d) return;
     // Leave the app in a clean state rather than wherever the last step
-    // parked it: the point of the ending is "you're back at the library".
+    // parked it: the point of the ending is "you're back where you came in".
+    //
+    // The sort is read from the vendored `init` rather than named here. It was
+    // hardcoded to 'recent', which silently became wrong when v0.5.2 changed
+    // the Library's default to Path — Done then dropped visitors into a
+    // chronological list they had never chosen, and which the tour had just
+    // described as the OTHER view. Deriving it means the ending follows the
+    // app's real starting state if upstream ever moves it again.
+    //
+    // Step 1 deliberately does NOT derive its sort: its narration names the
+    // ontology out loud, so if the default moved, the honest fix there is new
+    // prose, not a silently different step.
     void (async () => {
       await d.tt.returnToNow();
       d.dispatch({ type: 'CLEAR_FILTERS' });
       d.navigate({ view: 'library', factPath: null });
-      d.dispatch({ type: 'SET_LIBRARY_SORT', sort: 'recent' });
+      d.dispatch({ type: 'SET_LIBRARY_SORT', sort: init.librarySort });
     })();
   }, [cancelFlight]);
 

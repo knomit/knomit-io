@@ -22,6 +22,17 @@ jobs:
       # repo — no token needed. Pin KNOMIT_REF to a tag/SHA once one exists;
       # `master` (the default branch) is the fallback until then.
       KNOMIT_REF: ${{ vars.KNOMIT_REF || 'master' }}
+      # REQUIRED, despite every repo the sync touches being public. The release
+      # lookup for /download hits api.github.com, whose UNAUTHENTICATED limit is
+      # 60 requests/hour PER IP — shared with every other Actions job on the
+      # same runner address, so it is exhausted by strangers at unpredictable
+      # times. Without this the call 403s intermittently, sync.mjs falls back to
+      # a page with no downloads on it (by design — it must not break the
+      # build), and the /download e2e tests fail on a green change. The
+      # automatic token lifts this to 1000/hour for the repository and needs no
+      # secret to be configured. Read-only `contents: read` is enough to list
+      # releases on a public repo.
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       KB_REPO_SLUG: ${{ vars.KB_REPO_SLUG || 'knomit/agentic-engineering-kb' }}
       # The agent branch name encodes a hostname; keep it a repo variable so
       # retargeting needs no code change.

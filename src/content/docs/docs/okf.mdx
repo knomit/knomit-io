@@ -1,6 +1,6 @@
 ---
 title: OKF export
-description: Publish a knomit knowledge base as a portable Open Knowledge Format (OKF) repository with knomit-okf — clone, sync, and branches, plus the bundle layout, determinism, authentication, and privacy model.
+description: Publish a knomit knowledge base as a portable Open Knowledge Format repository — clone, sync, branches, and the bundle layout.
 ---
 
 import { Aside, Steps } from '@astrojs/starlight/components';
@@ -274,6 +274,13 @@ The same rule applies to logs: a scope with nothing to report gets no `log.md`.
 `LICENSE`, `.github/` — and is never read, written, or staged. Staging with
 `--all` would sweep a publisher's uncommitted edits into an okf commit; the tool
 stages only the paths it owns.
+
+Note the reversal: in the *knowledge base* those same two filenames are knomit's
+— `README.md` is the repo description it reads and writes, and `LICENSE` is a
+file it reports (see
+[what a KB repo contains](/docs/concepts/#what-a-knowledge-base-repo-contains)).
+In the *export* they are yours and knomit-okf leaves them alone. Which rule
+applies depends on which repository the file is sitting in.
 
 Deleting inside the owned paths is not optional: overlaying files can never
 remove them, so a retired fact's document would stay published forever,

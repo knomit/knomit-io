@@ -6,8 +6,15 @@ description: The knomit MCP tool set, the branch-scoped endpoint, session instru
 import { Aside } from '@astrojs/starlight/components';
 
 knomit is MCP-native. A peer connects over the Model Context Protocol and gets a
-small, sharp tool set whose descriptions carry all the behavioral guidance the
-model needs — no prompt scaffolding required.
+small, sharp tool set whose descriptions carry the guidance a model needs to call
+them correctly — the descriptions are written as prompt engineering for the
+calling agent, not as human reference, so no prompt scaffolding is needed to use
+the tools well.
+
+Knowing *when* to reach for them is a separate problem, and one the tool
+descriptions cannot solve: a tool description is only read once the model has
+already decided to look at that tool. That is what
+[Claude Code's skills and `CLAUDE.md` block](/docs/claude-code/) add.
 
 ## The tools
 

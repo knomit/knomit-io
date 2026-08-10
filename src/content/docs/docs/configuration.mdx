@@ -35,10 +35,9 @@ fall back to the default.
 $KNOMIT_HOME/
 ├── knomit.toml                 # optional config file
 ├── repos/
-│   ├── core.db                 # the default repo (SQLite cache; git is source of truth)
-│   ├── core.db-shm / -wal      # SQLite sidecars
-│   ├── core.sessions.db        # ephemeral: tool cursors + pipeline work-steal sessions
-│   ├── <name>.db               # any additional repo (auto-discovered by *.db glob)
+│   ├── <uid>.db                # one repo (SQLite cache; git is source of truth)
+│   ├── <uid>.db-shm / -wal     # SQLite sidecars
+│   ├── <uid>.sessions.db       # ephemeral: tool cursors + pipeline work-steal sessions
 │   └── archive/
 │       ├── <ksuid>.db          # archived (deleted-but-recoverable) repo
 │       └── <ksuid>.json        # archive manifest {id, name, origin, archivedAt}
@@ -48,7 +47,7 @@ $KNOMIT_HOME/
 │   └── knomit-bridge           # symlink the desktop app creates on launch
 ├── crashes/                    # crash-report bundles written by the post-mortem reporter
 ├── dumps/                      # goroutine dumps written on SIGUSR1 (server keeps running)
-├── control.db                  # machine-local control plane: lenses + per-repo MCP profile
+├── control.db                  # machine-local control plane: the repo registry, origins, lenses
 ├── running.marker              # clean-shutdown marker; present at boot ⇒ previous run crashed
 ├── known_hosts                 # SSH host-key pins for git remotes (default location)
 ├── id_ed25519 / .pub           # agent SSH key (signs commits; derives credential-encryption key)
@@ -59,30 +58,62 @@ $KNOMIT_HOME/
 see [Observability](/docs/observability/).
 
 <Aside type="note">
-`control.db` is a SQLite database holding lens definitions (tables `lenses`,
-`lens_reads`) and per-repo MCP profile settings (table `repo_settings`). It is
+`control.db` is a SQLite database holding the **repo registry** (tables `repos`,
+`repo_origins`) and lens definitions (`lenses`, `lens_reads`). It is
 machine-local operational config: deliberately **not** git-backed, and it does
-not sync. Lenses store per-machine repo *names*; repo settings are keyed by repo
-ID (the root commit hash).
+not sync.
 </Aside>
 
-Repos are discovered by scanning `repos/` for `*.db` files at startup (and at
-runtime via `POST /api/v1/repos:rescan`); the filename minus `.db` is the repo
-name, and names must match `[a-z0-9_-]+`.
+A repo's **name and its filename are no longer the same thing.** Each database is
+`repos/<uid>.db`, where the uid is an opaque, immutable KSUID; `control.db` maps
+that uid to the display name. Renaming a repo therefore touches only a registry
+row, and two repos can swap names without a file moving. Startup opens what the
+registry lists — the `*.sessions.db` sidecars are filtered out, and there is no
+runtime rescan endpoint.
 
-<Aside type="note">
-The `*.sessions.db` sidecar is **not** opened as a repo — repo discovery globs
-`repos/*.db` and filters session DBs out. A rescan also skips any repo whose
-create or restore is still in flight: the `.db` file is on disk before the name
-is registered, and opening it there would double-open the same database.
+### Inside a repo, versus inside `KNOMIT_HOME`
+
+The layout above is **machine-local**: caches, keys, models, the registry. None
+of it syncs. What travels with a knowledge base is the git repo's own contents,
+which is a separate layout:
+
+```text
+<repo>/
+├── kb/                       # the ontology root — facts live here
+├── README.md                 # the repo description, read and written by knomit
+├── LICENSE                   # the KB's terms, read-only
+└── .domains/ontology.yaml    # the ontology definition
+```
+
+`ontology_root` (default `kb`) names the first of these. The ontology definition
+itself sits in a **private** directory — anything with a dot-prefixed path
+segment is excluded from fact discovery — which is why it is configuration
+rather than a fact, and why knomit reads it by name. See
+[what a knowledge base repo contains](/docs/concepts/#what-a-knowledge-base-repo-contains).
+
+<Aside type="caution" title="Repos predating the move">
+The ontology used to live at `domains/ontology.yaml`, without the dot. That path
+is still read, second, and read-only: there is no migration, so a repo that was
+never moved keeps validating against **its own** ontology rather than silently
+falling back to the embedded default.
 </Aside>
 
-### The default repo
+### There is no default repo
 
-The default repo is named **`core`** (`config.DefaultRepoName`), stored at
-`repos/core.db`. It is opened first on startup and initialized on first run.
-"core" is only the *repo* name — the MCP server name and the git committer
-identity are both still `knomit`.
+**A fresh install has zero repos, and that is a healthy steady state** — startup
+opens what is already on disk and creates nothing. The web UI's "no repos"
+screen is the ordinary first-run view, not an error.
+
+Nothing is privileged: there is no `core` repo, no `config.DefaultRepoName`, and
+archiving your last remaining repo is allowed (it stays restorable). A repo of
+your own may still be *called* `core`; the name simply carries no special
+meaning.
+
+The consequence for anything that resolves a repo is that it cannot fall back to
+a hardcoded name and must handle the empty set — which is why `knomit verify`
+requires `--repo` unless you pass `--all`, and `knomit-bridge` requires exactly
+one of `--repo` or `--lens`. Repos are born only through `POST /api/v1/repos`
+(the web UI's **Manage** mode); MCP cannot create them at all.
 
 ### Server discovery lockfile
 
@@ -107,7 +138,7 @@ host            = "localhost"
 port            = "19278"
 socket          = ""            # Unix socket path; an *additional* listener alongside host:port
 ontology_root   = "kb"          # path within git where facts live
-onnx_lib_path   = ""            # DEAD: parsed but never read — use the ORT_LIB_PATH env var
+onnx_lib_path   = ""            # set ORT_LIB_PATH instead (see the note below)
 local_origin_root = ""          # root for permitted local-path git origins ("" = disabled)
 read_only       = false         # read-only demo: reject mutations, hide git + write tools, pull-only sync
 methodology_min_score = 0.15    # composite-score floor for methodology candidates
@@ -115,7 +146,7 @@ methodology_min_score = 0.15    # composite-score floor for methodology candidat
 [llm]
 model    = "gemini-2.5-flash"
 provider = "gemini"
-api_key  = ""                   # DEAD: parsed but never read — adapters read their own credential env vars
+api_key  = ""                   # set the provider's own env var instead (see below)
 cache    = false
 batch    = false
 
@@ -125,7 +156,7 @@ model = "embeddinggemma"
 [git]
 origin          = ""            # remote URL for the default repo
 serve           = true          # expose the built-in git smart-HTTP server (mounted at /git on the main port)
-port            = ""            # DEAD: parsed but never read — there is no separate git listener
+port            = ""            # no separate listener: /git rides the main host:port
 network_timeout = "120s"        # bounds every remote git network op (clone/fetch/push)
 
 [remote]
@@ -221,16 +252,16 @@ succeeding silently.
 | `KNOMIT_SOCKET` | `socket` | — |
 | `KNOMIT_READ_ONLY` | `read_only` | `false` |
 | `KNOMIT_LOCAL_ORIGIN_ROOT` | `local_origin_root` | — (disabled) |
-| `ONNXRUNTIME_SHARED_LIBRARY` | `onnx_lib_path` — **dead**, see below | — |
+| `ONNXRUNTIME_SHARED_LIBRARY` | `onnx_lib_path` — use `ORT_LIB_PATH`, see below | — |
 | `KNOMIT_EMBED_MODEL` | `embeddings.model` | `embeddinggemma` |
 | `KNOMIT_LLM_MODEL` | `llm.model` | `gemini-2.5-flash` |
 | `KNOMIT_LLM_PROVIDER` | `llm.provider` | `gemini` |
-| `KNOMIT_API_KEY` | `llm.api_key` — **dead**, see below | — |
+| `KNOMIT_API_KEY` | `llm.api_key` — use the provider's own variable, see below | — |
 | `KNOMIT_LLM_CACHE` | `llm.cache` | `false` |
 | `KNOMIT_LLM_BATCH` | `llm.batch` | `false` |
 | `KNOMIT_GIT_ORIGIN` | `git.origin` | — |
 | `KNOMIT_GIT_SERVE` | `git.serve` | `true` |
-| `KNOMIT_GIT_PORT` | `git.port` — **dead**, see below | — |
+| `KNOMIT_GIT_PORT` | `git.port` — `/git` rides the main port, see below | — |
 | `KNOMIT_GIT_NETWORK_TIMEOUT` | `git.network_timeout` | `120s` |
 | `KNOMIT_REMOTE_TOKEN` | `remote.token` | — |
 | `KNOMIT_REMOTE_USER` | `remote.user` | — |
@@ -258,20 +289,24 @@ succeeding silently.
 | `KNOMIT_CRASH_LOG` | `log.crash_file` | — (off) |
 | `KNOMIT_RUNTIME_ADDR` | `runtime.addr` | — (off) |
 
-<Aside type="caution" title="Three knobs are parsed but never read">
-`onnx_lib_path` / `ONNXRUNTIME_SHARED_LIBRARY`, `llm.api_key` /
-`KNOMIT_API_KEY`, and `git.port` / `KNOMIT_GIT_PORT` are loaded into the config
-struct and then consumed by nothing. Setting them has no effect. Use these
-instead:
+<Aside type="note" title="Three settings live outside knomit.toml">
+Three things you might expect to configure here are controlled elsewhere. If
+your `knomit.toml` carries `onnx_lib_path`, `llm.api_key` or `git.port`, these
+are the settings that take effect instead:
 
-- **ONNX Runtime shared library** — `ORT_LIB_PATH`, read directly by the
-  embedder. Unset, it probes for the library next to the binary.
-- **LLM credentials** — each adapter reads its own environment: Gemini takes
+- **ONNX Runtime shared library** — the `ORT_LIB_PATH` environment variable,
+  read directly by the embedder. Leave it unset and the embedder probes for the
+  library next to the binary, which is what a `make build` layout already gives
+  you.
+- **LLM credentials** — each adapter reads its own environment, so the same
+  variables work whether or not knomit is in the picture: Gemini takes
   `GEMINI_API_KEY`, falling back to `GOOGLE_AI_API_KEY`; Anthropic uses the
-  SDK's own variable; Bedrock uses the AWS default credential chain.
-- **Git port** — none. Git smart-HTTP is mounted at `/git` on the main server
-  router, so it shares `KNOMIT_HOST` / `KNOMIT_PORT`. There is no separate
-  listener.
+  SDK's own variable; Bedrock uses the AWS default credential chain. See
+  [Provider credentials](#provider-credentials-read-directly) below.
+- **The git port** — there isn't one, by design. Git smart-HTTP is mounted at
+  `/git` on the main server router rather than getting a listener of its own,
+  so it is reached on `KNOMIT_HOST` / `KNOMIT_PORT` like everything else, and
+  `git.serve` is what turns it on.
 </Aside>
 
 ### Provider credentials (read directly)
@@ -296,7 +331,7 @@ These are read by the LLM adapters, not through `knomit.toml`:
 | `KNOMIT_BASE_URL` | `knomit-bridge claude` | Server URL for the `claude init` / `claude hook` helpers. **Does not affect the MCP proxy** — that resolves its base URL from the positional argument, then `server.json`, then the hardcoded default | `http://localhost:19278` |
 | `KNOMIT_MCP_DEBUG` | `knomit-bridge` | Non-empty → debug logging | — (info) |
 | `KNOMIT_LLM_TRACE` | app wiring | Non-empty → wraps the LLM adapter in a tracing adapter that writes every request/response to this path | — (off) |
-| `ORT_LIB_PATH` | embeddings | ONNX Runtime shared library. This is the live knob that `onnx_lib_path` / `ONNXRUNTIME_SHARED_LIBRARY` never became | — (probes `lib/` next to the binary) |
+| `ORT_LIB_PATH` | embeddings | ONNX Runtime shared library — the variable the embedder actually reads | — (probes `lib/` next to the binary) |
 | `GRAPHQLITE_LIB_PATH` | store | graphqlite SQLite extension, given **without** the file extension — the driver appends `.so` / `.dylib` / `.dll` | — (probes exe-relative, then source tree) |
 
 <Aside type="note">

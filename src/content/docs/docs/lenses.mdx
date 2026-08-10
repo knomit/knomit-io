@@ -1,6 +1,6 @@
 ---
 title: Lenses
-description: Federate one write repo with N read mounts into a single virtual knowledge base — the write-repo rule, kb:// addressing, union read semantics, validation rules, and the lens REST and MCP surfaces.
+description: "Federate one write repo with N read mounts into a single virtual knowledge base: kb:// addressing, union reads, and the rules."
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -62,16 +62,24 @@ every `PATCH`:
 | Name must not collide with an existing **repo** name | 409 |
 | Name must not collide with an existing **lens** | 409 |
 | A create for the same name must not already be in flight | 409 |
-| Two mounts must not resolve to the same repo ID (a replica or clone) | 409 |
+| Two mounts' repo IDs must not share a 12-hex prefix | 409 |
 | Every member repo must be registered | 422 |
 | A pinned branch must exist in its member repo | 422 |
 | Description must be ≤ 4096 bytes | 422 |
 
-Two consequences worth stating plainly:
+Three consequences worth stating plainly:
 
 - **Repo and lens names share one namespace.** A lens cannot take a name a repo
   already has, and vice versa. (They share it because a lens and a lens-of-one
   repo both surface the same identity for cursor pinning.)
+- **The prefix rule is about addressing, not duplication.** `kb://<id>/…` routes
+  on a 12-hex prefix of the root commit, so two members sharing that prefix
+  would be misrouted — which is why the check is on the prefix rather than the
+  full ID. It cannot fire for a repo and its own clone: at most one *active*
+  repo may hold a given knowledge base, and a lens can only name active members,
+  so two mounts of the same KB are unreachable by construction. What remains
+  live is the rarer case — two genuinely **different** knowledge bases whose
+  root commits happen to collide in their first 12 hex digits.
 - **A repo referenced by a lens cannot be archived or purged.** Delete the lens
   first. `DELETE /api/v1/lenses/{lens}` removes the definition only and returns
   204; member repos are untouched.

@@ -37,14 +37,6 @@ Set `KNOMIT_RUNTIME_ADDR` (e.g. `localhost:6060`) to enable the gated **runtime
 diagnostics port** — pprof, Prometheus `/metrics`, expvar, and live process
 controls. See [Observability](/docs/observability/).
 
-### `knomit reset` — wipe a repo and reinitialize
-
-Destroys the repo's database and recreates it fresh.
-
-| Flag | Type | Default | Meaning |
-|------|------|---------|---------|
-| `--name` | string | `core` | Repo to reset |
-
 ### `knomit verify` — integrity check
 
 Walks the git object chain, SQLite tables, and search index, reporting structural
@@ -53,7 +45,7 @@ clean atomic snapshot. Exit codes: `0` clean, `1` issues found, `2` command erro
 
 | Flag | Type | Default | Meaning |
 |------|------|---------|---------|
-| `--repo` | string | `core` | Repo to verify |
+| `--repo` | string | — | Repo to verify. **Required unless `--all`** — there is no default repo to fall back to |
 | `--all` | bool | `false` | Verify all configured repos |
 | `--deep` | bool | `false` | Parse every fact (slower, stricter) |
 
@@ -87,8 +79,8 @@ server-side. It maintains the `Mcp-Session-Id` header and handles SSE responses.
 
 | Flag / arg | Default | Meaning |
 |------------|---------|---------|
-| `--repo` | `core` | Repository name |
-| `--lens` | — | [Lens](/docs/lenses/) name; connects to the lens MCP endpoint. Mutually exclusive with an explicitly-set `--repo` — passing both is a fatal error |
+| `--repo` | — | Repository name. **Exactly one of `--repo` or `--lens` is required** — knomit has no default repo to fall back to |
+| `--lens` | — | [Lens](/docs/lenses/) name; connects to the lens MCP endpoint. Mutually exclusive with `--repo` — passing both is a fatal error |
 | `[base-url]` (positional) | `http://localhost:19278` | Server base URL |
 | `--log` | `/tmp/knomit-bridge.log` | Bridge log file (4 MB rotation, 3 backups, 7 days) |
 
