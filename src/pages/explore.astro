@@ -372,6 +372,7 @@ import { GITHUB_URL } from '../lib/site';
      of unrelated effects. Two pulses, then it settles and stays outlined for
      as long as the step does. */
   .explore-frame[data-tour-highlight='library'] [data-testid='library-header'],
+  .explore-frame[data-tour-highlight='overview'] [data-testid='stats-view'],
   .explore-frame[data-tour-highlight='fact'] [data-testid='fact-title'],
   .explore-frame[data-tour-highlight='edges'] [data-testid='connections-out'],
   .explore-frame[data-tour-highlight='filter'] #filter-input,
@@ -419,8 +420,9 @@ import { GITHUB_URL } from '../lib/site';
   @media (prefers-reduced-motion: reduce) {
     .explore-tour-cursor { transition: none; }
     .explore-frame[data-tour-highlight] :is([data-testid='library-header'],
-      [data-testid='fact-title'], [data-testid='connections-out'],
-      [data-testid='version-walker'], #filter-input) {
+      [data-testid='stats-view'], [data-testid='fact-title'],
+      [data-testid='connections-out'], [data-testid='version-walker'],
+      #filter-input) {
       animation: none;
     }
   }

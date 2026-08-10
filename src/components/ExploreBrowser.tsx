@@ -41,6 +41,9 @@ const LEFT_PANEL_STORAGE_KEY = 'knomit.explore.leftPanelWidth';
 /** Scroll targets for the tour's highlight keys. The ring is drawn in CSS. */
 const HIGHLIGHT_SELECTOR: Record<string, string> = {
   library: '[data-testid="library-header"]',
+  // The folder dashboard — facets and highlights. Present only while no fact
+  // is open, which is why the step that uses it clears the selection first.
+  overview: '[data-testid="stats-view"]',
   fact: '[data-testid="fact-title"]',
   // Was the rail slot; now the outgoing-connections cell inside the fact panel.
   // ConnectionsMenu renders `connections-<dir>` for both directions, and
