@@ -84,21 +84,53 @@ corpus introspectable. The ontology is configurable; knomit ships with two:
 **Source Code Knowledge** (a codebase taxonomy with topics like `invariants`,
 `conventions`, `decisions`, and `gotchas`).
 
-### What else lives in the repo
+## What a knowledge base repo contains
 
-A knowledge base is an ordinary git repository, so it holds more than facts:
+A knowledge base is an ordinary git repository, so it holds more than facts.
+Three root-level conventions matter.
 
-- **`README.md`** is the repo's description. It is read at HEAD and surfaced in
-  the UI, and editing the description commits the file — so the description is
-  part of the repo's history and syncs with it.
-- **`LICENSE`** sits beside it, read-only.
-- **Any path segment beginning with `.`** — `.github/`, `.domains`,
-  `kb/.drafts/` — is **private**: excluded from fact discovery, so nothing under
-  it is indexed, searched, or returned as a fact.
+### `README.md` — the repo's description
 
-Private means "not discovered as a fact", not "rejected". A dot-path is not
-blocked at the storage layer, so these files live, sync and diff like any others
-— they simply never enter the corpus.
+The description you see in the UI *is* `README.md`, read verbatim at HEAD. It is
+not metadata stored beside the repo: editing the description commits the file to
+the agent branch, so it has a history, diffs, and syncs with everything else.
+Capped at 64 KiB.
+
+### `LICENSE` — the terms, read-only
+
+The terms the KB's content is published under, at the tree root beside the
+README. knomit reports it and never offers to write one — a licence is authored
+by whoever owns the repo.
+
+Looked up by that exact spelling only. `LICENSE.md`, `LICENSE.txt`, `COPYING`,
+and even `License` are not found, because the lookup is an exact tree-entry
+match rather than a case-insensitive search. A missing licence is not an error;
+"this KB states no terms" is an ordinary state.
+
+### Dot-prefixed paths are private
+
+**Any path segment beginning with `.`** makes a path private — `.github/`,
+`.domains/`, `kb/.drafts/`. Private paths are excluded from fact **discovery**
+everywhere: the search indexer, `knomit verify`, and the OKF exporter all skip
+them, and the fact-creation paths refuse to allocate one.
+
+<Aside type="note" title="Private means “not knowledge”, not “invisible”">
+The rule governs **walking, never opening**. knomit still reads specific known
+paths by name — which is exactly what lets it load its own ontology definition
+from `.domains/ontology.yaml`, a private path it depends on at boot.
+
+So a dot-path is not hidden, blocked, or refused by storage. These files commit,
+diff, push and pull like any others. They simply never enter the corpus as
+facts.
+</Aside>
+
+<Aside type="caution" title="Not to be confused with an OKF export repo">
+An [OKF export](/docs/okf/) repository has `README.md` and `LICENSE` at its root
+too, and the rules there are the opposite: both belong to the **publisher**, and
+`knomit-okf` never reads, writes, or stages either of them. The distinction is
+which repository you are looking at — your knowledge base, or the bundle it
+publishes.
+</Aside>
 
 ## How knowledge clusters
 

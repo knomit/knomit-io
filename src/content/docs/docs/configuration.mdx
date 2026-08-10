@@ -72,6 +72,33 @@ row, and two repos can swap names without a file moving. Startup opens what the
 registry lists — the `*.sessions.db` sidecars are filtered out, and there is no
 runtime rescan endpoint.
 
+### Inside a repo, versus inside `KNOMIT_HOME`
+
+The layout above is **machine-local**: caches, keys, models, the registry. None
+of it syncs. What travels with a knowledge base is the git repo's own contents,
+which is a separate layout:
+
+```text
+<repo>/
+├── kb/                       # the ontology root — facts live here
+├── README.md                 # the repo description, read and written by knomit
+├── LICENSE                   # the KB's terms, read-only
+└── .domains/ontology.yaml    # the ontology definition
+```
+
+`ontology_root` (default `kb`) names the first of these. The ontology definition
+itself sits in a **private** directory — anything with a dot-prefixed path
+segment is excluded from fact discovery — which is why it is configuration
+rather than a fact, and why knomit reads it by name. See
+[what a knowledge base repo contains](/docs/concepts/#what-a-knowledge-base-repo-contains).
+
+<Aside type="caution" title="Repos predating the move">
+The ontology used to live at `domains/ontology.yaml`, without the dot. That path
+is still read, second, and read-only: there is no migration, so a repo that was
+never moved keeps validating against **its own** ontology rather than silently
+falling back to the embedded default.
+</Aside>
+
 ### There is no default repo
 
 **A fresh install has zero repos, and that is a healthy steady state** — startup
