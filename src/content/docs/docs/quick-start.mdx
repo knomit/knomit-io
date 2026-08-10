@@ -145,18 +145,17 @@ agent branch from the running server, so you never look it up by hand.
   </TabItem>
 </Tabs>
 
-<Aside type="caution" title="Upgrading from an older bridge">
-The `--source` and `--profile` flags have been removed. An existing `.mcp.json`
-that still passes them fails at startup with
-`flag provided but not defined: -source`, and the bridge exits non-zero.
-Delete those two arguments; `--repo`
-alone is enough. The source slug now follows the repo, and the MCP profile is a
-per-repo server setting rather than a client flag.
-</Aside>
+<Aside type="tip" title="Let the bridge write this for you">
+`knomit-bridge claude init` scaffolds the Claude Code integration into the
+current directory: the `.mcp.json` above, `.claude/settings.json`, eleven
+`/knomit-…` skills, and a block appended to `CLAUDE.md`. Where one of those
+already exists it drops a companion file beside it rather than overwriting your
+version. See [Claude Code](/docs/claude-code/).
 
-<Aside type="note">
-knomit's tool descriptions carry all the behavioral guidance the model needs —
-no `CLAUDE.md` setup is required to start using it.
+The tools are usable without any of it — their descriptions carry the guidance a
+model needs to call them correctly. What the skills and the `CLAUDE.md` block add
+is *when* to reach for them: recall before touching an unfamiliar area, record a
+decision once it is made, re-verify a fact before relying on it.
 </Aside>
 
 ## Write your first fact
