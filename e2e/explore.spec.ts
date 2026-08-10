@@ -305,10 +305,18 @@ test.describe('/explore guided tour', () => {
     await expect(frame).toHaveAttribute('data-tour-highlight', 'filter');
     await expect(frame).toContainText('entity:');
 
-    // Done clears up after itself.
+    // Done clears up after itself, and hands the visitor back the view they
+    // arrived in. Every one of these was left dirty by the last steps: the
+    // sort was 'recent' from step 3, the type and entity chips were still
+    // applied, and a fact was open — so a tour that merely hid its own bar
+    // would strand someone in a chronological, filtered list they never chose.
     await next();
     await expect(bar).toHaveCount(0);
     await expect(page.getByTestId('tour-launcher')).toBeVisible();
+    await expect(page.getByTestId('left-panel')).toHaveAttribute('data-sort', 'path');
+    await expect(frame).not.toContainText('type:synthesis');
+    await expect(frame).not.toContainText('entity:');
+    await expect(page.getByTestId('stats-view')).toBeVisible();
   });
 
   test('starting the tour keeps the open fact until the view actually changes', async ({ page }) => {
@@ -452,9 +460,11 @@ test.describe('/explore guided tour', () => {
     await expect(page.getByTestId('tour-bar')).toHaveCount(0);
     await expect(page.getByTestId('tour-cursor')).toHaveCount(0);
     await expect(page.getByTestId('tour-launcher')).toBeVisible();
-    // And the app is left usable: live anchor, no filters, library restored.
+    // And the app is left usable: live anchor, no filters, library restored
+    // to the view the visitor arrived in — the ontology, not whichever sort
+    // the tour happened to stop on.
     await expect(page.locator('#filter-input')).toHaveCount(1);
-    await expect(page.getByTestId('left-panel')).toHaveAttribute('data-sort', 'recent');
+    await expect(page.getByTestId('left-panel')).toHaveAttribute('data-sort', 'path');
   });
 
   test('the launcher names the real repo and links to it', async ({ page }) => {

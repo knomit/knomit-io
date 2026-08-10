@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Dispatch } from 'react';
 import type { AppState, Action } from '../generated/kb-ui/state';
+import { init } from '../generated/kb-ui/state';
 import type { BundleTour } from '../lib/bundleTypes';
 
 /**
@@ -290,12 +291,23 @@ export function useTour(deps: TourDeps | null, frameRef: { current: HTMLElement 
     const d = depsRef.current;
     if (!d) return;
     // Leave the app in a clean state rather than wherever the last step
-    // parked it: the point of the ending is "you're back at the library".
+    // parked it: the point of the ending is "you're back where you came in".
+    //
+    // The sort is read from the vendored `init` rather than named here. It was
+    // hardcoded to 'recent', which silently became wrong when v0.5.2 changed
+    // the Library's default to Path — Done then dropped visitors into a
+    // chronological list they had never chosen, and which the tour had just
+    // described as the OTHER view. Deriving it means the ending follows the
+    // app's real starting state if upstream ever moves it again.
+    //
+    // Step 1 deliberately does NOT derive its sort: its narration names the
+    // ontology out loud, so if the default moved, the honest fix there is new
+    // prose, not a silently different step.
     void (async () => {
       await d.tt.returnToNow();
       d.dispatch({ type: 'CLEAR_FILTERS' });
       d.navigate({ view: 'library', factPath: null });
-      d.dispatch({ type: 'SET_LIBRARY_SORT', sort: 'recent' });
+      d.dispatch({ type: 'SET_LIBRARY_SORT', sort: init.librarySort });
     })();
   }, [cancelFlight]);
 
