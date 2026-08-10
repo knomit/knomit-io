@@ -821,6 +821,10 @@ const toc = [
     display: flex;
     flex-direction: column;
     gap: 0.45rem;
+    /* Grid items refuse to shrink below their content's intrinsic width unless
+       told to. Ontology paths are unbreakable monospace, so without this the
+       two columns pushed the page 38px wider than a phone viewport. */
+    min-width: 0;
   }
   .tree-ont {
     font-size: 0.67rem;
@@ -1366,6 +1370,12 @@ const toc = [
   @media (max-width: 860px) {
     .concept-block,
     .concept-block--reverse {
+      grid-template-columns: 1fr;
+    }
+    /* Two side-by-side ontology trees are ~172px each on a phone, which is
+       narrower than the paths they contain. Stack them: min-width:0 alone
+       stops the overflow but leaves both unreadable. */
+    .tree-columns {
       grid-template-columns: 1fr;
     }
     .concept-block--reverse .concept-block__art {

@@ -448,6 +448,13 @@ const steps = [
   }
   .facts__art {
     max-width: 440px;
+    /* The fact card's own min-content was flooring the single-column track at
+       363px inside a 338px container, so the page overflowed by ~4px on a
+       phone. Grid items don't shrink past their content unless told to. */
+    min-width: 0;
+  }
+  .facts__copy {
+    min-width: 0;
   }
 
   /* Problem */
@@ -703,11 +710,15 @@ const steps = [
   }
 
   @media (max-width: 880px) {
+    /* minmax(0, 1fr), not 1fr. A bare `1fr` is `minmax(auto, 1fr)`, so the
+       track can never be narrower than its content's automatic minimum — which
+       let the fact card size the column at 363px inside a 338px container and
+       pushed the page 4px wider than a phone viewport. */
     .hero__inner,
     .facts__grid,
     .okfband,
     .problem-head {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
     .hero__art {
       order: -1;

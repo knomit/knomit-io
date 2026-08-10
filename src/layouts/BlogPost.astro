@@ -12,8 +12,16 @@ interface Props {
   next?: { href: string; title: string };
 }
 const { post, prev, next } = Astro.props;
-const { title, description, pubDate, updatedDate, author, tags, heroImage } =
+const { title, description, seoTitle, seoDescription, pubDate, updatedDate, author, tags, heroImage } =
   post.data;
+
+// The head gets the short forms when a post supplies them; the page keeps the
+// full headline and standfirst either way. Only the `<title>` and
+// `<meta name=description>` differ — the JSON-LD below deliberately keeps the
+// real title and description, because that is structured data describing the
+// article, not a search-result label.
+const headTitle = seoTitle ?? title;
+const headDescription = seoDescription ?? description;
 
 const site = Astro.site!;
 const url = new URL(Astro.url.pathname, site);
@@ -30,7 +38,7 @@ const jsonLd = blogPostingSchema({
 });
 ---
 
-<BaseLayout title={`${title} — knomit blog`} description={description} article={true} jsonLd={jsonLd}>
+<BaseLayout title={`${headTitle} — knomit blog`} description={headDescription} article={true} jsonLd={jsonLd}>
   <article class="post">
     <div class="k-container post__head">
       <a href="/blog" class="post__back k-mono">← Blog</a>
