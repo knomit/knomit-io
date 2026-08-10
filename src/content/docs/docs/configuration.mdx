@@ -61,8 +61,7 @@ see [Observability](/docs/observability/).
 `control.db` is a SQLite database holding the **repo registry** (tables `repos`,
 `repo_origins`) and lens definitions (`lenses`, `lens_reads`). It is
 machine-local operational config: deliberately **not** git-backed, and it does
-not sync. A home created before the registry moved here needs a one-time
-[`knomit migrate-registry`](/docs/cli-reference/#knomit-migrate-registry--adopt-the-controldb-repo-registry).
+not sync.
 </Aside>
 
 A repo's **name and its filename are no longer the same thing.** Each database is

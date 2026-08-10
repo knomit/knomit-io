@@ -13,7 +13,7 @@ const pillars = [
   },
   {
     title: 'Encrypted remote credentials',
-    body: 'When you sync a repo to a git remote, auth tokens are never stored in plaintext. They are encrypted with AES-256-GCM using a key derived (HKDF-SHA256) from the agent\'s SSH private key, and stored base64-encoded in the repo DB.',
+    body: 'When you sync a repo to a git remote, auth tokens are never stored in plaintext. They are encrypted with AES-256-GCM using a key derived (HKDF-SHA256) from the agent\'s SSH private key, and stored base64-encoded in the machine-local control plane — never in the git-backed knowledge base, so a credential cannot be pushed to a remote by accident. If the key is unreadable, knomit refuses to persist a token rather than writing it in the clear.',
   },
   {
     title: 'Guarded remotes',

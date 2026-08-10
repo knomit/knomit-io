@@ -49,25 +49,6 @@ clean atomic snapshot. Exit codes: `0` clean, `1` issues found, `2` command erro
 | `--all` | bool | `false` | Verify all configured repos |
 | `--deep` | bool | `false` | Parse every fact (slower, stricter) |
 
-### `knomit migrate-registry` — adopt the control.db repo registry
-
-Converts a home created before the repo registry moved into `control.db`. Run it
-**once, with the server stopped**: it records each repo in `control.db`, renames
-the databases to `repos/<uid>.db`, re-keys lens membership from repo names to
-uids, and unpacks the archive directory. It refuses to run while
-`<home>/running.marker` says a server may be up.
-
-<Aside type="caution" title="Irreversible — copy your home first">
-Only `control.db` is backed up (to `control.db.bak`). Each repo database's
-`url` / `branch` / `auth_method` / `auth_token` columns are dropped by schema
-migration 000017 and cannot be recovered from the database afterwards. Copy the
-whole `KNOMIT_HOME` before running.
-</Aside>
-
-| Flag | Type | Default | Meaning |
-|------|------|---------|---------|
-| `--dry-run` | bool | `false` | Print the plan and return before the first write. Every read uses a `mode=ro` handle, so no file contents change |
-
 ### `knomit warm-models` — pre-download the embedding model
 
 Fetches model + tokenizer files into `KNOMIT_HOME/models/<id>/` without booting
