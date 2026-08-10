@@ -502,7 +502,7 @@ const toc = [
           <tbody>
             <tr><td><code>kb/technology/debugging/pool-fix.md</code></td><td>Local fact in this knowledge base</td></tr>
             <tr><td><code>kb://&lt;id12&gt;/kb/…</code></td><td>Fact in another repo mounted in this lens</td></tr>
-            <tr><td><code>src://&lt;source&gt;/&lt;path&gt;@&lt;commit&gt;</code></td><td>Source file, optionally pinned to a commit</td></tr>
+            <tr><td><code>src://&lt;repo&gt;/&lt;path&gt;@&lt;commit&gt;:&lt;blob&gt;</code></td><td>Source file, pinned to a commit and a blob — so it resolves even after a rename</td></tr>
             <tr><td><code>https://…</code></td><td>Any web resource — article, paper, press release</td></tr>
           </tbody>
         </table>
@@ -613,8 +613,9 @@ const toc = [
         <p>
           MCP is not an optional add-on — it is the primary interface for
           humans (via Claude Code and editors) and agents alike. Eight tools
-          cover the full fact lifecycle; their descriptions carry all the
-          behavioral guidance a model needs, with no prompt scaffolding required.
+          cover the full fact lifecycle; their descriptions are written as
+          prompt engineering for the calling model, so none of them need
+          scaffolding to be called correctly.
         </p>
         <p>
           Each agent connects to a <strong>branch-scoped endpoint</strong>, so
@@ -820,6 +821,10 @@ const toc = [
     display: flex;
     flex-direction: column;
     gap: 0.45rem;
+    /* Grid items refuse to shrink below their content's intrinsic width unless
+       told to. Ontology paths are unbreakable monospace, so without this the
+       two columns pushed the page 38px wider than a phone viewport. */
+    min-width: 0;
   }
   .tree-ont {
     font-size: 0.67rem;
@@ -1365,6 +1370,12 @@ const toc = [
   @media (max-width: 860px) {
     .concept-block,
     .concept-block--reverse {
+      grid-template-columns: 1fr;
+    }
+    /* Two side-by-side ontology trees are ~172px each on a phone, which is
+       narrower than the paths they contain. Stack them: min-width:0 alone
+       stops the overflow but leaves both unreadable. */
+    .tree-columns {
       grid-template-columns: 1fr;
     }
     .concept-block--reverse .concept-block__art {

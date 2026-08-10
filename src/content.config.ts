@@ -10,6 +10,20 @@ const blog = defineCollection({
     z.object({
       title: z.string(),
       description: z.string(),
+      /**
+       * Search-result overrides. Both are OPTIONAL and exist because `title`
+       * and `description` are page CONTENT here, not metadata: `title` is the
+       * article's headline and `description` is rendered as its standfirst.
+       * Cutting them to fit a SERP would edit the article.
+       *
+       * So a post that would truncate in results supplies a short form for the
+       * `<title>` / `<meta name=description>` only. The caps are enforced at
+       * build time rather than by a test, so an over-long override cannot ship:
+       * ~60 chars is where Google truncates a title, ~160 a description, and
+       * the blog's `<title>` appends " — knomit blog" (14), hence 46 here.
+       */
+      seoTitle: z.string().max(46).optional(),
+      seoDescription: z.string().max(160).optional(),
       pubDate: z.coerce.date(),
       updatedDate: z.coerce.date().optional(),
       author: z.string().default('The knomit team'),

@@ -569,7 +569,10 @@ describe('api.recent / stats / activity / completions', () => {
 
     type RecentOpts = NonNullable<Parameters<typeof api.recent>[6]>;
     const RECENT_OPTS_CASES: Array<[string, RecentOpts, string[]]> = [
-      ['typeFilter narrows to the listed type', { typeFilter: 'gotcha' }, [P2]],
+      ['types narrows to the listed type', { types: ['gotcha'] }, [P2]],
+      // OR-combined, unlike domains/entities below: listing both types keeps
+      // facts of either, rather than requiring a fact to be both at once.
+      ['types OR-combines', { types: ['gotcha', 'pattern'] }, [P1, P2]],
       ['excludeType drops the listed type', { excludeType: 'gotcha' }, [P1, P3]],
       ['kinds narrows to the listed kind', { kinds: ['epistemic'] }, [P1, P3]],
       ['excludeKinds drops the listed kind', { excludeKinds: ['epistemic'] }, [P2]],

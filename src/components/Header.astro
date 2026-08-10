@@ -37,6 +37,7 @@ const isActive = (href: string) =>
 
     <div class="k-header__actions">
       {DEMO_LIVE && <a href="/explore" class="k-header__link k-header__link--demo">Explore</a>}
+      <a href="/download" class="k-btn k-header__dl">Download</a>
       <a href={GITHUB_URL} class="k-btn k-btn--ghost k-header__gh" rel="noopener">
         <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">
           <path
@@ -55,6 +56,7 @@ const isActive = (href: string) =>
   <nav class="k-header__mobile" aria-label="Mobile" hidden>
     {nav.map((item) => <a href={item.href} class="k-header__link">{item.label}</a>)}
     {DEMO_LIVE && <a href="/explore" class="k-header__link">Explore</a>}
+    <a href="/download" class="k-header__link">Download</a>
     <a href={GITHUB_URL} class="k-header__link" rel="noopener">GitHub</a>
   </nav>
 </header>
@@ -115,9 +117,19 @@ const isActive = (href: string) =>
   .k-header__link--demo {
     color: var(--k-brand);
   }
+  .k-header__dl,
   .k-header__gh {
     padding: 0.45rem 0.8rem;
     font-size: 0.9rem;
+  }
+  /* Download is the solid button and GitHub the ghost one, so the primary
+     action reads as primary in the chrome as well as in the hero. Below the
+     nav's own breakpoint the actions row is replaced by the burger menu, and
+     both land there as plain links — see the mobile nav above. */
+  @media (max-width: 980px) {
+    .k-header__dl {
+      display: none;
+    }
   }
   .k-header__burger {
     display: none;

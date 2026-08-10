@@ -9,7 +9,25 @@ knomit is a distributed, decentralized knowledge base built from facts —
 knowledge + commit. This page gets you from zero to a running server with a peer
 connected.
 
-## Requirements
+## Install
+
+The quickest way in is a signed release build — no toolchain, no compile step.
+
+<CardGrid>
+  <Card title="Download a release" icon="download">
+    Grab the [desktop app or the server binary](/download) for macOS or Linux.
+    The macOS app is notarized and keeps itself up to date; both platforms ship
+    a `knomit serve` tarball. **Start here unless you need to modify knomit.**
+  </Card>
+  <Card title="Build from source" icon="seti:go">
+    Everything below. Needed if you're changing knomit itself, or running on a
+    platform the releases don't cover.
+  </Card>
+</CardGrid>
+
+## Build from source
+
+### Requirements
 
 - **Go 1.25+** — the entire backend.
 - **Node.js + npm** — builds the embedded React frontend.
@@ -26,7 +44,7 @@ drops top-level `dist/knomit` and `dist/knomit-bridge` symlinks pointing into
 that platform directory.
 </Aside>
 
-## Build and run
+### Build and run
 
 <Steps>
 
@@ -57,22 +75,28 @@ that platform directory.
 
 </Steps>
 
-Open <strong>http://localhost:19278/</strong> for the web UI. The default repo
-(`core`) is created automatically on first run.
+Open <strong>http://localhost:19278/</strong> for the web UI. A fresh install
+starts with **no repositories** — the UI's "no repos" screen is the ordinary
+first-run state, not an error. Create your first one from **Manage repos**.
 
 <Aside type="tip" title="Prefer a native app?">
-Instead of `make run`, build the [desktop app](/docs/desktop/) with `make
-desktop` — a system-tray app that runs the server in-process and lets MCP
-clients auto-discover it. No terminal needed to keep knomit running. On macOS
-that produces `dist/Knomit.app`; on Linux it produces the `dist/knomit-desktop`
-binary only — run `make desktop-install` afterwards to install the `.desktop`
-launcher and icon.
+The [desktop app](/docs/desktop/) is a system-tray app that runs the server
+in-process and lets MCP clients auto-discover it — no terminal needed to keep
+knomit running. Most people should just [download it](/download). To build it
+here instead of `make run`, use `make desktop`: on macOS that produces
+`dist/darwin-arm64/Knomit.app`; on Linux it produces the `knomit-desktop`
+binary only — run `make desktop-install` afterwards for the `.desktop` launcher
+and icon.
 </Aside>
 
 <Aside type="tip" title="No CLI to create repos">
-Additional repos are created, archived, restored, and purged at runtime through
-the web UI ("Manage repos") or the [REST API](/docs/api/) — there is no CLI
-command to create a repo. The default `core` repo is always created if missing.
+Repos are created, archived, restored, and purged at runtime through the web UI
+("Manage repos") or the [REST API](/docs/api/) — there is no CLI command to
+create one, and MCP cannot create repos at all. No repo is privileged: knomit
+starts with none, and archiving your last one is allowed (it stays restorable).
+Because nothing falls back to a default name, commands that act on a repo make
+you name one: `knomit verify` needs `--repo` unless you pass `--all`, and
+`knomit-bridge` needs exactly one of `--repo` or `--lens`.
 </Aside>
 
 ## Connect an agent over MCP
@@ -121,18 +145,17 @@ agent branch from the running server, so you never look it up by hand.
   </TabItem>
 </Tabs>
 
-<Aside type="caution" title="Upgrading from an older bridge">
-The `--source` and `--profile` flags have been removed. An existing `.mcp.json`
-that still passes them fails at startup with
-`flag provided but not defined: -source`, and the bridge exits non-zero.
-Delete those two arguments; `--repo`
-alone is enough. The source slug now follows the repo, and the MCP profile is a
-per-repo server setting rather than a client flag.
-</Aside>
+<Aside type="tip" title="Let the bridge write this for you">
+`knomit-bridge claude init` scaffolds the Claude Code integration into the
+current directory: the `.mcp.json` above, `.claude/settings.json`, eleven
+`/knomit-…` skills, and a block appended to `CLAUDE.md`. Where one of those
+already exists it drops a companion file beside it rather than overwriting your
+version. See [Claude Code](/docs/claude-code/).
 
-<Aside type="note">
-knomit's tool descriptions carry all the behavioral guidance the model needs —
-no `CLAUDE.md` setup is required to start using it.
+The tools are usable without any of it — their descriptions carry the guidance a
+model needs to call them correctly. What the skills and the `CLAUDE.md` block add
+is *when* to reach for them: recall before touching an unfamiliar area, record a
+decision once it is made, re-verify a fact before relying on it.
 </Aside>
 
 ## Write your first fact

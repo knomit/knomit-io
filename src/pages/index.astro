@@ -120,9 +120,13 @@ const steps = [
           gives birth to new ones. Every peer — human or agent — learns on its own
           branch and converges on a shared <code>main</code>.
         </p>
+        {/* Two actions, deliberately. The hero column is ~520px, so a third
+            button wraps to a second row and the primary action stops reading
+            as primary. GitHub is not lost: it sits in the header on every
+            page, and closes this one in the final CTA below. */}
         <div class="hero__cta">
-          <a href={GITHUB_URL} class="k-btn" rel="noopener">
-            <Icon name="provenance" size={17} /> View on GitHub
+          <a href="/download" class="k-btn">
+            <Icon name="arrow" size={17} /> Download knomit
           </a>
           <a href="/docs/quick-start" class="k-btn k-btn--ghost">
             Quick start <Icon name="arrow" size={17} />
@@ -361,8 +365,8 @@ const steps = [
           diff, and host anywhere.
         </p>
         <div class="cta__actions">
-          <a href={GITHUB_URL} class="k-btn" rel="noopener">View on GitHub</a>
-          <a href="/docs/quick-start" class="k-btn k-btn--ghost">Quick start</a>
+          <a href="/download" class="k-btn">Download knomit</a>
+          <a href={GITHUB_URL} class="k-btn k-btn--ghost" rel="noopener">View on GitHub</a>
         </div>
       </div>
     </div>
@@ -444,6 +448,13 @@ const steps = [
   }
   .facts__art {
     max-width: 440px;
+    /* The fact card's own min-content was flooring the single-column track at
+       363px inside a 338px container, so the page overflowed by ~4px on a
+       phone. Grid items don't shrink past their content unless told to. */
+    min-width: 0;
+  }
+  .facts__copy {
+    min-width: 0;
   }
 
   /* Problem */
@@ -699,11 +710,15 @@ const steps = [
   }
 
   @media (max-width: 880px) {
+    /* minmax(0, 1fr), not 1fr. A bare `1fr` is `minmax(auto, 1fr)`, so the
+       track can never be narrower than its content's automatic minimum — which
+       let the fact card size the column at 363px inside a 338px container and
+       pushed the page 4px wider than a phone viewport. */
     .hero__inner,
     .facts__grid,
     .okfband,
     .problem-head {
-      grid-template-columns: 1fr;
+      grid-template-columns: minmax(0, 1fr);
     }
     .hero__art {
       order: -1;

@@ -10,6 +10,10 @@ system-tray icon plus a native webview window showing the same web UI. It is the
 easiest way to keep a knomit server running on your machine — no terminal, no
 manual `serve`.
 
+What you see inside that window is the [web UI](/docs/web-ui/) — same code, same
+surfaces, screenshots and all. This page covers what the desktop app adds around
+it: how it runs the server, how it is installed, and how it updates.
+
 It works differently from a bare `knomit serve`, and those differences matter for
 wiring up MCP clients.
 
@@ -29,6 +33,12 @@ wiring up MCP clients.
 - **Lives in the system tray.** On macOS and Linux alike it runs as a tray app
   (`Knomit.app` on macOS), with an "Open Knomit" menu item that shows the
   webview window.
+- **Appears before it is ready.** Startup is tray-first: the icon shows up
+  immediately with an **amber badge** while the server boots in the background,
+  rather than leaving you with nothing on screen during a cold start (the first
+  ever launch downloads a ~600 MB embedding model).
+- **Has its own Settings and Logs windows.** Process configuration and a live
+  log view are native windows off the tray menu, so neither needs a terminal.
 - **Symlinks the bridge.** On launch the app symlinks the bundled
   `knomit-bridge` into `$KNOMIT_HOME/bin` (default `~/.knomit/bin`) on every
   platform, giving MCP clients a stable path to point at.
@@ -41,7 +51,38 @@ server automatically — see [Claude Cowork](/docs/claude-cowork/) and
 [Claude Code](/docs/claude-code/).
 </Aside>
 
-## Build & install
+## Install
+
+[Download a release](/download) — that is the intended path, and on macOS it is
+also the one that gets you updates.
+
+- **macOS** — the `.app` is signed with a Developer ID and **notarized**, with
+  the ticket stapled into the bundle, so a first launch works offline and needs
+  no `xattr`, no right-click-Open, and no trip through Privacy & Security. Drag
+  it to Applications.
+- **Linux** — a single AppImage. It needs **GTK 4 and WebKitGTK 6.0** on the
+  host. `chmod +x` it and run it; on a host without FUSE, prefix the command
+  with `APPIMAGE_EXTRACT_AND_RUN=1`.
+
+## Updates
+
+**macOS builds update themselves.** The app polls a signed appcast every six
+hours and posts a notification when a newer version exists. It never opens a
+window to tell you, and a check that finds nothing is silent. Nothing installs
+until you press **Install & Restart** on that notification — deliberately, since
+an update may migrate your knowledge base and **migrations do not reverse**. You
+can also check on demand from the tray menu.
+
+Each artifact carries a detached `.ed25519` signature over its SHA-256 digest,
+and the updater verifies it against a key pinned at build time, refusing
+anything that does not match.
+
+**Linux does not self-update.** The AppImage is signed and published like every
+other artifact, but it is deliberately excluded from the update feed: the
+updater's binary-swap step resolves paths inside the AppImage's temporary FUSE
+mount rather than the AppImage file itself. Download a newer AppImage to upgrade.
+
+## Build from source
 
 Build the app with `make desktop`:
 

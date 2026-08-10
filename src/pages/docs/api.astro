@@ -72,6 +72,15 @@ const scalarTheme = `
       renderMode="static"
       configuration={{
         url: '/openapi.yaml',
+        // Override the spec's own `servers: [{url: /api/v1}]`. That entry is
+        // RELATIVE, so Scalar resolves it against whatever host is serving the
+        // page — which is correct inside knomit's own bundled UI, and wrong
+        // here: on knomit.io it rendered as `https://knomit.io/api/v1`, an
+        // address that serves no API and never will. The base URL a reader
+        // needs is their OWN knomit, which listens on 19278 by default.
+        servers: [
+          { url: 'http://localhost:19278/api/v1', description: 'Your local knomit server' },
+        ],
         theme: 'none',
         layout: 'classic',
         forceDarkModeState: 'dark',

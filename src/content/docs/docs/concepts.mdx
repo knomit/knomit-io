@@ -1,6 +1,6 @@
 ---
 title: Concepts
-description: Facts (epistemic vs pragmatic), the ontology and inheritance, clustering and subsumption, peers and consensus, provenance and signing, the temporal graph, the knomit URI scheme, synthesis, and the MCP loop.
+description: Facts, kinds and types, the ontology and inheritance, clustering, consensus, provenance and signing, and the temporal graph.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -84,6 +84,54 @@ corpus introspectable. The ontology is configurable; knomit ships with two:
 **Source Code Knowledge** (a codebase taxonomy with topics like `invariants`,
 `conventions`, `decisions`, and `gotchas`).
 
+## What a knowledge base repo contains
+
+A knowledge base is an ordinary git repository, so it holds more than facts.
+Three root-level conventions matter.
+
+### `README.md` — the repo's description
+
+The description you see in the UI *is* `README.md`, read verbatim at HEAD. It is
+not metadata stored beside the repo: editing the description commits the file to
+the agent branch, so it has a history, diffs, and syncs with everything else.
+Capped at 64 KiB.
+
+### `LICENSE` — the terms, read-only
+
+The terms the KB's content is published under, at the tree root beside the
+README. knomit reports it and never offers to write one — a licence is authored
+by whoever owns the repo.
+
+Looked up by that exact spelling only. `LICENSE.md`, `LICENSE.txt`, `COPYING`,
+and even `License` are not found, because the lookup is an exact tree-entry
+match rather than a case-insensitive search. A missing licence is not an error;
+"this KB states no terms" is an ordinary state.
+
+### Dot-prefixed paths are private
+
+**Any path segment beginning with `.`** makes a path private — `.github/`,
+`.domains/`, `kb/.drafts/`. Private paths are excluded from fact **discovery**
+everywhere: the search indexer, `knomit verify`, and the OKF exporter all skip
+them, and the fact-creation paths refuse to allocate one.
+
+<Aside type="note" title="Private means “not knowledge”, not “invisible”">
+The rule governs **walking, never opening**. knomit still reads specific known
+paths by name — which is exactly what lets it load its own ontology definition
+from `.domains/ontology.yaml`, a private path it depends on at boot.
+
+So a dot-path is not hidden, blocked, or refused by storage. These files commit,
+diff, push and pull like any others. They simply never enter the corpus as
+facts.
+</Aside>
+
+<Aside type="caution" title="Not to be confused with an OKF export repo">
+An [OKF export](/docs/okf/) repository has `README.md` and `LICENSE` at its root
+too, and the rules there are the opposite: both belong to the **publisher**, and
+`knomit-okf` never reads, writes, or stages either of them. The distinction is
+which repository you are looking at — your knowledge base, or the bundle it
+publishes.
+</Aside>
+
 ## How knowledge clusters
 
 Beyond what each fact says about itself, the corpus has emergent structure the
@@ -149,16 +197,50 @@ commits), the temporal model (history), and the distribution model
 Refs anchor a fact to its source material — the evidence behind the claim. A ref
 points to another fact, to a source file, or to any web resource:
 
-| Form | Meaning | Example |
-|------|---------|---------|
-| Local fact path | Fact in this knowledge base | `kb/technology/debugging/pool-fix.md` |
-| Repo-qualified | Fact in another repo mounted in this [lens](/docs/lenses/), addressed by 12-hex repo id | `kb://a1b2c3d4e5f6/kb/technology/debugging/pool-fix.md` |
-| Source anchor | Source file, optionally pinned to a commit | `src://knomit/internal/store/service.go@cfef409` |
-| Plain URL | Any web resource — article, paper, commit | `https://example.com/doc` |
+{/* A list, not a table. Four forms against three columns left the "Meaning"
+    column about 110px wide — every phrase wrapped to two or three words, the
+    longest example was clipped, and four rows ran to 699px of page. Stacking
+    them gives the examples the full column width, which is what a reader is
+    actually scanning for. */}
+<dl class="ref-forms">
+
+<dt>`kb/technology/debugging/pool-fix.md`</dt>
+<dd>**Local fact path** — a fact in this knowledge base.</dd>
+
+<dt>`kb://a1b2c3d4e5f6/kb/technology/debugging/pool-fix.md`</dt>
+<dd>**Repo-qualified** — a fact in another repo mounted in this
+[lens](/docs/lenses/), addressed by that repo's 12-hex id.</dd>
+
+<dt>`src://7b4887ce51d9/internal/store/service.go@<commit>:<blob>`</dt>
+<dd>**Source anchor** — a source file, pinned to a 40-hex commit *and* a 40-hex
+blob, optionally with `#L10-L24`. [Why the blob](#why-a-source-ref-carries-a-blob).</dd>
+
+<dt>`https://example.com/doc`</dt>
+<dd>**Plain URL** — any web resource: article, paper, commit.</dd>
+
+</dl>
 
 Refs are stored verbatim — never rewritten, resolved, or normalized. A ref is
 classified **local** when it does not start with `kb://` and does end in `.md`;
 everything else is external.
+
+### Why a source ref carries a blob
+
+The current `src://` form names three things: the source repo's id (its root
+commit, a different namespace from a knomit repo id), a full 40-hex commit, and
+the 40-hex **blob** of the file at that commit — optionally with `#L10-L24`.
+
+The blob is what makes the citation durable. With it, `git cat-file blob <blob>`
+retrieves exactly the bytes that were cited, even if the file was later renamed
+or deleted. The older `src://<source>/<path>@<commit>` form is still accepted,
+but it is weaker on purpose: `git show <commit>:<path>` fails outright if the
+path did not exist at that commit, which is the failure the blob removes.
+
+knomit stores no source objects and cannot verify a `src://` ref for you — the
+command that resolves it is the check. Get the three parts from the checkout you
+are citing: `git rev-list --max-parents=0 HEAD` for the repo id,
+`git rev-parse HEAD` for the commit, and `git rev-parse <commit>:<path>` for the
+blob.
 
 A `kb://` path is a stable identifier: pass it back as `knomit_explain`'s `file`,
 or store it in a fact's `refs` to cite across repos — the server never rewrites
@@ -180,8 +262,10 @@ effort dial and the bridge engine.
 ## The MCP operational loop
 
 MCP is the primary interface for humans (via Claude Code and editors) and agents
-alike. Eight tools cover the full fact lifecycle — their descriptions carry all
-the behavioral guidance a model needs, no prompt scaffolding required. Each agent
+alike. Eight tools cover the full fact lifecycle — their descriptions are written
+as prompt engineering for the calling model, so no scaffolding is needed to call
+them correctly (knowing *when* to call them is what
+[Claude Code's skills](/docs/claude-code/) add). Each agent
 connects to a **branch-scoped endpoint**, so reads and writes land on its own
 branch automatically; isolation is structural, not convention. A single MCP
 server instance serves every repo and [lens](/docs/lenses/); each handler
