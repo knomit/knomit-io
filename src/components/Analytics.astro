@@ -34,10 +34,21 @@ const host = new URL(Astro.site ?? 'https://knomit.io').hostname;
         // is nothing to filter out downstream.
         if (location.hostname !== host && location.hostname !== 'www.' + host) return;
 
-        var s = document.createElement('script');
-        s.async = true;
-        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + id;
-        document.head.appendChild(s);
+        // gtag.js is 167 KB — 63% of the homepage's transfer weight. It is NOT
+        // fetched here. Everything below (dataLayer, config, the click
+        // listener) runs immediately and queues into dataLayer, which is
+        // exactly what that array is for: hits recorded before the library
+        // arrives are replayed in order once it loads. So deferring the fetch
+        // costs no EVENTS, only the moment they reach Google.
+        var loaded = false;
+        function loadGtag() {
+          if (loaded) return;
+          loaded = true;
+          var s = document.createElement('script');
+          s.async = true;
+          s.src = 'https://www.googletagmanager.com/gtag/js?id=' + id;
+          document.head.appendChild(s);
+        }
 
         window.dataLayer = window.dataLayer || [];
         function gtag() {
@@ -81,6 +92,23 @@ const host = new URL(Astro.site ?? 'https://knomit.io').hostname;
           },
           true
         );
+
+        // Fetch the library once the main thread is free. The timeout is the
+        // safety net: without it, a page that never goes idle never reports.
+        if (typeof window.requestIdleCallback === 'function') {
+          window.requestIdleCallback(loadGtag, { timeout: 2000 });
+        } else {
+          setTimeout(loadGtag, 1200);
+        }
+
+        // Honest limitation: a visitor who leaves inside that window takes the
+        // queue with them, so very short visits can go uncounted. Flushing when
+        // the page is hidden recovers the common cases (tab switch, back
+        // button); a hard close during the first 2s is still lost. That is the
+        // price of not putting 167 KB on the critical path.
+        document.addEventListener('visibilitychange', function () {
+          if (document.visibilityState === 'hidden') loadGtag();
+        });
       })();
     </script>
   )
