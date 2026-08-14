@@ -846,7 +846,8 @@ const toc = [
     background: var(--k-brand-glow);
   }
   .tree-node--sib {
-    color: var(--k-text-muted);
+    /* .tree-node sits on --k-surface-2, where muted is 4.31:1. */
+    color: var(--k-text-2);
     font-size: 0.78rem;
     padding: 0.3rem 0.6rem;
   }
@@ -917,7 +918,10 @@ const toc = [
     opacity: 0.8;
   }
   .subsume-fact--dup .subsume-fact__type {
-    color: var(--k-text-muted);
+    /* Overrides the base rule's opacity: 0.8 too. Muted at 0.8 composites to
+       ~#6f6f6f (3.24:1) against the dup card. */
+    color: var(--k-text-2);
+    opacity: 1;
   }
   .subsume-fact__title {
     font-size: 0.78rem;
@@ -927,7 +931,8 @@ const toc = [
   }
   .subsume-fact__meta {
     font-size: 0.68rem;
-    color: var(--k-text-muted);
+    /* On --k-surface-2: muted is 4.31:1 and fails AA. See theme.css. */
+    color: var(--k-text-2);
     margin-top: 0.1rem;
   }
   .subsume-merged__hd {
@@ -965,7 +970,8 @@ const toc = [
     padding: 0.1rem 0.4rem;
     border-radius: 999px;
     border: 1px solid rgba(119,204,153,0.25);
-    color: var(--k-text-muted);
+    /* On --k-surface-2: muted is 4.31:1 and fails AA. See theme.css. */
+    color: var(--k-text-2);
     background: var(--k-surface-2);
   }
 
@@ -1221,8 +1227,12 @@ const toc = [
     color: var(--k-text-2);
   }
   .subsume-fact--dup {
+    /* "This is the duplicate being subsumed" is carried by the retracted
+       border and tint, NOT by opacity. Dimming composited the text to
+       3.40 / 2.99 / 3.37 against the card, and the lowest opacity clearing AA
+       on all three is 0.9 — by then there is no visible fade left to keep. */
     border-color: var(--k-retracted);
-    opacity: 0.6;
+    background: rgba(255, 136, 136, 0.06);
   }
   .subsume-tag {
     color: var(--k-retracted);

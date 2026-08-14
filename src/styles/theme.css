@@ -31,10 +31,19 @@
   --k-temporal: #e5a23c; /* time-travel, as-of, caution */
   --k-retracted: #ff8888; /* retraction, errors, "before" states */
 
-  /* Text ramp. Muted is the floor: it must clear WCAG AA (4.5:1) against BOTH
-     surfaces it lands on — #141414 (page) and #1a1a1a (footer, cards). #666666
-     measured 3.21 / 3.03 and failed both; #858585 measures 4.99 / 4.72. Anything
-     darker than #858585 re-breaks the footer, which is the tighter of the two. */
+  /* Text ramp. Muted is the floor, and it is only safe on the two DARKEST
+     surfaces: #141414 (page) and #1a1a1a (--k-surface-1). #666666 measured
+     3.21 / 3.03 and failed WCAG AA on both; #858585 measures 4.99 / 4.72.
+     Darker than #858585 re-breaks --k-surface-1, the tighter of the two.
+
+     Muted is NOT safe on the raised surfaces: on --k-surface-2 (#222) it is
+     4.31 and on --k-surface-3 (#2a2a2a) 3.89 — both under AA. Use --k-text-2
+     there instead (6.85 / 6.18), which is what the raised-surface call sites
+     do. Lifting this token until it cleared #2a2a2a would need ~#949494, close
+     enough to --k-text-2 that the ramp stops reading as three steps.
+
+     Also: never dim muted further with `opacity`. It composites against the
+     surface, so it silently lands below AA no matter what this value is. */
   --k-text: #eeeeee;
   --k-text-2: #aaaaaa;
   --k-text-muted: #858585;

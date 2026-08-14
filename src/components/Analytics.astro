@@ -38,8 +38,11 @@ const host = new URL(Astro.site ?? 'https://knomit.io').hostname;
         // fetched here. Everything below (dataLayer, config, the click
         // listener) runs immediately and queues into dataLayer, which is
         // exactly what that array is for: hits recorded before the library
-        // arrives are replayed in order once it loads. So deferring the fetch
-        // costs no EVENTS, only the moment they reach Google.
+        // arrives are replayed in order once it loads.
+        //
+        // The queue is NOT durable, though — it lives on the document. Any exit
+        // before the library lands drops whatever it holds, which is why the
+        // loaders below are more eager than a plain idle callback.
         var loaded = false;
         function loadGtag() {
           if (loaded) return;
@@ -101,11 +104,21 @@ const host = new URL(Astro.site ?? 'https://knomit.io').hostname;
           setTimeout(loadGtag, 1200);
         }
 
-        // Honest limitation: a visitor who leaves inside that window takes the
-        // queue with them, so very short visits can go uncounted. Flushing when
-        // the page is hidden recovers the common cases (tab switch, back
-        // button); a hard close during the first 2s is still lost. That is the
-        // price of not putting 167 KB on the critical path.
+        // The queue only survives if the library arrives before the document
+        // does not. A click on a github/CTA link QUEUES its event and then
+        // navigates away, discarding the queue with the page — so on the fast
+        // conversions these events exist to measure, idle may never come.
+        // First pointer/key contact fires well before the click that follows
+        // it (~100ms+), which is enough to have the fetch in flight, and it is
+        // still off the critical path. Passive + once so this costs nothing.
+        ['pointerdown', 'keydown', 'touchstart'].forEach(function (evt) {
+          window.addEventListener(evt, loadGtag, { once: true, passive: true });
+        });
+
+        // Last resort for exits with no interaction at all. Note this is
+        // genuinely best-effort: appending a <script> during unload rarely
+        // completes, and on a bfcache navigation the fetch is suspended on
+        // freeze. It recovers tab switches, not hard closes.
         document.addEventListener('visibilitychange', function () {
           if (document.visibilityState === 'hidden') loadGtag();
         });

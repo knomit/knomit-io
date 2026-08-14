@@ -43,9 +43,11 @@ const scalarTheme = `
 
   --scalar-color-1: #eeeeee;
   --scalar-color-2: #aaaaaa;
-  /* Scalar's dimmest text lands on #141414 at 12–14px, so it has to clear AA on
-     its own: #777777 measured 4.11:1 and failed. Matches --k-text-muted. */
-  --scalar-color-3: #858585;
+  /* Scalar's dimmest text is 12–14px and lands on BOTH --scalar-background-1
+     (#141414) and --scalar-background-3 (#222222) below, so it has to clear AA
+     on the lighter one. #777777 was 4.11 on #141414 alone; #858585 passes there
+     (4.99) but is only 4.31 on #222222. #909090 clears both: 5.77 / 4.98. */
+  --scalar-color-3: #909090;
   --scalar-color-accent: #88aaff;
   --scalar-background-1: #141414;
   --scalar-background-2: #1a1a1a;

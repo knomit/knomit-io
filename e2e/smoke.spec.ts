@@ -57,6 +57,27 @@ test.describe('docs', () => {
     const api = await page.request.get('/docs/api/');
     expect(api.status()).toBe(200);
   });
+
+  // The reference is no longer loaded from a CDN URL that is valid by
+  // construction: it points at a gitignored, build-generated, version-stamped
+  // path recorded in src/generated/scalar.json. If that name and the file
+  // sync.mjs actually emitted ever disagree — a partial sync, a stale
+  // public/vendor/, a half-landed dependency bump — the page still returns 200
+  // and simply renders nothing. Assert the script resolves, and that it is
+  // ours rather than a silent fall back to jsdelivr.
+  test('the REST reference loads a self-hosted Scalar bundle that exists', async ({ page }) => {
+    const html = await (await page.request.get('/docs/api/')).text();
+    const src = html.match(/<script[^>]+src="([^"]*scalar[^"]*)"/i)?.[1];
+
+    expect(src, 'no Scalar script tag on /docs/api/').toBeTruthy();
+    expect(src, 'Scalar must be self-hosted, not fetched from a CDN').not.toMatch(/^https?:\/\//);
+
+    const bundle = await page.request.get(src!);
+    expect(bundle.status(), `${src} does not resolve`).toBe(200);
+    // The loader appends a classic <script> and waits for window.Scalar, so an
+    // ESM build here would resolve 200 and then never boot the reference.
+    expect(await bundle.text()).toContain('Scalar');
+  });
 });
 
 test.describe('explore', () => {

@@ -15,7 +15,7 @@
  *
  * Outputs land in src/generated/ (gitignored) and are consumed by the docs.
  */
-import { mkdir, readFile, writeFile, access } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, access, rm } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { accessSync } from 'node:fs';
 import path from 'node:path';
@@ -268,13 +268,25 @@ async function syncScalar() {
   // point and walk up to the package root rather than requiring it directly.
   const require = createRequire(path.join(ROOT, 'noop.js'));
   const entry = require.resolve('@scalar/api-reference');
-  const pkgRoot = entry.slice(0, entry.indexOf(`${path.sep}dist${path.sep}`));
+  const cut = entry.indexOf(`${path.sep}dist${path.sep}`);
+  if (cut === -1) {
+    // Guard rather than let slice(0, -1) silently lop one character off the
+    // path and surface as ENOENT on ".../dist/index.j/package.json".
+    throw new Error(`cannot locate @scalar/api-reference package root from ${entry}`);
+  }
+  const pkgRoot = entry.slice(0, cut);
   const { version } = JSON.parse(await readFile(path.join(pkgRoot, 'package.json'), 'utf8'));
 
   const src = path.join(pkgRoot, 'dist', 'browser', 'standalone.js');
   const name = `standalone-${version}.js`;
-  const dest = path.join(ROOT, 'public', 'vendor', 'scalar', name);
-  await mkdir(path.dirname(dest), { recursive: true });
+  const outDir = path.join(ROOT, 'public', 'vendor', 'scalar');
+  // Wipe first: the filename is version-stamped, so without this a bumped
+  // dependency leaves every previously synced 3.7 MB bundle behind, and Astro
+  // copies all of public/ into dist/ — shipping dead files from a workspace
+  // that has not been re-cloned. A fresh CI checkout never sees this.
+  await rm(outDir, { recursive: true, force: true });
+  const dest = path.join(outDir, name);
+  await mkdir(outDir, { recursive: true });
   await writeFile(dest, await readFile(src, 'utf8'), 'utf8');
 
   const url = `/vendor/scalar/${name}`;

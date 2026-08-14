@@ -485,6 +485,13 @@ const mapAria =
     font-size: 0.95rem;
     line-height: 1.6;
   }
+  /* This link sits inside a paragraph, so colour alone cannot mark it: the
+     link and its surrounding text are under 3:1 against each other, which
+     leaves nothing for a colour-blind reader to go on. Underline it. */
+  .cmp-fit__more a {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
   .cmp-fit__list {
     list-style: none;
     margin: 0;
