@@ -20,6 +20,7 @@ import { constants } from 'node:fs';
 import { accessSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { resolveImportGraph, renderApiBarrel, writeVendorSwap, SEEDS } from './lib/vendor-ui.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -247,6 +248,44 @@ async function syncUI() {
   }
 }
 
+/**
+ * Publish Scalar's standalone browser bundle under public/ so the REST API page
+ * loads it same-origin.
+ *
+ * @scalar/astro otherwise points the reference at
+ * `https://cdn.jsdelivr.net/npm/@scalar/api-reference` with NO version in the
+ * URL, which meant /docs/api silently tracked Scalar's latest release and spent
+ * a cross-origin round trip on ~1 MB we could set no cache headers for. Serving
+ * it ourselves pins it to package.json and makes it immutably cacheable.
+ *
+ * It must be the `browser` (IIFE) build: @scalar/astro appends a classic
+ * <script> and waits for `window.Scalar`, which the ESM build never sets. The
+ * file is version-stamped so a dependency bump can never be served from cache
+ * under the old name.
+ */
+async function syncScalar() {
+  // package.json is not in the package's `exports` map, so resolve the entry
+  // point and walk up to the package root rather than requiring it directly.
+  const require = createRequire(path.join(ROOT, 'noop.js'));
+  const entry = require.resolve('@scalar/api-reference');
+  const pkgRoot = entry.slice(0, entry.indexOf(`${path.sep}dist${path.sep}`));
+  const { version } = JSON.parse(await readFile(path.join(pkgRoot, 'package.json'), 'utf8'));
+
+  const src = path.join(pkgRoot, 'dist', 'browser', 'standalone.js');
+  const name = `standalone-${version}.js`;
+  const dest = path.join(ROOT, 'public', 'vendor', 'scalar', name);
+  await mkdir(path.dirname(dest), { recursive: true });
+  await writeFile(dest, await readFile(src, 'utf8'), 'utf8');
+
+  const url = `/vendor/scalar/${name}`;
+  await writeFile(
+    path.join(OUT_DIR, 'scalar.json'),
+    `${JSON.stringify({ version, url }, null, 2)}\n`,
+    'utf8'
+  );
+  console.log(`  ✓ public${url}  (Scalar ${version}, self-hosted)`);
+}
+
 async function main() {
   console.log(`knomit sync — ref=${REF}${LOCAL ? `, local=${LOCAL}` : ''}`);
   await mkdir(OUT_DIR, { recursive: true });
@@ -256,6 +295,7 @@ async function main() {
 
   await syncUI();
   await syncRelease();
+  await syncScalar();
 
   // Publish the spec under public/ so the REST API page (Scalar) can fetch it
   // at /openapi.yaml and offer it as a download.

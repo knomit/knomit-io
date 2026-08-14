@@ -17,6 +17,8 @@ dist/
 src/generated/*
 !src/generated/.gitkeep
 public/openapi.yaml
+# Scalar's browser bundle, copied out of node_modules and version-stamped.
+public/vendor/scalar/
 
 # generated at build time by scripts/build-kb-bundle.mjs
 public/kb/
