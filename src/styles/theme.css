@@ -31,10 +31,13 @@
   --k-temporal: #e5a23c; /* time-travel, as-of, caution */
   --k-retracted: #ff8888; /* retraction, errors, "before" states */
 
-  /* Text ramp. */
+  /* Text ramp. Muted is the floor: it must clear WCAG AA (4.5:1) against BOTH
+     surfaces it lands on — #141414 (page) and #1a1a1a (footer, cards). #666666
+     measured 3.21 / 3.03 and failed both; #858585 measures 4.99 / 4.72. Anything
+     darker than #858585 re-breaks the footer, which is the tighter of the two. */
   --k-text: #eeeeee;
   --k-text-2: #aaaaaa;
-  --k-text-muted: #666666;
+  --k-text-muted: #858585;
 
   /* Brand tints for washes/glows (derived, low-contrast). */
   --k-brand-glow: rgba(119, 204, 153, 0.14);

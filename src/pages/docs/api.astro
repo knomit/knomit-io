@@ -1,6 +1,28 @@
 ---
 import { ScalarComponent } from '@scalar/astro';
 import StarlightPage from '@astrojs/starlight/components/StarlightPage.astro';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
+
+// Self-hosted Scalar bundle. @scalar/astro otherwise injects
+// `https://cdn.jsdelivr.net/npm/@scalar/api-reference` — UNVERSIONED, so this
+// page silently tracked Scalar's latest release and spent a cross-origin round
+// trip on ~1 MB we could set no cache headers for.
+//
+// The bundle can't be imported directly: @scalar/api-reference's `exports` map
+// has no entry for dist/browser/standalone.js, so a `?url` import fails to
+// resolve. scripts/sync.mjs copies it under public/ instead and records the
+// version-stamped URL here — same reason /download reads release.json.
+const SCALAR = path.resolve(process.cwd(), 'src/generated/scalar.json');
+let scalarCdn: string;
+try {
+  scalarCdn = JSON.parse(readFileSync(SCALAR, 'utf8')).url;
+} catch {
+  // Deliberately fatal rather than falling back to the CDN: a silent fallback
+  // would re-introduce the unpinned cross-origin fetch and nothing would show
+  // it. This page already needs prebuild for public/openapi.yaml anyway.
+  throw new Error('src/generated/scalar.json is missing — run `npm run prebuild`.');
+}
 
 // The REST API reference renders as a single Scalar page, but inside the
 // Starlight shell so the docs sidebar (Start here / Interfaces / Operate) stays
@@ -21,7 +43,9 @@ const scalarTheme = `
 
   --scalar-color-1: #eeeeee;
   --scalar-color-2: #aaaaaa;
-  --scalar-color-3: #777777;
+  /* Scalar's dimmest text lands on #141414 at 12–14px, so it has to clear AA on
+     its own: #777777 measured 4.11:1 and failed. Matches --k-text-muted. */
+  --scalar-color-3: #858585;
   --scalar-color-accent: #88aaff;
   --scalar-background-1: #141414;
   --scalar-background-2: #1a1a1a;
@@ -71,6 +95,7 @@ const scalarTheme = `
     <ScalarComponent
       renderMode="static"
       configuration={{
+        cdn: scalarCdn,
         url: '/openapi.yaml',
         // Override the spec's own `servers: [{url: /api/v1}]`. That entry is
         // RELATIVE, so Scalar resolves it against whatever host is serving the
