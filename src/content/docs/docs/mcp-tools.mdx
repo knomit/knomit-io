@@ -83,7 +83,10 @@ There is a **single MCP server instance**, shared across every repo and lens;
 each tool handler resolves the target binding from the request context. The
 instructions sent to the calling model are computed **per session** from that
 binding via an `AfterInitialize` hook, so the model is told the exact topics and
-categories the repo accepts.
+categories the repo accepts. The topic list it receives is the repo's
+[ontology](/docs/ontologies/#how-the-ontology-reaches-the-agent), each topic
+carried by its `description` — which makes those descriptions prompt text rather
+than documentation.
 
 For a lens binding, the instructions also carry a lens addendum: the mounts
 table, the `kb://` path convention, and read coverage per mount. A single-repo
@@ -137,8 +140,8 @@ Each fact object:
 
 | Field | Type | Req | Default | Notes |
 |-------|------|-----|---------|-------|
-| `topic` | string | ✓ | | Top-level ontology topic |
-| `category` | string | ✓ | | Category path within the topic (e.g. `languages/go/concurrency`) |
+| `topic` | string | ✓ | | Top-level [ontology](/docs/ontologies/) topic. A closed set — an undeclared topic is rejected |
+| `category` | string | ✓ | | Category path within the topic (e.g. `languages/go/concurrency`). Not a closed set — declared children guide placement, but [anything below a topic is accepted](/docs/ontologies/#how-paths-are-validated) |
 | `title` | string | ✓ | | Short descriptive title |
 | `body` | string | ✓ | | Fact body, natural language |
 | `kind` | string | | `epistemic` | `epistemic` (descriptive) or `pragmatic` (prescriptive) |
@@ -156,6 +159,12 @@ Pragmatic: `policy`, `heuristic`. A single batch may **not** mix observed types
 with inferred types (`hypothesis` / `methodology`). The `kind`, `type`, and
 `origin` vocabularies are generated from one source, so the `learn` schema, the
 `update` schema, and the session instructions cannot disagree.
+
+Schema conformance is not the only gate. If the repo's ontology declares
+[validation rules](/docs/ontologies/#validation-rules), each written fact — and
+each merged fact after a subsumption — is evaluated against them, and the first
+rule to fail rejects the write with that rule's message. `knomit_update` runs
+the same check on the reassembled fact.
 
 ### `knomit_query` — search
 

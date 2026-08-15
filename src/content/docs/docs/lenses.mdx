@@ -138,7 +138,9 @@ hypothetical: a re-rooted fork of a read-mounted upstream has a different
 root-commit ID, so it mounts, but it shares the upstream's fact UUIDs.)
 
 **Fan-out is ontology-aware.** A bare path filter of the form `kb/<topic>/` skips
-mounts whose ontology lacks that topic. The topic must be fully delimited by a
+mounts whose [ontology](/docs/ontologies/) lacks that topic — which is why a
+shared topic vocabulary across the mounts is what makes cross-repo browsing
+coherent. The topic must be fully delimited by a
 trailing slash — `kb/decisions/` constrains, `kb/decisions` is a prefix that
 could also match `kb/decisions-x/` and constrains nothing. The skip is an
 internal optimization: a skipped mount is indistinguishable from one that matched

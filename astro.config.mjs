@@ -93,6 +93,7 @@ export default defineConfig({
             { label: 'Quick start', slug: 'docs/quick-start' },
             { label: 'Overview & architecture', slug: 'docs/overview' },
             { label: 'Concepts', slug: 'docs/concepts' },
+            { label: 'Ontologies', slug: 'docs/ontologies' },
             { label: 'Lenses', slug: 'docs/lenses' },
           ],
         },

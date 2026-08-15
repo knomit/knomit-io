@@ -79,6 +79,12 @@ Open <strong>http://localhost:19278/</strong> for the web UI. A fresh install
 starts with **no repositories** — the UI's "no repos" screen is the ordinary
 first-run state, not an error. Create your first one from **Manage repos**.
 
+Creating a repo is where you pick its [ontology](/docs/ontologies/) — the topics
+it accepts, and the rules every fact is validated against. The `code` preset is
+the right answer for a codebase and the `default` preset for everything else.
+There is no setting to change it afterwards — doing so is a migration through
+git — so it is worth a minute of thought now.
+
 <Aside type="tip" title="Prefer a native app?">
 The [desktop app](/docs/desktop/) is a system-tray app that runs the server
 in-process and lets MCP clients auto-discover it — no terminal needed to keep
@@ -186,8 +192,9 @@ the web UI, or query it back with `knomit_query`.
     [Claude Cowork](/docs/claude-cowork/) — slash commands, hooks, and the bridge.
   </Card>
   <Card title="Understand the model" icon="open-book">
-    Read [Concepts](/docs/concepts/) for facts, the ontology, branches,
-    provenance, and the temporal graph.
+    Read [Concepts](/docs/concepts/) for facts, branches, provenance, and the
+    temporal graph — then [Ontologies](/docs/ontologies/) to shape what your KB
+    will accept.
   </Card>
   <Card title="See how it fits together" icon="document">
     The [Overview & architecture](/docs/overview/) — the four artifacts and how
