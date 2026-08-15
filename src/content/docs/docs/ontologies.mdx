@@ -172,13 +172,6 @@ for synthesis-pipeline output, `discovered` for the emergent facts the
 [discovery engine](/docs/discovery/) surfaces. `evidence_weight` is the mass a
 derived fact inherits from the facts it was built on.
 
-That is every field a fact has, minus one. `ref_warnings` is deliberately
-withheld: it is derived on read rather than stored, so it is structurally empty
-on the write path and describes the *previous* refs on an update — a rule over
-it would pass vacuously or judge the wrong thing. The completeness is enforced
-by a reflection test rather than by convention, so a field added to a fact
-cannot quietly fail to appear here.
-
 <Aside type="note" title="`origin` is the resolved value">
 An agent usually omits `origin`, and the on-disk default is applied downstream —
 after rules have run. So a rule is handed the value that *will* land on disk,
