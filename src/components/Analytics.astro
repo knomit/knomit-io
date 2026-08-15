@@ -127,9 +127,12 @@ const host = new URL(Astro.site ?? 'https://knomit.io').hostname;
         });
 
         // Last resort for exits with no interaction at all. Note this is
-        // genuinely best-effort: appending a <script> during unload rarely
-        // completes, and on a bfcache navigation the fetch is suspended on
-        // freeze. It recovers tab switches, not hard closes.
+        // genuinely best-effort: appending a script element during unload
+        // rarely completes, and on a bfcache navigation the fetch is suspended
+        // on freeze. It recovers tab switches, not hard closes.
+        // (Do not write the literal script tag here — Vite's dev-mode
+        // dependency scanner regex-matches script tags across the whole .astro
+        // file and would split this block at that point.)
         document.addEventListener('visibilitychange', function () {
           if (document.visibilityState === 'hidden') loadGtag();
         });
