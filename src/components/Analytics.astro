@@ -34,10 +34,35 @@ const host = new URL(Astro.site ?? 'https://knomit.io').hostname;
         // is nothing to filter out downstream.
         if (location.hostname !== host && location.hostname !== 'www.' + host) return;
 
-        var s = document.createElement('script');
-        s.async = true;
-        s.src = 'https://www.googletagmanager.com/gtag/js?id=' + id;
-        document.head.appendChild(s);
+        // gtag.js is 167 KB — 63% of the homepage's transfer weight. It is NOT
+        // fetched here. Everything below (dataLayer, config, the click
+        // listener) runs immediately and queues into dataLayer, which is
+        // exactly what that array is for: hits recorded before the library
+        // arrives are replayed in order once it loads.
+        //
+        // The queue is NOT durable, though — it lives on the document. Any exit
+        // before the library lands drops whatever it holds, which is why the
+        // loaders below are more eager than a plain idle callback.
+        // Warm DNS + TLS now so the deferred fetch is transfer only. Injected
+        // here rather than as a static <link> in BaseHead deliberately: a
+        // markup preconnect would open a connection to Google from CI,
+        // localhost and *.pages.dev too, which is exactly what the host gate
+        // above exists to prevent. This runs only past that gate.
+        var pre = document.createElement('link');
+        pre.rel = 'preconnect';
+        pre.href = 'https://www.googletagmanager.com';
+        pre.crossOrigin = '';
+        document.head.appendChild(pre);
+
+        var loaded = false;
+        function loadGtag() {
+          if (loaded) return;
+          loaded = true;
+          var s = document.createElement('script');
+          s.async = true;
+          s.src = 'https://www.googletagmanager.com/gtag/js?id=' + id;
+          document.head.appendChild(s);
+        }
 
         window.dataLayer = window.dataLayer || [];
         function gtag() {
@@ -81,6 +106,33 @@ const host = new URL(Astro.site ?? 'https://knomit.io').hostname;
           },
           true
         );
+
+        // Fetch the library once the main thread is free. The timeout is the
+        // safety net: without it, a page that never goes idle never reports.
+        if (typeof window.requestIdleCallback === 'function') {
+          window.requestIdleCallback(loadGtag, { timeout: 2000 });
+        } else {
+          setTimeout(loadGtag, 1200);
+        }
+
+        // The queue only survives if the library arrives before the document
+        // does not. A click on a github/CTA link QUEUES its event and then
+        // navigates away, discarding the queue with the page — so on the fast
+        // conversions these events exist to measure, idle may never come.
+        // First pointer/key contact fires well before the click that follows
+        // it (~100ms+), which is enough to have the fetch in flight, and it is
+        // still off the critical path. Passive + once so this costs nothing.
+        ['pointerdown', 'keydown', 'touchstart'].forEach(function (evt) {
+          window.addEventListener(evt, loadGtag, { once: true, passive: true });
+        });
+
+        // Last resort for exits with no interaction at all. Note this is
+        // genuinely best-effort: appending a <script> during unload rarely
+        // completes, and on a bfcache navigation the fetch is suspended on
+        // freeze. It recovers tab switches, not hard closes.
+        document.addEventListener('visibilitychange', function () {
+          if (document.visibilityState === 'hidden') loadGtag();
+        });
       })();
     </script>
   )

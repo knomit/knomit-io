@@ -384,7 +384,8 @@ const jsonLd = howToSchema({
     background: var(--k-surface-2);
     border-bottom: 1px solid var(--k-hairline);
     font-size: 0.76rem;
-    color: var(--k-text-muted);
+    /* On --k-surface-2: muted is 4.31:1 and fails AA. See theme.css. */
+    color: var(--k-text-2);
   }
   .okf-term__bar span {
     width: 8px;
@@ -598,7 +599,8 @@ const jsonLd = howToSchema({
     border-top: 1px solid var(--k-hairline-soft);
     background: var(--k-surface-2);
     font-size: 0.7rem;
-    color: var(--k-text-muted);
+    /* On --k-surface-2: muted is 4.31:1 and fails AA. See theme.css. */
+    color: var(--k-text-2);
   }
   .okf-doc__legend span {
     display: inline-flex;

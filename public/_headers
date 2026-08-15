@@ -1,0 +1,20 @@
+# Cloudflare Pages response headers.
+#
+# Pages' default for static assets is `public, max-age=14400, must-revalidate`,
+# which it applies even to content-hashed files. Measured on production: both
+# /_astro/_slug_.D0qAjmuO.css and the woff2 fonts came back REVALIDATED with
+# that header, so every repeat visit past four hours pays a conditional request
+# per asset before it can paint.
+#
+# Everything below is content-addressed — Astro hashes /_astro/*, and
+# scripts/sync.mjs version-stamps the Scalar bundle — so the filename changes
+# whenever the bytes do. That is exactly the precondition for `immutable`.
+#
+# Do NOT extend this to a path whose contents can change under a fixed name;
+# a stale immutable response is uncacheable-by-hand and lasts a year.
+
+/_astro/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/vendor/scalar/*
+  Cache-Control: public, max-age=31536000, immutable
