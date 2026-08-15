@@ -84,6 +84,11 @@ corpus introspectable. The ontology is configurable; knomit ships with two:
 **Source Code Knowledge** (a codebase taxonomy with topics like `invariants`,
 `conventions`, `decisions`, and `gotchas`).
 
+The tree is not only a taxonomy: an ontology also declares validation rules that
+run against every fact on write, so it decides what counts as a well-formed fact
+in this knowledge base. See [Ontologies](/docs/ontologies/) for the file format,
+the rules, and how to write your own.
+
 ## What a knowledge base repo contains
 
 A knowledge base is an ordinary git repository, so it holds more than facts.
@@ -110,14 +115,15 @@ match rather than a case-insensitive search. A missing licence is not an error;
 ### Dot-prefixed paths are private
 
 **Any path segment beginning with `.`** makes a path private — `.github/`,
-`.domains/`, `kb/.drafts/`. Private paths are excluded from fact **discovery**
+`.knomit/`, `kb/.drafts/`. Private paths are excluded from fact **discovery**
 everywhere: the search indexer, `knomit verify`, and the OKF exporter all skip
 them, and the fact-creation paths refuse to allocate one.
 
 <Aside type="note" title="Private means “not knowledge”, not “invisible”">
 The rule governs **walking, never opening**. knomit still reads specific known
-paths by name — which is exactly what lets it load its own ontology definition
-from `.domains/ontology.yaml`, a private path it depends on at boot.
+paths by name — which is exactly what lets it load its own
+[ontology definition](/docs/ontologies/#where-it-lives-and-when-it-is-read) from
+`.knomit/ontology.yaml`, a private path it depends on at boot.
 
 So a dot-path is not hidden, blocked, or refused by storage. These files commit,
 diff, push and pull like any others. They simply never enter the corpus as

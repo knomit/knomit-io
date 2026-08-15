@@ -288,9 +288,9 @@ contradicting the `views/retired.md` in the same bundle.
 
 ### Concept documents
 
-One markdown file per fact, at the fact's ontology path, with a slugified-title
-filename. Frontmatter carries meaning in **standard OKF keys** and knomit
-specifics in `knomit_*`:
+One markdown file per fact, at the fact's [ontology](/docs/ontologies/) path,
+with a slugified-title filename. Frontmatter carries meaning in **standard OKF
+keys** and knomit specifics in `knomit_*`:
 
 ```yaml
 ---
@@ -315,7 +315,9 @@ knomit_path: kb/invariants/embeddings/mandatory/f34da09a.md
 
 OKF's `type` maps from the fact's **topic** — the first path segment under `kb/` —
 not from its leaf `fact.Type`. `type` is OKF's only required key and answers
-"what this document is"; the leaf type is preserved as `knomit_type`.
+"what this document is"; the leaf type is preserved as `knomit_type`. Your
+[ontology's](/docs/ontologies/) topic names therefore surface in the published
+bundle, which is one more reason to choose them deliberately.
 
 The body carries the authored text, then `# Related` (domains and entities,
 linked into `views/`), `# Citations` (refs, with cited facts resolved to titled
