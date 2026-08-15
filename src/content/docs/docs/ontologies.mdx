@@ -162,22 +162,57 @@ One global, `fact`:
 | `fact.confidence` | number, 0–1 |
 | `fact.sources` | number — count of independent corroborations |
 | `fact.origin` | string — `authored` \| `distilled` \| `discovered` |
+| `fact.evidence_weight` | number — provenance mass carried by a derived fact |
 
-`fact.sources` and `fact.origin` are the two provenance axes, and they support
-the rules that make an ontology enforce a *standard of evidence* rather than a
-shape. `sources` counts independent corroborations, defaulting to 1; `origin`
-records which pipeline minted the fact — `authored` for anything a human or
-agent asserted, `distilled` for synthesis-pipeline output, `discovered` for the
-emergent facts the [discovery engine](/docs/discovery/) surfaces.
+The last three are the provenance axes, and they are what let an ontology
+enforce a *standard of evidence* rather than a shape. `sources` counts
+independent corroborations and defaults to 1. `origin` records which pipeline
+minted the fact: `authored` for anything a human or agent asserted, `distilled`
+for synthesis-pipeline output, `discovered` for the emergent facts the
+[discovery engine](/docs/discovery/) surfaces. `evidence_weight` is the mass a
+derived fact inherits from the facts it was built on.
 
-<Aside type="caution" title="`sources` is summed on a merge">
-Rules run again on the merged fact after a
-[subsumption](/docs/concepts/#subsumption--never-learned-twice), and a merge
-**adds** the two facts' source counts. A `fact.sources >= 2` rule therefore
-gates the first write of a claim and then passes automatically on every
-subsequent one — which is usually what you want from a corroboration rule, but
-is not a floor that holds per-write.
+That is every field a fact has, minus one. `ref_warnings` is deliberately
+withheld: it is derived on read rather than stored, so it is structurally empty
+on the write path and describes the *previous* refs on an update — a rule over
+it would pass vacuously or judge the wrong thing. The completeness is enforced
+by a reflection test rather than by convention, so a field added to a fact
+cannot quietly fail to appear here.
+
+<Aside type="note" title="`origin` is the resolved value">
+An agent usually omits `origin`, and the on-disk default is applied downstream —
+after rules have run. So a rule is handed the value that *will* land on disk,
+resolved by type: an unset `observation` reads as `'authored'`, an unset
+`synthesis` as `'distilled'`, and an explicit origin as itself.
+
+Without that resolution `fact.origin === 'authored'` would reject nearly every
+`knomit_learn` write, and `fact.origin !== 'discovered'` would quietly pass
+facts whose origin was never set. You can write either form and mean it.
 </Aside>
+
+### What the write path does to the values
+
+Rules run at three moments, and two of them hand a rule values no single caller
+supplied. Worth knowing before you write a provenance rule:
+
+| Field | On a fresh `knomit_learn` write | On the re-run after a [subsumption](/docs/concepts/#subsumption--never-learned-twice) merge |
+|---|---|---|
+| `sources` | as supplied, default 1 | **summed** — new + existing |
+| `confidence` | as supplied, default 0.7 | **max** of the two |
+| `domain`, `entities` | as supplied | union of both |
+| `origin`, `type`, `kind` | as supplied, resolved | inherited from whichever fact wins the merge |
+| `evidence_weight` | **always 0** | **always 0** |
+
+Two consequences:
+
+- **`fact.sources >= 2` gates a claim's first write, then passes on every one
+  after it**, because the merge sums. That is usually the semantics you want
+  from a corroboration rule, but it is not a per-write floor.
+- **`evidence_weight` is only meaningful on `knomit_update`.** On `knomit_learn`
+  it is not a caller-supplied field at all — it is computed and stamped after
+  validation has already run, so a rule always sees 0 and
+  `fact.evidence_weight > 0` rejects every learn write. `knomit_update`
+  validates a fact parsed from disk, so there the stored weight is real.
 
 ### Sandbox and limits
 
@@ -507,7 +542,9 @@ That has four practical consequences:
 3. `children` are suggestions. The freeform tail means they never restrict what
    gets created; use a `fact.path` rule for a real constraint.
 4. `fact.sources` is **summed on a subsumption merge**, so a corroboration
-   floor gates a claim's first write and passes on every one after it.
+   floor gates a claim's first write and passes on every one after it — and
+   `fact.evidence_weight` is **always 0 on `knomit_learn`**, because it is
+   stamped after validation.
 5. Only the **first** failing rule is reported per write.
 6. Comments and key order are **not preserved** — the stored file is
    re-serialised with sorted keys.
