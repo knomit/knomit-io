@@ -17,6 +17,10 @@ export const FAQ_ITEMS: FaqItem[] = [
     a: 'A fact in knomit is a single atomic claim — an observation, principle, invariant, or decision — written in plain markdown. Instead of embedding whole documents, knomit captures the discrete claims inside them, each one typed, scored for confidence, and linked to its sources and to related facts, forming a graph you can reason over and explain.',
   },
   {
+    q: 'Can I define my own ontology?',
+    a: 'Yes. An ontology is one YAML file in the knowledge base that declares the topics facts may be filed under, describes each topic to the agent — those descriptions are shipped as MCP instructions, so they are prompt text — and carries validation rules: small JavaScript expressions evaluated against every fact on write, where a failure rejects the fact and shows the agent your message. That makes an ontology more than a folder layout: it decides what counts as a well-formed fact. knomit ships two presets, a general-knowledge taxonomy and a source-code one, and you supply a custom ontology when you create the knowledge base.',
+  },
+  {
     q: 'Is knomit open source?',
     a: 'Yes. knomit is open source and the store is a plain git repository, so you can inspect it, diff it, review changes like code, and host it anywhere — locally or on a git host such as GitHub.',
   },

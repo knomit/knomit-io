@@ -1,0 +1,504 @@
+---
+title: Ontologies
+description: Declare the topics a knowledge base accepts, describe them to the agent, and enforce what counts as a well-formed fact — the file format, the path rules, and the validation language.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+An **ontology** is one YAML file that does three jobs for a knowledge base:
+
+1. **It declares the topics** — the validated first segment of every fact path.
+2. **It describes them to the agent.** Topic descriptions are shipped as part of
+   the MCP server instructions on every session. This is prompt text, not
+   documentation.
+3. **It carries validation rules** — small JavaScript expressions evaluated
+   against every fact on write. A fact that fails one is rejected, and the agent
+   is shown your error message.
+
+The third job is what separates an ontology from a folder layout. A taxonomy
+tells an agent where to file a claim; a validation rule decides whether the
+claim may enter the corpus at all. The ontology is therefore where you encode
+*what counts as a well-formed fact here* — and it is enforced on write, not
+offered as advice.
+
+Most knowledge bases never need a custom one. knomit ships
+[two presets](#the-built-in-presets), and `code` in particular is a working
+answer for any codebase. Read on when you want topics the presets don't have,
+or a standard of evidence they don't enforce.
+
+## Where it lives, and when it is read
+
+Inside the knowledge base repo, at:
+
+```text
+.knomit/ontology.yaml
+```
+
+Two older locations are still **read**, for repos that predate the move —
+`.domains/ontology.yaml`, then `domains/ontology.yaml`. The first rung with
+content wins, and whatever rung was read is the rung written back to. No
+migration runs: a repo is moved by hand, and reading all three is what stops an
+unmigrated repo from silently falling onto the default taxonomy.
+
+Facts land under the **ontology root**, `kb/` by default and set by
+`ontology_root` in [`knomit.toml`](/docs/configuration/#knomittoml):
+
+```text
+kb/<topic>/<category…>/<uuid8>.md
+```
+
+The ontology is parsed **once, when the repo is opened** — at server start, or
+when the repo is created or adopted. It is not re-read per request.
+
+<Aside type="caution" title="A broken ontology falls back silently">
+If the file is missing, unreadable, or fails to parse, knomit logs a warning and
+loads the built-in general-purpose ontology. It does not refuse to start.
+
+A typo in your YAML therefore surfaces as *"why are all my topics suddenly
+`people`, `technology`, `science`…"* rather than as an error — and every fact
+written in the meantime is validated against the wrong taxonomy. Validate the
+file before you ship it: [repo creation](#choosing-an-ontology) is the one place
+a malformed ontology produces a loud failure.
+</Aside>
+
+## The file format
+
+```yaml
+id: acme-support              # required — stable identity; also controls preset upgrades
+name: Acme Support Knowledge  # required — human label
+description: >-               # optional
+  What the support team knows about customers, policy, and incidents.
+
+validations:                  # optional — ROOT rules, run for every fact
+  - name: title-states-a-claim
+    message: "titles must state a claim, not ask a question"
+    rule: "!fact.title.trim().endsWith('?')"
+
+topics:                       # required — at least one
+  policy:
+    description: Rules agents must follow — refunds, escalation, SLAs
+    validations:              # optional — run for facts under this topic
+      - name: policy-must-anchor
+        message: "a policy fact must cite the document or code that enforces it"
+        rule: "fact.refs.length > 0"
+    children:                 # optional, and nestable
+      refunds:
+        description: Eligibility, limits, approvals
+      escalation:
+        description: When to escalate, and to whom
+```
+
+| Field | Where | Required | Notes |
+|---|---|---|---|
+| `id` | root | ✓ | Stable slug. Matching an embedded preset's id opts you into [auto-upgrade](#preset-upgrades-and-how-to-opt-out). |
+| `name` | root | ✓ | Human label. |
+| `description` | root | — | Not shown to the agent. |
+| `topics` | root | ✓ | Must be non-empty. |
+| `validations` | root, and any node | — | A list of `{name, message, rule}`. |
+| `description` | node | — | **Top-level topic descriptions are sent to the agent**; child descriptions are not. |
+| `children` | node | — | Recursive, with no depth limit. |
+
+**Key naming.** Topic keys and their *direct* children must match
+`^[a-z0-9]+(-[a-z0-9]+)*$` — lowercase kebab-case. A violation is a parse error.
+Deeper keys are not regex-checked, but every path lookup lowercases each
+segment, so an uppercase grandchild key parses cleanly and is then unreachable.
+Keep the whole tree kebab-case.
+
+<Aside type="note" title="Your file is normalised on write">
+At repo creation the YAML is parsed and re-serialised with sorted keys. Comments
+and your original key order are **not** preserved in the stored copy. Keep the
+authored version in your own repo as the source of truth.
+</Aside>
+
+## How paths are validated
+
+`ValidatePath` walks a fact's path against the tree:
+
+- The **first segment must be a declared topic**. An unknown topic is rejected.
+- Later segments are matched against declared `children`. **At the first segment
+  that does not match, the walk stops, and everything after it is accepted as
+  freeform.**
+- Lookups are case-insensitive, since keys are canonically lowercase.
+- `category` is required separately by `knomit_learn`, so the shallowest legal
+  placement is `topic/category`.
+
+Against the example above:
+
+| Path | Result |
+|---|---|
+| `policy/refunds` | ✅ declared child |
+| `policy/refunds/eu/vat` | ✅ `eu/vat` is a freeform tail |
+| `policy/anything/at/all` | ✅ freeform from `anything` onward |
+| `Policy/Refunds` | ✅ lookups are case-insensitive |
+| `marketing/campaigns` | ❌ `unknown topic "marketing"` |
+| `policy` | ❌ rejected by `knomit_learn` — category required |
+
+The consequence is worth stating plainly: **declaring `children` does not close
+the set.** Children shape the agent's mental model and give you somewhere to
+hang rules, but they never restrict what may be created below a topic. Only the
+top-level topic list is closed. If you want a genuinely constrained category,
+enforce it with a rule on `fact.path` — see the cookbook below.
+
+## Validation rules
+
+Each rule is a JavaScript expression that passes by returning a truthy value.
+Rules are compiled once when the ontology is parsed, then evaluated in a
+sandboxed interpreter — a fresh one per fact.
+
+**Order.** Root rules run first, then the topic's rules, then each matched
+child's rules, descending. The **first failure wins**, so the agent sees exactly
+one error:
+
+```text
+validation "policy-must-anchor" at policy: a policy fact must cite the document or code that enforces it
+```
+
+Root rules report at the pseudo-topic `<root>`.
+
+### What a rule can see
+
+One global, `fact`:
+
+| Field | Type |
+|---|---|
+| `fact.kind` | string — `epistemic` \| `pragmatic` |
+| `fact.type` | string — leaf type (`observation`, `policy`, `hypothesis`, …) |
+| `fact.domain` | string[] |
+| `fact.entities` | string[] |
+| `fact.refs` | string[] |
+| `fact.title` | string |
+| `fact.body` | string |
+| `fact.path` | string — the full path, e.g. `kb/policy/refunds/a1b2c3d4.md` |
+| `fact.confidence` | number, 0–1 |
+
+`sources` and `origin` are **not** exposed; both are `undefined` inside a rule.
+"Require at least two independent sources" is a rule people reach for, and it
+cannot be written today.
+
+### Sandbox and limits
+
+- A fresh interpreter per fact, so no state leaks between evaluations.
+- Plain JavaScript, not Node: no `require`, no `process`. The standard library
+  (`Array`, `String`, `JSON`, `RegExp`, …) is available.
+- `fact` is bound non-enumerably, so `Object.keys(globalThis)` is empty and a
+  rule cannot discover what else exists.
+- A 100 ms interrupt per rule.
+- No I/O, no network, no access to other facts. **A rule is a pure function of
+  one fact** — cross-fact checks like "is this a duplicate of…" are out of scope
+  by design, and belong to [subsumption](/docs/concepts/#subsumption--never-learned-twice).
+
+### Where rules run
+
+- `knomit_learn`, on every fact written — and again on the *merged* fact after a
+  subsumption merge.
+- `knomit_update`, on the reassembled fact.
+- **Skipped entirely for private state** — facts written to an explicit
+  `.knomit/<area>/…` path — including root rules. That exemption is deliberate:
+  a background job's bookkeeping has no ontology placement, and without it any
+  root rule would let a job create its state slot and then refuse every update
+  to it.
+
+### Rule cookbook
+
+```yaml
+# Require a citation
+rule: "fact.refs.length > 0"
+
+# Conditional — "if type is X then Y must hold". The idiom is !isX || Y.
+rule: "fact.type !== 'hypothesis' || fact.confidence <= 0.5"
+
+# Constrain kind and type for a topic
+rule: "fact.kind === 'pragmatic' && fact.type === 'policy'"
+
+# Require a tag from a fixed set
+rule: "['billing','auth','api'].some(function(d){ return fact.domain.indexOf(d) >= 0 })"
+
+# Mutually exclusive tags
+rule: "!(fact.domain.includes('global') && fact.domain.length > 1)"
+
+# Enforce category depth — children cannot do this, because of the freeform tail
+rule: "fact.path.split('/').length >= 5"
+
+# A body naming a dollar threshold must also name the account-age condition,
+# so the fact cannot compress into a false slogan
+rule: "!/\\$\\d/.test(fact.body) || /\\bdays?\\b/.test(fact.body)"
+
+# Confidence floor for a topic
+rule: "fact.confidence >= 0.8"
+```
+
+Note the escaping in the regex example: `\\$` and `\\b`, because the rule is a
+double-quoted YAML scalar before it is JavaScript.
+
+<Aside type="tip" title="Write the message for the agent, not for a log">
+The `message` is the entire feedback signal the model gets back. `"confidence
+too low"` teaches it nothing. `"policy facts must be written with confidence >=
+0.8 — if you are less sure, file it under gotchas"` tells it what to do instead,
+and the retry succeeds.
+</Aside>
+
+## A worked example
+
+This is the ontology behind a research pack that reads arXiv papers. It is worth
+reading in full, because it shows the thing that distinguishes an ontology from
+a folder list: **the topics encode an epistemic stance, and the rules encode a
+standard of evidence.**
+
+```yaml
+id: research-literature
+name: Research Literature Knowledge
+description: >-
+  Claims extracted from research papers, together with the experimental setup
+  that bounds them. Written for a reader at a build decision, not for a
+  literature review.
+
+validations:
+  - name: refs-non-empty
+    message: "every fact must cite at least one source"
+    rule: "fact.refs.length > 0"
+  - name: hypothesis-stays-provisional
+    message: "a hypothesis is a single-source claim: confidence must be <= 0.5 until independent replication graduates it to an observation"
+    rule: "fact.type !== 'hypothesis' || fact.confidence <= 0.5"
+
+topics:
+  findings:
+    description: What a paper established, and the setup that bounds it
+    children:
+      empirical:
+        description: Measured results, stated with models, scale and benchmark
+      negative:
+        description: What did not work, and the cause the authors give
+      replicated:
+        description: Confirmed by independent work — graduated from hypothesis
+      scaling:
+        description: How a result moves with model size, data or compute
+  methods:
+    description: Techniques and architectures, and the rationale behind their design
+    children:
+      architectures:
+        description: Structural designs and what they buy
+      training:
+        description: Objectives, curricula, data construction
+      inference:
+        description: Decoding, sampling, test-time compute
+      evaluation:
+        description: How a method measures itself
+  contested:
+    description: Where credible papers disagree, and the conditions that decide it
+    children:
+      unresolved:
+        description: Live disagreement, no condition yet separates the results
+      conditional:
+        description: Both hold — the conditions separating them are known
+  limits:
+    description: Boundary conditions, scaling walls, impossibility results
+    children:
+      empirical:
+        description: Observed ceilings and where a technique stops paying
+      theoretical:
+        description: Proved bounds and impossibility results
+  benchmarks:
+    description: What a benchmark measures — and how it misleads
+    children:
+      construction:
+        description: How it was built, and what that bakes in
+      saturation:
+        description: Headroom, contamination, ceiling effects
+  open-problems:
+    description: Gaps the literature itself names as unsolved
+```
+
+Four things in it are worth copying, whatever your subject.
+
+**The root rules encode a research standard, not a schema.** `refs-non-empty`
+means an uncited claim cannot enter the corpus at all. `hypothesis-stays-provisional`
+is the more interesting one: it ties a fact's *type* to a *confidence ceiling*,
+so a single-source claim structurally cannot masquerade as settled. Confidence
+0.8 on a `hypothesis` is rejected; the same 0.8 on an `observation` passes. The
+ontology enforces an epistemic norm that a human reviewer would otherwise have
+to police by hand.
+
+**`findings/replicated` is a promotion target.** The taxonomy names the state
+change — hypothesis becomes replicated observation — so graduating a claim is a
+move within the tree rather than an ad-hoc edit. Topics can model a lifecycle.
+
+**`contested` splits on the reason for the disagreement.** `unresolved` (no
+condition separates the results) versus `conditional` (both hold, and the
+separating condition is known) changes what a reader does next. That is the test
+for whether a child earns its place: *does landing here rather than there change
+the reader's next action?*
+
+**`open-problems` declares no children at all.** The shape of that space is not
+known in advance, so it is left freeform. Not every topic needs a fixed
+substructure.
+
+<Aside type="note" title="Copy meta and principles verbatim">
+The full file also carries `meta` and `principles`, lifted unchanged from the
+`code` preset. `meta/reasoning` is a **hardcoded path** that `knomit_review` and
+`knomit_hypothesize` write [methodology facts](/docs/synthesis/) to, and
+`principles` carries the four rules that make designer intent writable only
+through a deliberate flow. Copy both blocks into any custom ontology.
+</Aside>
+
+## The built-in presets
+
+Two ontologies ship embedded. Both are good starting points to copy and edit.
+
+### `default` — id `general`
+
+A broad taxonomy aligned with Wikipedia's main topic classifications: `people`,
+`technology`, `science`, `society`, `culture`, `geography`, `history`, `health`,
+`philosophy`, `religion`, `business`, `reference`, plus `meta`. Each carries
+three to five children — `technology` has `software`, `hardware`, `networking`,
+`data`; `science` has `formal`, `natural`, `applied`. There are no validation
+rules at all; it is deliberately permissive.
+
+Use it for personal knowledge bases, chat-derived knowledge, or anything whose
+subject matter isn't known in advance. It is also the fallback when no ontology
+loads, and the seed for a clone of an empty origin.
+
+### `code` — id `source-code`
+
+Knowledge categories for an agent working in a codebase. The topics are
+**epistemic roles**, not subject areas — which is the real contrast with
+`default`:
+
+| Topic | Purpose | Children |
+|---|---|---|
+| `invariants` | Load-bearing rules that must never be violated | `architecture`, `concurrency`, `data`, `protocol` |
+| `architecture` | What lives where, and how it connects | `modules`, `flows`, `integrations` |
+| `conventions` | House style — idioms, patterns | `testing`, `logging`, `errors`, `naming`, `git` |
+| `decisions` | Design choices with rationale | `accepted`, `superseded`, `rejected` |
+| `gotchas` | Sharp edges and surprises | `tools`, `libraries`, `runtime` |
+| `incidents` | Past bugs and their fixes | `bugs`, `near-misses` |
+| `meta` | Knowledge about the knowledge | `reasoning`, `ontology` |
+| `principles` | Designer-authored intent | `mission`, `philosophy`, `anti-patterns`, `ux` |
+
+`principles` is the only topic carrying rules, and they are a good template for
+your own: entities must include `designer`, kind and type must be `pragmatic`
+and `policy`, and `domain` must be non-empty and must not mix `global` with an
+area path. Together they make the topic writable only through the
+[`/knomit-principle` flow](/docs/claude-code/).
+
+### Which shape to choose
+
+`default` organises by **subject**. `code` and the research example above
+organise by **epistemic role**. For an agent-facing knowledge base, prefer the
+second: "show me the invariants for this area" is a question an agent can act
+on, in a way "show me the technology facts" is not. Subject is better carried by
+`domain` tags and `entities`, which cut across the tree instead of partitioning
+it.
+
+## Preset upgrades, and how to opt out
+
+Presets evolve. On every repo open, knomit checks whether the stored ontology's
+`id` matches an embedded preset — `general` maps to `default`, `source-code` to
+`code`. If it does **and** the stored ontology is a strict subset of that preset,
+the stored file is **overwritten in place** with the newer preset, so repos
+created against an older version pick up added topics automatically. Subset
+comparison matches validations by `name` only, which is how rule wording fixes
+ship this way too.
+
+If the stored ontology has *added* anything the preset lacks, it has diverged:
+knomit logs that an upgrade is available and leaves your file alone.
+
+<Aside type="danger" title="Deletion is not divergence">
+Start from the `code` preset, keep `id: source-code`, delete the topics you
+don't want — and your file is still a *subset*. The next repo open silently
+restores every topic you removed.
+
+**If you edit a preset, change the `id`.** A new id makes the file yours: knomit
+stops managing it, and nothing is ever written back.
+
+```yaml
+id: acme-code          # was: source-code
+name: Acme Code Knowledge
+```
+</Aside>
+
+## Choosing an ontology
+
+The ontology is chosen **when the knowledge base is created**, via
+`POST /api/v1/repos`:
+
+```sh
+curl -X POST http://localhost:19278/api/v1/repos \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "name": "research",
+        "mode": "custom",
+        "ontology_yaml": "id: research-literature\nname: Research Literature Knowledge\ntopics:\n  findings:\n    description: What a paper established\n"
+      }'
+```
+
+| `mode` | Ontology source |
+|---|---|
+| `preset` | `ontology_preset`: `"default"` or `"code"`. Omitted, it falls back to `default`. |
+| `custom` | `ontology_yaml`: the full YAML, inline. |
+| `clone` | Taken from the origin. Passing `ontology_preset` or `ontology_yaml` is **rejected**, not ignored — a clone of a non-empty origin would otherwise drop it silently. |
+
+The response is newline-delimited JSON progress ending in `{"type":"done"}` or
+`{"type":"error"}`. A malformed ontology fails preflight with a `problem+json`
+body — this is the one place your YAML gets a loud error, so use repo creation
+as the validation step. The web UI's [Manage mode](/docs/web-ui/#manage) offers
+the same three modes, with a textarea for custom YAML.
+
+<Aside type="caution" title="Changing the ontology of an existing knowledge base">
+There is no API for this, and no way to do it from inside knomit. The fact tools
+deliberately refuse to write `.knomit/ontology.yaml` — it is a loose file at the
+root of knomit's private namespace, which the write gate reserves — and the
+built-in git server exposes fetch only, never push. The file is also read just
+once, when the repo is opened.
+
+So the only route is git from outside: change the file in the repo's **origin**,
+let sync bring it down, and restart the server so the repo is reopened. Treat
+changing a live knowledge base's ontology as a migration, and pick the right one
+at creation time.
+</Aside>
+
+## How the ontology reaches the agent
+
+MCP server instructions are generated per session from the write repo's
+ontology. The top-level topic list, with each topic's `description`, is
+interpolated straight into the section the model reads before it does anything:
+
+```text
+- **topic**: A validated top-level folder. Available topics:
+  benchmarks — What a benchmark measures — and how it misleads
+  contested — Where credible papers disagree, and the conditions that decide it
+  findings — What a paper established, and the setup that bounds it
+  ...
+```
+
+That has four practical consequences:
+
+- **Descriptions are prompt engineering.** "Sharp edges and surprises" routes
+  facts better than "gotchas". Write them as routing instructions addressed to
+  the agent, not as glossary entries.
+- **Only top-level descriptions are shipped.** Child descriptions shape the file
+  tree and the UI, and a human browsing will read them, but the model never sees
+  them in its instructions. Front-load the meaning into the topic line.
+- Topic names affect [federation](/docs/lenses/): a lens skips read mounts whose
+  ontology lacks the topic being browsed, so a shared topic vocabulary across
+  repos is what makes cross-repo browsing coherent.
+- Topics feed the [OKF export](/docs/okf/), where the OKF `type` is derived from
+  the topic, singularised.
+
+## Gotchas
+
+1. A broken ontology **falls back to the default silently** — a warning log is
+   the only signal.
+2. Deleting topics from a preset while keeping its `id` is **silently undone** on
+   the next repo open. Change the `id`.
+3. `children` are suggestions. The freeform tail means they never restrict what
+   gets created; use a `fact.path` rule for a real constraint.
+4. `sources` and `origin` are **invisible to rules**.
+5. Only the **first** failing rule is reported per write.
+6. Comments and key order are **not preserved** — the stored file is
+   re-serialised with sorted keys.
+7. Grandchild keys skip the kebab-case check, and are then unreachable if they
+   aren't lowercase.
+8. Rules are compiled at parse time, so a **syntax error takes down the whole
+   ontology**, not just that rule — and then gotcha 1 applies.
+9. Private-state facts bypass ontology validation entirely, root rules included.
+10. Regex rules need doubled backslashes inside a double-quoted YAML scalar.
