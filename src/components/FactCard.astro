@@ -166,7 +166,8 @@ const fm = frontmatter;
     border-top: 1px solid var(--k-hairline-soft);
     background: var(--k-surface-2);
     font-size: 0.76rem;
-    color: var(--k-text-muted);
+    /* --k-text-muted is 4.31:1 on --k-surface-2 and fails AA; --k-text-2 is 6.85. */
+    color: var(--k-text-2);
   }
   .k-fact__dot {
     width: 7px;

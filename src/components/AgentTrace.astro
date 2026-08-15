@@ -93,7 +93,8 @@ const finalDelay = (finalAt / SPEEDUP).toFixed(2);
     border-bottom: 1px solid var(--k-hairline);
     font-family: var(--k-font-mono);
     font-size: 0.74rem;
-    color: var(--k-text-muted);
+    /* Raised surface: muted would be 4.31:1 here. See theme.css text ramp. */
+    color: var(--k-text-2);
   }
   .agent-trace__bar span {
     width: 8px;
@@ -120,8 +121,9 @@ const finalDelay = (finalAt / SPEEDUP).toFixed(2);
     min-width: max-content;
   }
   .agent-trace__at {
+    /* No opacity: it composites against the surface and drops the effective
+       colour to ~#6a6a6a (3.22:1), under AA regardless of the token value. */
     color: var(--k-text-muted);
-    opacity: 0.75;
     text-align: right;
     font-variant-numeric: tabular-nums;
   }

@@ -97,7 +97,8 @@ site-search button:hover {
 }
 site-search button kbd {
   background: var(--k-surface-3);
-  color: var(--k-text-muted);
+  /* muted is 3.89:1 on --k-surface-3 and fails AA; --k-text-2 is 6.18. */
+  color: var(--k-text-2);
   border-radius: 4px;
   font-family: var(--k-font-mono);
 }

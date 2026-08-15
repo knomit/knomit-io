@@ -15,11 +15,12 @@
  *
  * Outputs land in src/generated/ (gitignored) and are consumed by the docs.
  */
-import { mkdir, readFile, writeFile, access } from 'node:fs/promises';
+import { mkdir, readFile, writeFile, access, rm } from 'node:fs/promises';
 import { constants } from 'node:fs';
 import { accessSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 import { resolveImportGraph, renderApiBarrel, writeVendorSwap, SEEDS } from './lib/vendor-ui.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -247,6 +248,67 @@ async function syncUI() {
   }
 }
 
+/**
+ * Publish Scalar's standalone browser bundle under public/ so the REST API page
+ * loads it same-origin.
+ *
+ * @scalar/astro otherwise points the reference at
+ * `https://cdn.jsdelivr.net/npm/@scalar/api-reference` with NO version in the
+ * URL, which meant /docs/api silently tracked Scalar's latest release and spent
+ * a cross-origin round trip on ~1 MB we could set no cache headers for. Serving
+ * it ourselves pins it to package.json and makes it immutably cacheable.
+ *
+ * It must be the `browser` (IIFE) build: @scalar/astro appends a classic
+ * <script> and waits for `window.Scalar`, which the ESM build never sets. The
+ * file is version-stamped so a dependency bump can never be served from cache
+ * under the old name.
+ */
+async function syncScalar() {
+  // package.json is not in the package's `exports` map, so resolve the entry
+  // point and walk up to the package root rather than requiring it directly.
+  const require = createRequire(path.join(ROOT, 'noop.js'));
+  const entry = require.resolve('@scalar/api-reference');
+  // lastIndexOf, not indexOf: the absolute path may itself contain a "dist"
+  // segment (a checkout under ~/dist/…), and taking the first match would
+  // resolve pkgRoot to that ancestor and read a completely unrelated
+  // package.json.
+  const cut = entry.lastIndexOf(`${path.sep}dist${path.sep}`);
+  if (cut === -1) {
+    // Guard rather than let slice(0, -1) silently lop one character off the
+    // path and surface as ENOENT on ".../dist/index.j/package.json".
+    throw new Error(`cannot locate @scalar/api-reference package root from ${entry}`);
+  }
+  const pkgRoot = entry.slice(0, cut);
+  const { version } = JSON.parse(await readFile(path.join(pkgRoot, 'package.json'), 'utf8'));
+
+  const src = path.join(pkgRoot, 'dist', 'browser', 'standalone.js');
+  const name = `standalone-${version}.js`;
+  const outDir = path.join(ROOT, 'public', 'vendor', 'scalar');
+
+  // Read BEFORE destroying anything. The wipe exists because the filename is
+  // version-stamped, so without it a bumped dependency leaves every previously
+  // synced 3.7 MB bundle behind and Astro copies all of public/ into dist/.
+  // But wiping first means a failed read (a bump that renames the browser
+  // entry, a half-finished npm ci) leaves no bundle on disk while
+  // src/generated/scalar.json still names the OLD one — and `npm start` is
+  // `astro dev` with no sync, so the next run serves /docs/api with a script
+  // tag that 404s and a silently blank reference. Same build-then-swap posture
+  // as writeVendorSwap in scripts/lib/vendor-ui.mjs, for the same reason.
+  const bundle = await readFile(src, 'utf8');
+  await rm(outDir, { recursive: true, force: true });
+  const dest = path.join(outDir, name);
+  await mkdir(outDir, { recursive: true });
+  await writeFile(dest, bundle, 'utf8');
+
+  const url = `/vendor/scalar/${name}`;
+  await writeFile(
+    path.join(OUT_DIR, 'scalar.json'),
+    `${JSON.stringify({ version, url }, null, 2)}\n`,
+    'utf8'
+  );
+  console.log(`  ✓ public${url}  (Scalar ${version}, self-hosted)`);
+}
+
 async function main() {
   console.log(`knomit sync — ref=${REF}${LOCAL ? `, local=${LOCAL}` : ''}`);
   await mkdir(OUT_DIR, { recursive: true });
@@ -266,6 +328,12 @@ async function main() {
     await writeFile(publicSpec, await readFile(specSrc, 'utf8'), 'utf8');
     console.log(`  ✓ public/openapi.yaml  (served at /openapi.yaml)`);
   }
+
+  // Last, and deliberately so. This is the only fatal step in main(): every
+  // other one either warns and keeps its vendored copy or fails before
+  // anything downstream needs it. Running it here keeps a Scalar failure from
+  // also blocking the openapi.yaml refresh above.
+  await syncScalar();
 }
 
 main().catch((err) => {

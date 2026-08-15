@@ -3,6 +3,16 @@ import '@fontsource-variable/space-grotesk';
 import '@fontsource/jetbrains-mono/400.css';
 import '@fontsource/jetbrains-mono/500.css';
 import '../styles/theme.css';
+// The two faces that paint above the fold, imported as URLs purely so we can
+// preload them. Without this the browser can't discover them until it has
+// fetched AND parsed the stylesheet, putting the fonts three hops deep:
+// document -> CSS -> woff2. On mobile that chain is what sets LCP.
+// Deliberately only these two: latin-ext/Vietnamese subsets and mono 500 are
+// below the fold or unused, and preloading them would compete for bandwidth
+// with the ones that matter. These resolve to the SAME emitted assets the
+// @fontsource CSS references, so this adds no extra download.
+import spaceGroteskLatin from '@fontsource-variable/space-grotesk/files/space-grotesk-latin-wght-normal.woff2?url';
+import jetbrainsMonoLatin400 from '@fontsource/jetbrains-mono/files/jetbrains-mono-latin-400-normal.woff2?url';
 import JsonLd from './JsonLd.astro';
 import Analytics from './Analytics.astro';
 import { organizationSchema, websiteSchema, softwareApplicationSchema } from '../lib/schema';
@@ -27,6 +37,9 @@ const site = Astro.site!;
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="generator" content={Astro.generator} />
+
+<link rel="preload" as="font" type="font/woff2" href={spaceGroteskLatin} crossorigin />
+<link rel="preload" as="font" type="font/woff2" href={jetbrainsMonoLatin400} crossorigin />
 <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
 <link rel="sitemap" href="/sitemap-index.xml" />
 <link
