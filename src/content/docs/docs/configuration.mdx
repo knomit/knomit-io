@@ -100,20 +100,6 @@ agents write private state into. That is why the fact tools refuse
 `.knomit/ontology.yaml` — and why the only way to change a live KB's ontology is
 [out of band, through git](/docs/ontologies/#choosing-an-ontology).
 
-<Aside type="caution" title="Repos predating the move">
-The ontology has lived at three paths. All three are still **read**, newest
-first — `.knomit/ontology.yaml`, then `.domains/ontology.yaml`, then
-`domains/ontology.yaml` — and the first rung with content wins. There is no
-migration: a repo is moved by hand, and reading every rung is what keeps an
-unmigrated repo validating against **its own** ontology instead of silently
-falling back to the embedded default.
-
-A repo left on an old rung is not read-only. Whichever rung was read is the rung
-a [preset refresh](/docs/ontologies/#preset-upgrades-and-how-to-opt-out) writes
-back to, so an unmigrated repo never ends up holding two ontology files with
-nothing to tell the live one from the stale one.
-</Aside>
-
 <Aside type="note" title="Two different `.knomit`s">
 `~/.knomit` is `KNOMIT_HOME`, the machine-local directory above. `.knomit/`
 *inside a repo* is knomit's private namespace within that git tree. They share a

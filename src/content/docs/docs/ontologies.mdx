@@ -28,19 +28,9 @@ or a standard of evidence they don't enforce.
 
 ## Where it lives, and when it is read
 
-Inside the knowledge base repo, at:
-
-```text
-.knomit/ontology.yaml
-```
-
-Two older locations are still **read**, for repos that predate the move —
-`.domains/ontology.yaml`, then `domains/ontology.yaml`. The first rung with
-content wins, and whatever rung was read is the rung written back to. No
-migration runs: a repo is moved by hand, and reading all three is what stops an
-unmigrated repo from silently falling onto the default taxonomy.
-
-Facts land under the **ontology root**, `kb/` by default and set by
+Inside the knowledge base repo, at `.knomit/ontology.yaml` — a private path, so
+it is configuration rather than a fact, and knomit reads it by name. Facts
+themselves land under the **ontology root**, `kb/` by default and set by
 `ontology_root` in [`knomit.toml`](/docs/configuration/#knomittoml):
 
 ```text

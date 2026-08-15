@@ -115,7 +115,7 @@ match rather than a case-insensitive search. A missing licence is not an error;
 ### Dot-prefixed paths are private
 
 **Any path segment beginning with `.`** makes a path private — `.github/`,
-`.domains/`, `kb/.drafts/`. Private paths are excluded from fact **discovery**
+`.knomit/`, `kb/.drafts/`. Private paths are excluded from fact **discovery**
 everywhere: the search indexer, `knomit verify`, and the OKF exporter all skip
 them, and the fact-creation paths refuse to allocate one.
 
