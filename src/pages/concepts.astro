@@ -809,7 +809,8 @@ const toc = [
     padding: 0.2rem 0.55rem;
     border-radius: 999px;
     border: 1px solid var(--k-hairline);
-    color: var(--k-text-muted);
+    /* On --k-surface-2: muted is 4.31:1 and fails AA. See theme.css. */
+    color: var(--k-text-2);
     background: var(--k-surface-2);
   }
   .tree-columns {

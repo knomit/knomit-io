@@ -74,9 +74,18 @@ test.describe('docs', () => {
 
     const bundle = await page.request.get(src!);
     expect(bundle.status(), `${src} does not resolve`).toBe(200);
-    // The loader appends a classic <script> and waits for window.Scalar, so an
-    // ESM build here would resolve 200 and then never boot the reference.
-    expect(await bundle.text()).toContain('Scalar');
+
+    // The loader appends a CLASSIC <script> and waits for window.Scalar, so
+    // shipping the ESM build instead would resolve 200 and then never boot.
+    // Note both builds contain the string "window.Scalar", so that is not a
+    // discriminator. What separates them is that the ESM build has top-level
+    // module syntax and imports sibling files out of ./chunks/ that
+    // syncScalar does not copy.
+    const body = await bundle.text();
+    expect(body, 'this is the ESM build, not the IIFE browser build').not.toMatch(
+      /(^|[};])export[ {]/
+    );
+    expect(body, 'bundle imports ./chunks/, which is not published').not.toContain('./chunks');
   });
 });
 
