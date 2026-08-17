@@ -1,15 +1,21 @@
-import { SITE_NAME, GITHUB_URL } from './site';
+import { SITE_NAME, GITHUB_URL, SITE_TWITTER } from './site';
 
 const ctx = 'https://schema.org';
 
 export function organizationSchema(site: URL) {
+  // Every profile that provably belongs to the same entity, so a knowledge
+  // graph can reconcile them. Derived from SITE_TWITTER rather than spelled out
+  // again — the handle is already the source for twitter:site/twitter:creator,
+  // and the entry drops out entirely if the handle is ever cleared.
+  const sameAs = [GITHUB_URL];
+  if (SITE_TWITTER) sameAs.push(`https://twitter.com/${SITE_TWITTER.replace(/^@/, '')}`);
   return {
     '@context': ctx,
     '@type': 'Organization',
     name: SITE_NAME,
     url: site.origin + '/',
     logo: new URL('/favicon.svg', site).href,
-    sameAs: [GITHUB_URL],
+    sameAs,
   };
 }
 

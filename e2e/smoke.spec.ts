@@ -12,9 +12,9 @@ test.describe('marketing site', () => {
     // /explore is a shipped feature (DEMO_LIVE=true): the header links to it.
     // Labelled "Explore", not "See it live" — the page serves a build-time
     // snapshot refreshed on a schedule, so "live" overclaimed.
-    await expect(page.getByRole('link', { name: /^Explore$/i }).first()).toHaveAttribute('href', '/explore');
+    await expect(page.getByRole('link', { name: /^Explore$/i }).first()).toHaveAttribute('href', '/explore/');
     // Footer link must also point at /explore.
-    await expect(page.getByRole('link', { name: /^Explore$/i }).last()).toHaveAttribute('href', '/explore');
+    await expect(page.getByRole('link', { name: /^Explore$/i }).last()).toHaveAttribute('href', '/explore/');
     // Footer present.
     await expect(page.getByRole('contentinfo')).toBeVisible();
   });
@@ -22,9 +22,9 @@ test.describe('marketing site', () => {
   test('primary nav links resolve', async ({ page }) => {
     await page.goto('/');
     for (const [name, path] of [
-      ['Concepts', '/concepts'],
-      ['Use cases', '/use-cases'],
-      ['Blog', '/blog'],
+      ['Concepts', '/concepts/'],
+      ['Use cases', '/use-cases/'],
+      ['Blog', '/blog/'],
     ] as const) {
       const res = await page.request.get(path);
       expect(res.status(), `${name} -> ${path}`).toBe(200);
@@ -34,14 +34,14 @@ test.describe('marketing site', () => {
 
 test.describe('blog', () => {
   test('index lists the seed post', async ({ page }) => {
-    await page.goto('/blog');
+    await page.goto('/blog/');
     await expect(page.getByRole('heading', { name: /Real-world use cases/i })).toBeVisible();
     const post = page.getByRole('link', { name: /how knomit holds its own shape/i });
     await expect(post.first()).toBeVisible();
   });
 
   test('a post renders with byline and navigates back', async ({ page }) => {
-    await page.goto('/blog');
+    await page.goto('/blog/');
     await page.getByRole('link', { name: /how knomit holds its own shape/i }).first().click();
     await expect(page.getByRole('heading', { level: 1 })).toContainText(/Dogfooding/i);
     await page.getByRole('link', { name: '← Blog' }).click();
@@ -51,7 +51,7 @@ test.describe('blog', () => {
 
 test.describe('docs', () => {
   test('quick start renders and REST reference is generated', async ({ page }) => {
-    await page.goto('/docs/quick-start');
+    await page.goto('/docs/quick-start/');
     await expect(page.getByRole('heading', { name: 'Quick start' })).toBeVisible();
     // OpenAPI-generated REST reference exists.
     const api = await page.request.get('/docs/api/');
@@ -96,7 +96,7 @@ test.describe('explore', () => {
   // e2e/explore.spec.ts covers directly by simulating that failure. This
   // smoke test just needs to confirm the live page comes up.
   test('mounts the live browser, not an iframe embed', async ({ page }) => {
-    await page.goto('/explore');
+    await page.goto('/explore/');
     await expect(page.locator('iframe.explore-frame')).toHaveCount(0);
     await expect(page.getByTestId('explore-browser')).toBeVisible();
   });
@@ -120,8 +120,13 @@ test.describe('feeds & meta', () => {
     expect(await robots.text()).toContain('Sitemap:');
   });
 
+  // Requested in canonical (trailing-slash) form. `astro preview` under
+  // `trailingSlash: 'always'` answers a slashless unknown path with its own
+  // bare 404 instead of falling back to 404.html; Cloudflare Pages serves
+  // dist/404.html for either shape, so that gap is the preview server's, not
+  // the site's. The build still emits dist/404.html — assert what ships.
   test('404 page renders for unknown routes', async ({ page }) => {
-    const res = await page.goto('/no-such-fact-xyz');
+    const res = await page.goto('/no-such-fact-xyz/');
     expect(res?.status()).toBe(404);
     await expect(page.getByText(/No fact at this path/i)).toBeVisible();
   });

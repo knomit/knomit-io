@@ -1,7 +1,40 @@
 export interface FaqItem {
   q: string;
   a: string;
+  /** Optional "read more" pointer, rendered as a separate anchor after the
+   *  answer. Deliberately NOT inline markup inside `a`: that string is also
+   *  the `acceptedAnswer.text` of the FAQPage JSON-LD, and HTML in a schema
+   *  text field is markup leaking into structured data. Keeping the link out
+   *  of band means the answer reads the same to a person and to a parser. */
+  more?: { href: string; label: string };
 }
+
+/** Teasers for the homepage block.
+ *
+ *  Deliberately NOT a slice of FAQ_ITEMS. The homepage previously rendered
+ *  `FAQ_ITEMS.slice(0, 5)`, which put five question-and-answer pairs on the
+ *  homepage byte-identical to /faq — a third of that page's visible content,
+ *  duplicated onto the page it is meant to feed. These are rewritten short
+ *  form, not truncations: the answers must differ, or moving the block
+ *  achieves nothing.
+ *
+ *  Only FAQ_ITEMS is marked up as FAQPage JSON-LD, and only on /faq. Do not
+ *  add schema for these — two FAQPage blocks competing on the same questions
+ *  is the problem this split exists to avoid. */
+export const HOME_FAQ_ITEMS: FaqItem[] = [
+  {
+    q: 'What is knomit?',
+    a: 'A distributed knowledge base for AI agents, stored as git. Agents write concise, typed facts instead of dumping documents, and every claim carries provenance you can trace back to the commit that made it.',
+  },
+  {
+    q: 'How is knomit different from RAG or a vector database?',
+    a: 'A vector store hands back the chunk of text it matched. knomit hands back the claim itself — typed, scored for confidence, and traceable — and folds a repeated claim into the fact that already exists rather than storing it twice.',
+  },
+  {
+    q: 'Is knomit open source?',
+    a: 'Yes, and the store is an ordinary git repository — so you can clone it, diff it, and review knowledge changes in a pull request, like code.',
+  },
+];
 
 export const FAQ_ITEMS: FaqItem[] = [
   {
@@ -27,6 +60,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     q: 'What is MCP and how does knomit use it?',
     a: 'MCP (Model Context Protocol) is the open protocol agents use to call external tools. knomit is MCP-native: it exposes tools like knomit_learn, knomit_query, and knomit_explain so a model can recall knowledge before it acts and learn as it works, directly inside Claude Code, an editor, or any MCP client — no prompt scaffolding required.',
+    more: { href: '/docs/mcp-tools/', label: 'All eight MCP tools' },
   },
   {
     q: 'Does knomit work offline?',
@@ -63,5 +97,6 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     q: 'Where can I run knomit?',
     a: 'knomit ships four binaries: a server (knomit), a desktop tray app (knomit-desktop), a bridge (knomit-bridge) that proxies MCP over stdio into clients like Claude Code and Claude Desktop, and knomit-okf, which publishes a knowledge base as a portable Open Knowledge Format repository. It runs on macOS and Linux.',
+    more: { href: '/docs/deployment/', label: 'Deployment guide' },
   },
 ];

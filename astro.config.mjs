@@ -47,6 +47,13 @@ const PANEL_TOGGLE_SCRIPT = `
 // https://astro.build/config
 export default defineConfig({
   site: SITE,
+  // One canonical URL shape for every route: with the slash. Cloudflare Pages
+  // already 308s /foo -> /foo/, so a hand-written href without the slash costs
+  // every crawler and visitor an extra hop, and splits link equity across two
+  // URLs. This setting makes `astro dev`/`preview` match production; it does
+  // NOT rewrite the hrefs we author, so the links themselves are written with
+  // the slash and tests/unit/trailing-slash.test.ts fails CI if one drifts.
+  trailingSlash: 'always',
   // Marketing pages own the root; Starlight is mounted under /docs.
   integrations: [
     react(),
@@ -56,6 +63,10 @@ export default defineConfig({
     }),
     starlight({
       title: 'knomit',
+      // Starlight defaults to "Page | knomit"; the marketing pages all title
+      // themselves "Page — subtitle". Same separator on both halves of the site
+      // so a SERP listing doesn't read as two different properties.
+      titleDelimiter: '—',
       description: 'Git-backed knowledge for AI agents. Knowledge + commit.',
       tagline: 'Git-backed knowledge for AI agents.',
       logo: {
@@ -102,7 +113,7 @@ export default defineConfig({
           items: [
             { label: 'MCP tools', slug: 'docs/mcp-tools' },
             // The REST reference is a single Scalar page outside Starlight.
-            { label: 'REST API', link: '/docs/api' },
+            { label: 'REST API', link: '/docs/api/' },
             { label: 'Web UI', slug: 'docs/web-ui' },
             { label: 'Desktop app', slug: 'docs/desktop' },
             { label: 'CLI reference', slug: 'docs/cli-reference' },
@@ -147,6 +158,12 @@ export default defineConfig({
         SiteTitle: './src/components/starlight/SiteTitle.astro',
         SocialIcons: './src/components/starlight/SocialIcons.astro',
         Head: './src/components/starlight/Head.astro',
+        // Starlight ships the mobile and desktop tables of contents as two
+        // separate DOM trees, each hidden by CSS at the other's breakpoint, so
+        // "On this page" and its whole link list land twice in the text layer
+        // of every docs page. The override keeps the mobile one out of the
+        // served HTML until a narrow viewport needs it — see the component.
+        MobileTableOfContents: './src/components/starlight/MobileTableOfContents.astro',
       },
       head: [
         // og:image is emitted by the Head override instead, so it can vary by

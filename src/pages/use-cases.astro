@@ -14,13 +14,14 @@ const groups = [
         title: 'Codebase tribal knowledge',
         body: 'Invariants, gotchas, and design rationale that never make it into comments. Your coding agent — and your teammates — read them before touching an area, and write new ones when they discover something non-obvious.',
         tag: 'invariants · gotchas · decisions — in the repo',
-        link: { href: '/compare', label: 'Versus the memory tool you use now' },
+        link: { href: '/compare/', label: 'Versus the memory tool you use now' },
       },
       {
         icon: 'provenance',
         title: 'Agents that document their own decisions',
         body: 'When an agent makes a call — picks an approach, rejects an alternative, resolves a tradeoff — it records it as a typed, signed fact. Not memory: actionable knowledge. The next agent reads the rationale instead of re-deriving it, and you can trace exactly what was known when any choice was made.',
         tag: 'self-documenting · signed · traceable',
+        link: { href: '/docs/claude-code/', label: 'Wire it into Claude Code' },
       },
       {
         icon: 'discovery',
@@ -39,21 +40,21 @@ const groups = [
         title: 'Research & intelligence monitoring',
         body: 'Point agents at sources; they learn typed facts continuously. Synthesis distills patterns and higher-order insight as the corpus grows — the knowledge base sharpens with every cycle.',
         tag: 'continuous learning · synthesis · compounding insight',
-        link: DEMO_LIVE ? { href: '/explore', label: 'Open the live demo' } : undefined,
+        link: DEMO_LIVE ? { href: '/explore/', label: 'Open the live demo' } : undefined,
       },
       {
         icon: 'discovery',
         title: 'Hypothesis-driven research',
         body: 'Observations distill into syntheses; syntheses extend into falsifiable hypotheses with settlement criteria. When evidence arrives, the hypothesis transitions to observation — and git records the exact moment the loop closed.',
         tag: 'observe → synthesize → hypothesize → confirm',
-        link: { href: '/concepts#synthesis', label: 'Synthesis & hypotheses' },
+        link: { href: '/concepts/#synthesis', label: 'Synthesis & hypotheses' },
       },
       {
         icon: 'evolve',
         title: 'Knowledge that compounds',
         body: 'Facts beget facts; confidence rises and falls; query the graph as-of any point in time — so the corpus gets sharper over time, not just bigger.',
         tag: 'confidence moves · query as-of any commit',
-        link: { href: '/concepts#temporal', label: 'The temporal graph' },
+        link: { href: '/concepts/#temporal', label: 'The temporal graph' },
       },
     ],
   },
@@ -66,13 +67,14 @@ const groups = [
         title: 'Distributed team knowledge',
         body: 'One source of truth that humans and agents build together. Because facts are plain markdown in git, you review knowledge in pull requests and trust provenance instead of folklore.',
         tag: 'author together · review like code',
-        link: { href: '/concepts#branches', label: 'Peers, branches & consensus' },
+        link: { href: '/concepts/#branches', label: 'Peers, branches & consensus' },
       },
       {
         icon: 'cluster',
         title: 'Competitive agent benchmarking',
         body: 'Spin a fleet at one task; each agent self-documents its approach and findings on its own branch; all converge to a shared repo. Synthesis distills where approaches agreed, where confidence diverged, and what only one agent found — a knowledge graph of why, not just a leaderboard.',
         tag: 'fleet · per-branch findings · distilled comparison',
+        link: { href: '/docs/claude-cowork/', label: 'Running a fleet in Claude Cowork' },
       },
       {
         icon: 'distributed',
@@ -85,7 +87,7 @@ const groups = [
         title: 'Publish knowledge as an open standard',
         body: 'Export the whole base to Open Knowledge Format — Google Cloud\'s open spec — and push it to any git host. Consumers read plain markdown with standard frontmatter, with no knomit anywhere in the picture. Your private, agent-shaped base stays private; what you publish is portable and belongs to no vendor.',
         tag: 'OKF 0.2 · conformance-validated · one git URL',
-        link: { href: '/okf', label: 'How OKF export works' },
+        link: { href: '/okf/', label: 'How OKF export works' },
       },
     ],
   },
@@ -161,7 +163,7 @@ const groups = [
       <p class="k-lead">It's open source. Clone it, point your peers at it, and see.</p>
       <div class="uc-cta__actions">
         <a href={GITHUB_URL} class="k-btn" rel="noopener">View on GitHub</a>
-        <a href="/docs/quick-start" class="k-btn k-btn--ghost">Quick start</a>
+        <a href="/docs/quick-start/" class="k-btn k-btn--ghost">Quick start</a>
       </div>
     </div>
   </section>

@@ -6,7 +6,7 @@ async function jsonLdBlocks(page: Page) {
 }
 
 test.describe('meta descriptions', () => {
-  const pages = ['/', '/concepts', '/use-cases', '/blog'];
+  const pages = ['/', '/concepts/', '/use-cases/', '/blog/'];
   for (const path of pages) {
     test(`${path} has a meta description <= 160 chars`, async ({ page }) => {
       await page.goto(path);
@@ -21,7 +21,7 @@ test.describe('meta descriptions', () => {
 
 test.describe('structured data', () => {
   test('docs page emits BreadcrumbList and Organization', async ({ page }) => {
-    await page.goto('/docs/quick-start');
+    await page.goto('/docs/quick-start/');
     const blocks = await jsonLdBlocks(page);
     const types = blocks.map((b: any) => b['@type']);
     expect(types).toContain('Organization');
@@ -42,7 +42,7 @@ test.describe('structured data', () => {
   });
 
   test('blog post emits BlogPosting with dates', async ({ page }) => {
-    await page.goto('/blog');
+    await page.goto('/blog/');
     await page.getByRole('link', { name: /how knomit holds its own shape/i }).first().click();
     const blocks = await jsonLdBlocks(page);
     const post = blocks.find((b: any) => b['@type'] === 'BlogPosting');
@@ -85,9 +85,9 @@ test.describe('llms.txt', () => {
 
 test.describe('faq', () => {
   test('/faq renders questions and emits FAQPage schema', async ({ page }) => {
-    const res = await page.request.get('/faq');
+    const res = await page.request.get('/faq/');
     expect(res.status()).toBe(200);
-    await page.goto('/faq');
+    await page.goto('/faq/');
     await expect(page.getByRole('heading', { name: /what is knomit/i })).toBeVisible();
     const blocks = await jsonLdBlocks(page);
     const faq = blocks.find((b: any) => b['@type'] === 'FAQPage');
@@ -110,9 +110,9 @@ test('homepage links to the FAQ', async ({ page }) => {
 
 test.describe('compare', () => {
   test('/compare renders the operational-profile clusters with the key dimensions', async ({ page }) => {
-    const res = await page.request.get('/compare');
+    const res = await page.request.get('/compare/');
     expect(res.status()).toBe(200);
-    await page.goto('/compare');
+    await page.goto('/compare/');
     // /compare was rewritten from a table into operational-profile clusters that
     // name capabilities, not products — assert the cluster layout plus the
     // comparison dimensions the page actually contrasts. (Some dimension words
@@ -128,9 +128,9 @@ test.describe('compare', () => {
 });
 
 test('/security renders and covers signing, encryption, and local-first', async ({ page }) => {
-  const res = await page.request.get('/security');
+  const res = await page.request.get('/security/');
   expect(res.status()).toBe(200);
-  await page.goto('/security');
+  await page.goto('/security/');
   for (const term of [/Ed25519/i, /encrypt/i, /local/i, /open source/i]) {
     await expect(page.getByText(term).first()).toBeVisible();
   }
@@ -149,7 +149,7 @@ test.describe('sitemap', () => {
     // /explore was excluded while the live KB browser was gated behind a
     // teaser; it shipped as a real, crawlable page (astro.config.mjs's
     // sitemap filter was dropped), so it belongs in the sitemap now.
-    for (const p of ['/faq', '/compare', '/security', '/explore']) {
+    for (const p of ['/faq/', '/compare/', '/security/', '/explore/']) {
       expect(body, `sitemap missing ${p}`).toContain(p);
     }
   });
