@@ -3,6 +3,7 @@ import Default from '@astrojs/starlight/components/Head.astro';
 import JsonLd from '../JsonLd.astro';
 import Analytics from '../Analytics.astro';
 import { organizationSchema, websiteSchema, breadcrumbSchema } from '../../lib/schema';
+import { SITE_TWITTER } from '../../lib/site';
 
 const site = Astro.site!;
 // starlightRoute is injected by Starlight on every docs page (confirmed in
@@ -28,6 +29,13 @@ const ogImage = new URL(OG_BY_PATH[Astro.url.pathname] ?? '/og.png', site);
 ---
 <Default><slot /></Default>
 <meta property="og:image" content={ogImage} />
+{/* Starlight emits none of these; BaseHead.astro emits all three on the
+    marketing pages. Without them a docs URL unfurls as an unattributed card
+    and mobile browser chrome paints white against the dark-only theme. Same
+    source of truth as BaseHead, so the handle changes in one place. */}
+<meta name="theme-color" content="#141414" />
+{SITE_TWITTER && <meta name="twitter:site" content={SITE_TWITTER} />}
+{SITE_TWITTER && <meta name="twitter:creator" content={SITE_TWITTER} />}
 <JsonLd schema={organizationSchema(site)} />
 <JsonLd schema={websiteSchema(site)} />
 <JsonLd schema={breadcrumbSchema(site, crumbs)} />

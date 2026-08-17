@@ -35,8 +35,8 @@ const { compact = false } = Astro.props;
     <!-- cluster regions (x/width mirror the panel-2 tile columns below) -->
     <rect class="bd__region" x="24" y="40" width="244" height="94" rx="12" />
     <rect class="bd__region" x="452" y="40" width="244" height="94" rx="12" />
-    <text class="bd__region-label" x="146" y="32" text-anchor="middle">similarity cluster A</text>
-    <text class="bd__region-label" x="574" y="32" text-anchor="middle">similarity cluster B</text>
+    <text aria-hidden="true" class="bd__region-label" x="146" y="32" text-anchor="middle">similarity cluster A</text>
+    <text aria-hidden="true" class="bd__region-label" x="574" y="32" text-anchor="middle">similarity cluster B</text>
 
     <!-- intra-cluster edges (what similarity sees) -->
     <g class="bd__intra">
@@ -52,22 +52,22 @@ const { compact = false } = Astro.props;
 
     <!-- the bridge (cross-cluster shared token) -->
     <line class="bd__bridge" x1="236" y1="86" x2="484" y2="86" marker-start="url(#bd-arrow)" marker-end="url(#bd-arrow)" />
-    <text class="bd__bridge-label" x="360" y="76" text-anchor="middle">shared token</text>
-    <text class="bd__bridge-sub" x="360" y="106" text-anchor="middle">domain / entity · different clusters</text>
+    <text aria-hidden="true" class="bd__bridge-label" x="360" y="76" text-anchor="middle">shared token</text>
+    <text aria-hidden="true" class="bd__bridge-sub" x="360" y="106" text-anchor="middle">domain / entity · different clusters</text>
 
     <!-- cluster A dots -->
     <circle class="bd__dot" cx="74" cy="72" r="6" />
     <circle class="bd__dot" cx="120" cy="62" r="6" />
     <circle class="bd__dot" cx="104" cy="112" r="6" />
     <circle class="bd__dot bd__dot--face" cx="236" cy="86" r="8" />
-    <text class="bd__dot-label" x="236" y="122" text-anchor="middle">fact A</text>
+    <text aria-hidden="true" class="bd__dot-label" x="236" y="122" text-anchor="middle">fact A</text>
 
     <!-- cluster B dots -->
     <circle class="bd__dot" cx="646" cy="72" r="6" />
     <circle class="bd__dot" cx="600" cy="62" r="6" />
     <circle class="bd__dot" cx="616" cy="112" r="6" />
     <circle class="bd__dot bd__dot--face" cx="484" cy="86" r="8" />
-    <text class="bd__dot-label" x="484" y="122" text-anchor="middle">fact B</text>
+    <text aria-hidden="true" class="bd__dot-label" x="484" y="122" text-anchor="middle">fact B</text>
 
     <!-- implication lines to the keystone (start below the fact labels) -->
     <g class="bd__imply">
@@ -77,8 +77,8 @@ const { compact = false } = Astro.props;
 
     <!-- keystone E -->
     <rect class="bd__keystone" x="276" y="244" width="168" height="44" rx="10" filter="url(#bd-glow)" />
-    <text class="bd__keystone-title" x="360" y="263" text-anchor="middle">E — keystone</text>
-    <text class="bd__keystone-sub" x="360" y="278" text-anchor="middle">unstated · origin: discovered</text>
+    <text aria-hidden="true" class="bd__keystone-title" x="360" y="263" text-anchor="middle">E — keystone</text>
+    <text aria-hidden="true" class="bd__keystone-sub" x="360" y="278" text-anchor="middle">unstated · origin: discovered</text>
   </svg>
 
   <figcaption class="bd__cap">

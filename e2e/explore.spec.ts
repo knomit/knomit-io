@@ -69,7 +69,7 @@ async function openFactViaTree(page: Page) {
 
 test.describe('/explore live KB browser', () => {
   test('renders the browser and its library', async ({ page }) => {
-    await page.goto('/explore');
+    await page.goto('/explore/');
     await expect(page.getByTestId('explore-browser')).toBeVisible();
     await expect(page.getByTestId('left-panel')).toBeVisible();
     // The default landing view: the ontology tree, not the chronological list.
@@ -81,7 +81,7 @@ test.describe('/explore live KB browser', () => {
   });
 
   test('descends the ontology tree under the Path sort', async ({ page }) => {
-    await page.goto('/explore');
+    await page.goto('/explore/');
     await showTree(page);
 
     const dir = page.getByTestId('dir-entry').first();
@@ -94,13 +94,13 @@ test.describe('/explore live KB browser', () => {
   });
 
   test('opens a fact and shows its body', async ({ page }) => {
-    await page.goto('/explore');
+    await page.goto('/explore/');
     await openFirstFact(page);
     await expect(page.getByTestId('fact-body')).not.toBeEmpty();
   });
 
   test('shows the connection counts only while a fact is open', async ({ page }) => {
-    await page.goto('/explore');
+    await page.goto('/explore/');
     // Nothing is open on arrival (Path sort opens no fact), so the absent
     // case is reachable directly — assert it before opening anything.
     //
@@ -122,7 +122,7 @@ test.describe('/explore live KB browser', () => {
   });
 
   test('exposes no write controls', async ({ page }) => {
-    await page.goto('/explore');
+    await page.goto('/explore/');
     await openFirstFact(page);
     // The shell deliberately leaves `serverReadOnly` false, because upstream
     // overloads that flag to also disable click-to-filter (see the next
@@ -144,7 +144,7 @@ test.describe('/explore live KB browser', () => {
   });
 
   test('clicking a domain chip adds it to the filter', async ({ page }) => {
-    await page.goto('/explore');
+    await page.goto('/explore/');
     await openFirstFact(page);
     // Regression guard for the `serverReadOnly` trade-off above. FactBody
     // gates these chips on the same `readOnly` boolean as the write
@@ -170,7 +170,7 @@ test.describe('/explore live KB browser', () => {
     const paths = () => page.getByTestId('chrono-item')
       .evaluateAll(els => els.map(el => el.getAttribute('data-path') ?? ''));
 
-    await page.goto('/explore');
+    await page.goto('/explore/');
     // Ask for Recent rather than landing in it: v0.5.2 moved the vendored
     // Library's default sort to Path, so `chrono-item` rows no longer exist on
     // arrival.
@@ -202,7 +202,7 @@ test.describe('/explore live KB browser', () => {
 
   test('falls back to the teaser when the bundle is unavailable', async ({ page }) => {
     await page.route('**/kb/bundle-*.json', route => route.fulfill({ status: 404, body: '' }));
-    await page.goto('/explore');
+    await page.goto('/explore/');
     // ExploreBrowser's Fallback() adds `explore-fallback` to <body>, and
     // explore.astro's CSS reacts to that class by hiding `.explore-live` (the
     // island's own ancestor) and showing `.explore-teaser` instead — so the
@@ -223,7 +223,7 @@ test.describe('/explore live KB browser', () => {
 // while nothing happened behind it) fails here.
 test.describe('/explore guided tour', () => {
   test('invites on a first visit, and only once', async ({ page }) => {
-    await page.goto('/explore');
+    await page.goto('/explore/');
     await expect(page.getByTestId('tour-invite')).toBeVisible();
     await page.getByTestId('tour-dismiss').click();
     await expect(page.getByTestId('tour-invite')).toHaveCount(0);
@@ -236,7 +236,7 @@ test.describe('/explore guided tour', () => {
   });
 
   test('walks every step, driving the real UI', async ({ page }) => {
-    await page.goto('/explore');
+    await page.goto('/explore/');
     await page.getByTestId('tour-start').click();
 
     const bar = page.getByTestId('tour-bar');
@@ -320,7 +320,7 @@ test.describe('/explore guided tour', () => {
   });
 
   test('starting the tour keeps the open fact until the view actually changes', async ({ page }) => {
-    await page.goto('/explore');
+    await page.goto('/explore/');
     // Put the page in the state this test is about: the Path sort — which step
     // 1 describes — with a fact open. Opened by descending the tree, since
     // switching sorts would close it. This is what makes step 1's guard
@@ -347,7 +347,7 @@ test.describe('/explore guided tour', () => {
   });
 
   test('animates a pointer to the control before performing each step', async ({ page }) => {
-    await page.goto('/explore');
+    await page.goto('/explore/');
     await page.getByTestId('tour-start').click();
     await expect(page.getByTestId('tour-bar')).toContainText('1/9');
 
@@ -387,7 +387,7 @@ test.describe('/explore guided tour', () => {
   });
 
   test('a click during the flight cannot double-run the step', async ({ page }) => {
-    await page.goto('/explore');
+    await page.goto('/explore/');
     await page.getByTestId('tour-start').click();
     // Advance to step 3, so the NEXT transition runs step 4 — whose action is
     // ADD_FILTER. That matters: the reducer appends non-path chips without
@@ -415,7 +415,7 @@ test.describe('/explore guided tour', () => {
 
   test('on a phone the narration stays on screen for every step', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/explore');
+    await page.goto('/explore/');
     await page.getByTestId('tour-start').click();
 
     const bar = page.getByTestId('tour-bar');
@@ -436,7 +436,7 @@ test.describe('/explore guided tour', () => {
   });
 
   test('skipping mid-flight does not resurrect the tour', async ({ page }) => {
-    await page.goto('/explore');
+    await page.goto('/explore/');
     await page.getByTestId('tour-start').click();
     // Advance to step 6, so the pending flight is the one into step 7 —
     // "Facts change", whose action scrubs into time-travel. That was the worst
@@ -468,7 +468,7 @@ test.describe('/explore guided tour', () => {
   });
 
   test('the launcher names the real repo and links to it', async ({ page }) => {
-    await page.goto('/explore');
+    await page.goto('/explore/');
     await page.getByTestId('tour-dismiss').click();
     const launcher = page.getByTestId('tour-launcher');
     // Typographic apostrophes in the copy (&rsquo;), so match around them.

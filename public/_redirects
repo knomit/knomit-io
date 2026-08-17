@@ -8,4 +8,10 @@
 # It's gone; the path still has to resolve, because knomit's own README links to
 # knomit.io/docs from GitHub. Note this fires on Cloudflare only: under
 # `astro dev` /docs 404s, which is the price of a real 301 over a meta refresh.
-/docs /docs/quick-start 301
+#
+# Both forms are listed: a `/docs` rule does NOT match `/docs/`, and the slashed
+# form was hard-404ing in production. The target carries its trailing slash so
+# the hop lands on the canonical URL directly — targeting `/docs/quick-start`
+# made it a two-hop chain (301 here, then Pages' own 308 to add the slash).
+/docs /docs/quick-start/ 301
+/docs/ /docs/quick-start/ 301

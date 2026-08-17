@@ -21,7 +21,7 @@ test('sends no analytics hits when served from a non-production host', async ({ 
 
   // Both call sites: BaseHead for the marketing pages, the Starlight Head
   // override for /docs. A gate applied to only one of them still leaks.
-  for (const path of ['/', '/docs/quick-start']) {
+  for (const path of ['/', '/docs/quick-start/']) {
     await page.goto(path);
     // Absence needs a window in which the hit could have appeared: the
     // injected tag requests gtag.js during parse and collects immediately

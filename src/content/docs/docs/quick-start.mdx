@@ -1,6 +1,15 @@
 ---
 title: Quick start
 description: Clone, build, and run knomit, then connect your first agent over MCP.
+# The H1 comes from `title`, so it stays short and scannable — readers scan a
+# docs sidebar for "Quick start", not for a sentence. The document title is
+# overridden separately because "Quick start — knomit" spends 20 of the ~60
+# characters a SERP shows and says nothing about what the page does.
+# Starlight drops its generated <title> when head supplies one
+# (utils/head.ts hasTag), so this replaces rather than duplicates it.
+head:
+  - tag: title
+    content: Quick start — install and connect an agent over MCP — knomit
 ---
 
 import { Steps, Tabs, TabItem, Aside, Card, CardGrid } from '@astrojs/starlight/components';
@@ -15,7 +24,7 @@ The quickest way in is a signed release build — no toolchain, no compile step.
 
 <CardGrid>
   <Card title="Download a release" icon="download">
-    Grab the [desktop app or the server binary](/download) for macOS or Linux.
+    Grab the [desktop app or the server binary](/download/) for macOS or Linux.
     The macOS app is notarized and keeps itself up to date; both platforms ship
     a `knomit serve` tarball. **Start here unless you need to modify knomit.**
   </Card>
@@ -88,7 +97,7 @@ git — so it is worth a minute of thought now.
 <Aside type="tip" title="Prefer a native app?">
 The [desktop app](/docs/desktop/) is a system-tray app that runs the server
 in-process and lets MCP clients auto-discover it — no terminal needed to keep
-knomit running. Most people should just [download it](/download). To build it
+knomit running. Most people should just [download it](/download/). To build it
 here instead of `make run`, use `make desktop`: on macOS that produces
 `dist/darwin-arm64/Knomit.app`; on Linux it produces the `knomit-desktop`
 binary only — run `make desktop-install` afterwards for the `.desktop` launcher

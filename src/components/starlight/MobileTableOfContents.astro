@@ -1,0 +1,64 @@
+---
+/**
+ * Keep the mobile table of contents out of the served HTML until a narrow
+ * viewport actually needs it.
+ *
+ * Starlight renders BOTH tables of contents on every docs page — PageSidebar
+ * emits <mobile-starlight-toc> inside `.lg:sl-hidden` and <starlight-toc>
+ * inside `.sl-hidden.lg:sl-block` — and lets CSS pick one per breakpoint. A
+ * browser therefore only ever *shows* one, but anything reading the raw markup
+ * (LLM crawlers, plain HTML-to-text extraction, snippet generators) sees the
+ * heading "On this page" and the entire link list twice on all 19 docs pages.
+ *
+ * The two variants cannot simply be deduplicated: they are different widgets
+ * (a fixed <details> dropdown vs. a static rail) and each is genuinely needed
+ * at its own width. Nor can `aria-hidden` decide between them at build time —
+ * which one is visible depends on viewport width, which only CSS knows.
+ *
+ * So the mobile variant ships inside a <template>. Template content is inert:
+ * it is not in the document tree, not in the accessibility tree, and not in the
+ * text layer, which leaves exactly one "On this page" in the HTML. A tiny
+ * inline script moves it into place the moment the viewport is below
+ * Starlight's `lg` breakpoint (72rem — the width at which `.lg:sl-hidden`
+ * starts hiding it), and on any later resize across that line. Once inserted it
+ * stays: the wrapping `.lg:sl-hidden` handles hiding it again on the way back
+ * up, and the custom element keeps its scroll-spy state.
+ *
+ * Everything else is unchanged — Starlight's own component is what renders, so
+ * <mobile-starlight-toc> upgrades on insertion and behaves exactly as upstream.
+ *
+ * Cost: with JavaScript disabled on a narrow viewport there is no mobile TOC.
+ * That is a real but small regression — the headings are all still in the page
+ * and the left sidebar nav is unaffected — and it is the only way to get one
+ * copy in the text layer without breaking the widget for everyone else.
+ */
+import Default from '@astrojs/starlight/components/MobileTableOfContents.astro';
+---
+
+<template data-mobile-toc><Default /></template>
+
+<script is:inline>
+  (function () {
+    // 72rem is Starlight's `lg` breakpoint (style/util.css). Below it the
+    // desktop rail is display:none and this is the only TOC on the page.
+    var MQ = '(max-width: 71.9375rem)';
+    function hydrate() {
+      var tpl = document.querySelector('template[data-mobile-toc]');
+      if (!tpl) return; // already moved into the document
+      tpl.replaceWith(tpl.content);
+    }
+    function setup() {
+      if (!document.querySelector('template[data-mobile-toc]')) return;
+      var mql = window.matchMedia(MQ);
+      if (mql.matches) hydrate();
+      else mql.addEventListener('change', function onChange(e) {
+        if (!e.matches) return;
+        mql.removeEventListener('change', onChange);
+        hydrate();
+      });
+    }
+    if (document.readyState !== 'loading') setup();
+    else document.addEventListener('DOMContentLoaded', setup);
+    document.addEventListener('astro:page-load', setup);
+  })();
+</script>

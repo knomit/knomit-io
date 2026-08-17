@@ -5,6 +5,9 @@ interface Step {
   title: string;
   body: string;
   code?: string;
+  /** Optional pointer to the reference page for this step. Kept out of `body`
+   *  because that is rendered as escaped text, not markup. */
+  more?: { href: string; label: string };
 }
 interface Props {
   steps: Step[];
@@ -21,7 +24,15 @@ const { steps } = Astro.props;
         </div>
         <div class="k-step__content">
           <h3 class="k-step__title">{s.title}</h3>
-          <p class="k-step__body k-text-2">{s.body}</p>
+          <p class="k-step__body k-text-2">
+            {s.body}
+            {s.more && (
+              <>
+                {' '}
+                <a href={s.more.href}>{s.more.label}</a>.
+              </>
+            )}
+          </p>
           {s.code && <pre class="k-step__code k-mono">{s.code}</pre>}
         </div>
       </li>

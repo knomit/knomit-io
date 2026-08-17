@@ -66,12 +66,12 @@ const merges = [
   <!-- Central consensus node + pulse ring -->
   <circle class="kg-consensus" cx="240" cy="272" r="15" />
   <circle class="kg-consensus-ring" cx="240" cy="272" r="15" />
-  <text x="260" y="270" class="kg-label kg-label--main">main</text>
-  <text x="260" y="283" class="kg-label kg-muted">consensus</text>
+  <text aria-hidden="true" x="260" y="270" class="kg-label kg-label--main">main</text>
+  <text aria-hidden="true" x="260" y="283" class="kg-label kg-muted">consensus</text>
 
   <!-- Agent labels -->
-  <text x="14" y="70" class="kg-label kg-muted">agent A</text>
-  <text x="346" y="56" class="kg-label kg-muted">agent B</text>
+  <text aria-hidden="true" x="14" y="70" class="kg-label kg-muted">agent A</text>
+  <text aria-hidden="true" x="346" y="56" class="kg-label kg-muted">agent B</text>
 
   <!-- Fact cards -->
   {
@@ -121,9 +121,9 @@ const merges = [
   <!-- Legend -->
   <g class="kg-legend">
     <rect x="156" y="524" width="9" height="9" rx="1.5" transform="rotate(45 160.5 528.5)" fill="var(--k-brand)" />
-    <text x="174" y="532" class="kg-label kg-muted">epistemic</text>
+    <text aria-hidden="true" x="174" y="532" class="kg-label kg-muted">epistemic</text>
     <path d="M250 524 L258 528.5 L250 533 Z" fill="var(--k-temporal)" />
-    <text x="266" y="532" class="kg-label kg-muted">pragmatic</text>
+    <text aria-hidden="true" x="266" y="532" class="kg-label kg-muted">pragmatic</text>
   </g>
 </svg>
 
