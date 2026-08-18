@@ -184,18 +184,22 @@ silently dropped:
 ```sh
 curl -N -X POST http://localhost:19278/api/v1/repos \
   -H 'Content-Type: application/json' \
-  -d '{"name":"work","mode":"clone","origin":"git@github.com:you/kb.git"}'
+  -d '{"name":"work","mode":"clone",
+       "origin":{"url":"git@github.com:you/kb.git","branch":"main"}}'
 ```
 
 **`initialize`** turns a branch that is *not* a knowledge base into one. It
 clones the branch, cuts `agent/<host>` from its tip, commits the chosen
-[ontology](/docs/ontologies/) there, and pushes **that branch alone**:
+[ontology](/docs/ontologies/) there, and pushes **that branch alone**. An
+`ontology_preset` or `ontology_yaml` is required — writing that file *is* the
+act that makes the branch a knowledge base, so without one there is nothing to
+write:
 
 ```sh
 curl -N -X POST http://localhost:19278/api/v1/repos \
   -H 'Content-Type: application/json' \
   -d '{"name":"work","mode":"initialize","ontology_preset":"code",
-       "origin":"git@github.com:you/project.git"}'
+       "origin":{"url":"git@github.com:you/project.git","branch":"main"}}'
 ```
 
 <Aside type="tip" title="knomit never pushes to your default branch">
@@ -208,8 +212,8 @@ The one remote it refuses is a repository with **no branches at all**: there is
 nothing to cut a branch from. Create a `main` first — one commit is enough.
 </Aside>
 
-Both modes take the repo identity from the remote's existing root commit, so two
-machines pointed at the same remote converge on one identity rather than minting
-competing ones.
+Neither mode mints a new identity: the repo id is the remote's existing root
+commit, so two machines pointed at the same remote converge on one identity
+instead of splitting into two.
 
 See the [REST API reference](/docs/api/) for the full repo-management surface.

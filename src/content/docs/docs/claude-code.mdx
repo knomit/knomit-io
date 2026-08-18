@@ -43,31 +43,47 @@ This renders embedded templates into the project:
   any file is written, so a JSON-hostile value is rejected up front rather than
   baked into a broken `.mcp.json`.
 
-### The `.mcp.json` key is derived, and more than one is allowed
+### The `.mcp.json` key is derived from the scope
 
 The `mcpServers` key is **not** the constant `knomit`. It is derived from the
-scope: `knomit-lens-<lens>` with `--lens`, `knomit-repo-<repo>` otherwise. The
-prefix is applied unconditionally, which makes the mapping injective — a repo
-and a lens sharing a name, or a repo literally named `knomit-repo-x`, cannot
-collide on one key.
+**scope** the bridge is bound to: `knomit-lens-<lens>` with `--lens`,
+`knomit-repo-<repo>` otherwise. The prefix is applied unconditionally, which
+makes the mapping injective — a repo and a lens sharing a name, or a repo
+literally named `knomit-repo-x`, cannot collide on one key.
 
-That is the point: **a project can connect two knomit servers at once**, which
-is exactly what a repo-plus-lens setup wants. Running `claude init --repo` and
-then `claude init --lens` in one project yields two distinct keys that coexist.
+Each entry is one **bridge connection to a scope** — a repo or a lens — not a
+separate knomit server; a single knomit server hosts all of them. The constant
+key used to mean a second `claude init` in a project collided with the first, so
+its output could not be merged in at all. A derived key makes those entries
+mergeable.
 
 - The name budget is **27 characters**. Claude Code builds tool names as
   `mcp__<key>__<tool>` and the API caps those at 64; the longest knomit tool is
   `knomit_hypothesize`. A name that would overflow is rejected at `init` rather
-  than producing a server whose tools silently cannot be called.
-- **Nothing resolves a knomit server by key.** The hooks identify it by the
-  `command` basename `knomit-bridge`, so a hand-written `.mcp.json` under any
-  key you like still binds. Only `init`'s own output follows the derivation.
-- **Two knomit servers make hook binding ambiguous**, and there is no principled
-  answer to "which repo do the post-edit hooks read?". Rather than guess and run
-  against the wrong repo, the hooks skip with reason `multiple_knomit_servers`.
-  The `knomit_*` MCP tools are unaffected — each server serves its own scope.
+  than producing an entry whose tools silently cannot be called.
+- **The `command` identifies a knomit entry, not the key.** The hooks select on
+  the `knomit-bridge` command basename, so a hand-written `.mcp.json` under any
+  key still binds. The key is consulted only as a fallback, when *no* entry
+  matched on command — the legacy case, and the wrapper-script or `go run` case
+  where the command is unrecognisable. A key match is a guess and never dilutes
+  a command match, so an unrelated server that borrowed the `knomit-` namespace
+  cannot be counted as a second knomit entry.
 - The skills name tools **bare** (`knomit_learn`, not `mcp__knomit__knomit_learn`)
   so they resolve under whatever key is in play.
+
+<Aside type="caution" title="Keep one knomit scope per project">
+Mergeable entries are not an invitation to bind a project to both a repo and a
+lens. Entries naming **different** scopes leave no single answer to "which repo
+do the `post-edit` and `session-start` hooks read?", so rather than guess and
+run against the wrong repo, **the hooks disable themselves** with reason
+`multiple_knomit_servers`. The `knomit_*` MCP tools keep working for every
+entry — it is only the hooks you lose.
+
+Duplicate entries naming the **same** scope are fine and are the likely case:
+`.mcp.json` is merge-required, so re-running `init` leaves the pre-existing
+entry beside the freshly derived one. Both point at the same scope, and the
+hooks treat them as one.
+</Aside>
 
 <Aside type="note">
 The `CLAUDE.md` block carries a version marker (`<!-- knomit:integration v3 -->`)

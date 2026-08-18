@@ -68,8 +68,8 @@ wizard probes, and derives the rest from the answer.
 
 | Step | What it asks | When it appears |
 |---|---|---|
-| Source | Local-only, or a remote URL | always |
-| Access | Credentials, and what the probe established about them | remote |
+| Source | Local-only (with the repo name) or a remote URL | always |
+| Access | Credentials, plus the repo name — prefilled from the URL, since `git@host:org/arxiv-kb.git` is going to be called `arxiv-kb` | remote |
 | Branch | Which branch to build the knowledge base on | remote with branches |
 | Ontology | Preset or custom YAML | only when that branch is not already a KB |
 | Review | Confirm, then watch progress stream | when the shape is established |

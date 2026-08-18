@@ -264,18 +264,34 @@ destination onto their result:
 ```json
 {
   "commits": [{"file": "kb/gotchas/x/1a2b3c4d.md", "hash": "abc1234"}],
-  "written_to": {"repo": "knomit-kb", "branch": "agent/main", "lens": "knomit-dev"},
-  "summary": "wrote 2 facts to repo \"knomit-kb\" on branch \"agent/main\" — the write repo of lens \"knomit-dev\""
+  "written_to": {
+    "repo": "knomit-kb",
+    "repo_id": "3ec012f5b4d2",
+    "branch": "agent/main",
+    "lens": "knomit-dev"
+  },
+  "summary": "wrote 2 facts to repo \"knomit-kb\" (3ec012f5b4d2) on branch \"agent/main\" — the write repo of lens \"knomit-dev\""
 }
 ```
 
-`repo` is always the **write repo**, never the lens: a lens reads a union but
-writes to exactly one member, so naming the lens would misdescribe where the
-bytes are. `lens` is reported alongside as the reason that repo was chosen, and
-is omitted entirely on a repo-bound binding rather than carried as an empty
-field. The prose `summary` is not redundant with the struct — a caller reacts to
-prose, and the point of stamping is that a wrong destination gets *noticed* in
-the same turn it happens.
+- `repo` is always the **write repo**, never the lens: a lens reads a union but
+  writes to exactly one member, so naming the lens would misdescribe where the
+  bytes are. `lens` is reported alongside as the reason that repo was chosen,
+  and is omitted on a repo-bound binding rather than carried as an empty field.
+- `repo_id` is the 12-hex root-commit id — the same identifier that appears in
+  `kb://<id>/…` paths and the `knomit_repos` mount table. It is what makes the
+  stamp discriminating: a repo *name* is per-machine, mutable, and unique only
+  among one server's active repos, so two connected knomit servers each holding
+  a repo called `knomit` on `agent/main` would otherwise render byte-identically
+  and the stamp would detect nothing. It is omitted when the store is
+  unavailable and the identity is genuinely unknown.
+- The prose `summary` is not redundant with the struct — a caller reacts to
+  prose, and the point of stamping is that a wrong destination gets *noticed* in
+  the same turn it happens. The id rides in the sentence for the same reason it
+  is in the struct.
+
+`knomit_update` and `knomit_retract` carry the same two fields alongside their
+own `file` and `commit`.
 
 ### Private state
 

@@ -47,10 +47,11 @@ nothing — it logs an error and the repo opens **read-only**. Every branch is
 refused for writing, the agent branch included, so no fact is ever authored
 against a taxonomy nobody chose.
 
-Existing facts stay readable, searchable and exportable; what you lose is the
-write path until the file is repaired. Because the ontology is read once at
-open, repairing it means [fixing the file and reopening the
-repo](#choosing-an-ontology).
+Existing facts stay readable and searchable; what you lose is the write path
+until the file is repaired. The reason is reported rather than left to the log —
+the branch payload carries an `ontology_error` a client can show. Because the
+ontology is read once at open, repairing it means [fixing the file and reopening
+the repo](#choosing-an-ontology).
 
 Unknown top-level keys are a **warning**, not a parse failure, so an ontology
 written by a newer knomit still opens as itself rather than being rejected
@@ -487,7 +488,7 @@ curl -X POST http://localhost:19278/api/v1/repos \
 | `preset` | local only | `ontology_preset`: `"default"` or `"code"`. Omitted, it uses `default`. |
 | `custom` | local only | `ontology_yaml`: the full YAML, inline. |
 | `clone` | remote | Taken from the chosen branch of the origin. Passing `ontology_preset` or `ontology_yaml` is **rejected**, not ignored — a clone would otherwise drop it silently. `409` if that branch has no ontology. |
-| `initialize` | remote | `ontology_preset` or `ontology_yaml`, committed onto knomit's own branch. `409` if that branch already has one. |
+| `initialize` | remote | `ontology_preset` or `ontology_yaml` — **required**, since writing it is the act that makes the branch a knowledge base — committed onto knomit's own branch. `409` if that branch already has one. |
 
 The two remote modes are the two halves of one question about the branch you
 chose — *does it already carry `.knomit/ontology.yaml`?* — answered by
@@ -519,7 +520,7 @@ wizard's editor is built on them, and they are equally usable from `curl`:
 | Endpoint | What it gives you |
 |---|---|
 | `POST /api/v1/ontologies:validate` | Parses a raw YAML body and returns **every** diagnostic with its line position, not just the first. Always `200` — a document that fails validation answers `ok: false`; a 4xx is reserved for a body the server could not read at all. |
-| `GET /api/v1/ontologies/presets` | The built-in presets, with id, name, topic list and rule count. |
+| `GET /api/v1/ontologies/presets` | The built-in presets: each one's preset name, ontology id, title, description and topic list. |
 | `GET /api/v1/ontologies/presets/{name}` | A preset's YAML in exactly the form create would commit — the right starting point for a custom ontology. |
 | `GET /api/v1/ontologies/schema` | The field reference for the YAML above — every key with a one-line description. A reflection test over the parser's own structs fails if a key it accepts is missing here, so the reference cannot quietly fall behind the parser. |
 
