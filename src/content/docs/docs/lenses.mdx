@@ -224,7 +224,8 @@ All paths are under `/api/v1`.
 |----------|-------|
 | `GET /lenses`, `POST /lenses` | List and create. |
 | `GET /lenses/{lens}` | The definition — including `write`, which is what the Claude Code hooks resolve. |
-| `PATCH /lenses/{lens}` | Edit. **The name is immutable** — there is no field for it. |
+| `PATCH /lenses/{lens}` | Edit. Carries no name field — renaming has its own route. |
+| `POST /lenses/{lens}/rename` | Rename. A custom action rather than `PATCH`, because the response re-reads the lens through its **new** name and a rename invalidates the identifier the request was addressed by. Renaming to the current name is a successful no-op; `409` means the new name is held by another lens **or by a repo** — the two share one namespace. |
 | `DELETE /lenses/{lens}` | 204. Definition only; member repos untouched. |
 | `GET /lenses/{lens}/facts`, `/facts/{path}` | Union fact collection and single-fact read. |
 | `GET /lenses/{lens}/search` | Union relevance search. |
@@ -235,6 +236,14 @@ All paths are under `/api/v1`.
 On `PATCH`, an absent key keeps its current value and a present key replaces
 wholesale: `reads` replaces **as a set**, it never merges. The full create rule
 set is re-validated.
+
+<Aside type="note" title="A lens name is display-only">
+A lens is keyed internally by an opaque `uid`, not by its name, which is what
+makes renaming safe. In-flight MCP paging cursors are pinned to `repo:<uid>` /
+`lens:<uid>` for the same reason — a rename cannot orphan a `knomit_query` or
+`knomit_explain` cursor, and deleting a lens and recreating one under the same
+name cannot resume the old lens's cursor.
+</Aside>
 
 Points that differ from the repo endpoints:
 

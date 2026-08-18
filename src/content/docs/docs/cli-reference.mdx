@@ -40,14 +40,51 @@ controls. See [Observability](/docs/observability/).
 ### `knomit verify` — integrity check
 
 Walks the git object chain, SQLite tables, and search index, reporting structural
-issues. Read-only, but takes per-branch locks — stop any writing agent for a
-clean atomic snapshot. Exit codes: `0` clean, `1` issues found, `2` command error.
+issues. Exit codes: `0` clean (warnings do not fail the run), `1` integrity
+errors found, `2` verify itself could not run — bad flags, unknown repo, boot
+failure. The difference between `1` and `2` is the contract: a script that reads
+"the tool could not run" as "the repo is damaged" pages someone at 3am over a
+typo in a flag.
 
 | Flag | Type | Default | Meaning |
 |------|------|---------|---------|
 | `--repo` | string | — | Repo to verify. **Required unless `--all`** — there is no default repo to fall back to |
-| `--all` | bool | `false` | Verify all configured repos |
+| `--all` | bool | `false` | Verify all **active** repos. An archived repo is not opened and cannot be verified; the run names any it skipped |
 | `--deep` | bool | `false` | Parse every fact (slower, stricter) |
+| `--json` | bool | `false` | Emit the report(s) as JSON instead of text |
+| `--max-issues` | int | `100` | Cap issues printed per repo in **text** output (`0` = all). The per-category summary is always complete, and `--json` is never truncated — a truncated machine-readable report would look complete and not be. Ordering puts errors ahead of warnings, so truncation can only drop the least severe |
+| `--all-branches` | bool | `false` | Parity-check every `refs/heads/*` ref, not just the branches the index maintains |
+| `--prune-generated-refs` | bool | `false` | **Writes.** Deletes the generated `okf/*` refs left by the removed server-side export, and their markers — nothing else. Verify is otherwise strictly read-only |
+
+<Aside type="caution" title="Verify blocks every writer for its whole run">
+It is read-only, but it is also a **snapshot**: it takes the read lock on every
+branch it checks up front and holds all of them until it finishes. That is what
+makes the report internally consistent, and it means the run blocks every writer
+on those branches for its whole duration. Budget for it, or stop the agent —
+this is not a cheap probe to fire at a busy one.
+</Aside>
+
+Only branches the index maintains are parity-checked. Other refs under
+`refs/heads/*` — another machine's agent branch arriving by fetch, or refs left
+behind by a removed feature — have no SQLite rows *by design*. They are named as
+"not indexed" in the report header rather than reported as thousands of errors;
+`--all-branches` opts back in.
+
+### `knomit migrate-registry` — deprecated
+
+Converts a home shape that only exists on installations predating the
+`control.db` repo registry. A home created by a current build never needs it,
+and a converted one never needs it again.
+
+<Aside type="danger" title="Migrate now if you still have an unconverted home">
+This command **will be removed**. Once it is gone, the only supported path off
+the legacy shape is to re-clone each knowledge base from its remote — and a repo
+whose remote was never recorded anywhere else cannot be recovered that way.
+
+A legacy home makes the server refuse to boot, and the refusal names this
+command, which is why it stays listed in `knomit --help` rather than being
+hidden. A banner prints before the plan on every run, `--dry-run` included.
+</Aside>
 
 ### `knomit warm-models` — pre-download the embedding model
 

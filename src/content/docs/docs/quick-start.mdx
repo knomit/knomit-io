@@ -88,11 +88,18 @@ Open <strong>http://localhost:19278/</strong> for the web UI. A fresh install
 starts with **no repositories** — the UI's "no repos" screen is the ordinary
 first-run state, not an error. Create your first one from **Manage repos**.
 
-Creating a repo is where you pick its [ontology](/docs/ontologies/) — the topics
-it accepts, and the rules every fact is validated against. The `code` preset is
-the right answer for a codebase and the `default` preset for everything else.
-There is no setting to change it afterwards — doing so is a migration through
-git — so it is worth a minute of thought now.
+Creating a repo runs a short [wizard](/docs/web-ui/#creating-a-repository):
+local or a remote, then — if you gave it a remote — credentials and a branch. It
+probes as it goes and derives the rest, so you are never asked to classify the
+remote yourself.
+
+Where it asks is the [ontology](/docs/ontologies/) — the topics your repo
+accepts, and the rules every fact is validated against. The `code` preset is the
+right answer for a codebase and the `default` preset for everything else. There
+is no setting to change it afterwards — doing so is a migration through git — so
+it is worth a minute of thought now. If you point knomit at a branch that is
+*already* a knowledge base, the question doesn't come up at all: that repo's own
+ontology governs.
 
 <Aside type="tip" title="Prefer a native app?">
 The [desktop app](/docs/desktop/) is a system-tray app that runs the server
@@ -162,7 +169,7 @@ agent branch from the running server, so you never look it up by hand.
 
 <Aside type="tip" title="Let the bridge write this for you">
 `knomit-bridge claude init` scaffolds the Claude Code integration into the
-current directory: the `.mcp.json` above, `.claude/settings.json`, eleven
+current directory: the `.mcp.json` above, `.claude/settings.json`, ten
 `/knomit-…` skills, and a block appended to `CLAUDE.md`. Where one of those
 already exists it drops a companion file beside it rather than overwriting your
 version. See [Claude Code](/docs/claude-code/).

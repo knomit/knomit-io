@@ -40,15 +40,23 @@ kb/<topic>/<category…>/<uuid8>.md
 The ontology is parsed **once, when the repo is opened** — at server start, or
 when the repo is created or adopted. It is not re-read per request.
 
-<Aside type="caution" title="A broken ontology falls back silently">
-If the file is missing, unreadable, or fails to parse, knomit logs a warning and
-loads the built-in general-purpose ontology. It does not refuse to start.
+<Aside type="caution" title="No ontology, no writes">
+A repository is a knomit knowledge base **if and only if** it has an ontology.
+If the file is missing, unreadable, or fails to parse, knomit substitutes
+nothing — it logs an error and the repo opens **read-only**. Every branch is
+refused for writing, the agent branch included, so no fact is ever authored
+against a taxonomy nobody chose.
 
-A typo in your YAML therefore surfaces as *"why are all my topics suddenly
-`people`, `technology`, `science`…"* rather than as an error — and every fact
-written in the meantime is validated against the wrong taxonomy. Validate the
-file before you ship it: [repo creation](#choosing-an-ontology) is the one place
-a malformed ontology produces a loud failure.
+Existing facts stay readable, searchable and exportable; what you lose is the
+write path until the file is repaired. Because the ontology is read once at
+open, repairing it means [fixing the file and reopening the
+repo](#choosing-an-ontology).
+
+Unknown top-level keys are a **warning**, not a parse failure, so an ontology
+written by a newer knomit still opens as itself rather than being rejected
+into read-only. The editor and `POST /api/v1/ontologies:validate` stay strict —
+they answer `ok: false` for a key knomit does not declare, because they judge
+input you are still able to change.
 </Aside>
 
 ## The file format
@@ -396,8 +404,9 @@ three to five children — `technology` has `software`, `hardware`, `networking`
 rules at all; it is deliberately permissive.
 
 Use it for personal knowledge bases, chat-derived knowledge, or anything whose
-subject matter isn't known in advance. It is also the fallback when no ontology
-loads, and the seed for a clone of an empty origin.
+subject matter isn't known in advance. It is also what `mode: "preset"` picks
+when you omit `ontology_preset` — it is **not** a fallback for a repo whose own
+ontology failed to load, which opens read-only instead.
 
 ### `code` — id `source-code`
 
@@ -473,17 +482,54 @@ curl -X POST http://localhost:19278/api/v1/repos \
       }'
 ```
 
-| `mode` | Ontology source |
-|---|---|
-| `preset` | `ontology_preset`: `"default"` or `"code"`. Omitted, it falls back to `default`. |
-| `custom` | `ontology_yaml`: the full YAML, inline. |
-| `clone` | Taken from the origin. Passing `ontology_preset` or `ontology_yaml` is **rejected**, not ignored — a clone of a non-empty origin would otherwise drop it silently. |
+| `mode` | Remote? | Ontology source |
+|---|---|---|
+| `preset` | local only | `ontology_preset`: `"default"` or `"code"`. Omitted, it uses `default`. |
+| `custom` | local only | `ontology_yaml`: the full YAML, inline. |
+| `clone` | remote | Taken from the chosen branch of the origin. Passing `ontology_preset` or `ontology_yaml` is **rejected**, not ignored — a clone would otherwise drop it silently. `409` if that branch has no ontology. |
+| `initialize` | remote | `ontology_preset` or `ontology_yaml`, committed onto knomit's own branch. `409` if that branch already has one. |
+
+The two remote modes are the two halves of one question about the branch you
+chose — *does it already carry `.knomit/ontology.yaml`?* — answered by
+`POST /api/v1/repos:probe-initialized`. `clone` **joins** a branch that is
+already a knowledge base and lets its ontology govern; `initialize` **turns**
+a branch that isn't one into one.
+
+<Aside type="tip" title="`initialize` never needs push access to `main`">
+It clones the chosen branch, cuts `agent/<host>` from its tip, commits the
+ontology there, and pushes **that branch alone**. The consensus branch is never
+written, so a protected default branch is not an obstacle — open a merge
+request from `agent/<host>` when the knowledge base should become the project's
+consensus. A remote with no branches at all is refused, with the instruction
+that fixes it: create a `main` first, one commit is enough.
+</Aside>
 
 The response is newline-delimited JSON progress ending in `{"type":"done"}` or
-`{"type":"error"}`. A malformed ontology fails preflight with a `problem+json`
-body — this is the one place your YAML gets a loud error, so use repo creation
-as the validation step. The web UI's [Manage mode](/docs/web-ui/#manage) offers
-the same three modes, with a textarea for custom YAML.
+`{"type":"error"}`. Preflight establishes shape for both remote modes *before*
+the stream opens, so a mismatched mode arrives as a `problem+json` `409` rather
+than as an error line inside a committed `200`. The web UI wraps all four modes
+in a [guided wizard](/docs/web-ui/#creating-a-repository) that derives the mode
+from what it probed, rather than asking you to classify the remote yourself.
+
+### Validating a draft before you commit to it
+
+Three endpoints exist so a draft can be checked without creating anything. The
+wizard's editor is built on them, and they are equally usable from `curl`:
+
+| Endpoint | What it gives you |
+|---|---|
+| `POST /api/v1/ontologies:validate` | Parses a raw YAML body and returns **every** diagnostic with its line position, not just the first. Always `200` — a document that fails validation answers `ok: false`; a 4xx is reserved for a body the server could not read at all. |
+| `GET /api/v1/ontologies/presets` | The built-in presets, with id, name, topic list and rule count. |
+| `GET /api/v1/ontologies/presets/{name}` | A preset's YAML in exactly the form create would commit — the right starting point for a custom ontology. |
+| `GET /api/v1/ontologies/schema` | The field reference for the YAML above — every key with a one-line description. A reflection test over the parser's own structs fails if a key it accepts is missing here, so the reference cannot quietly fall behind the parser. |
+
+```sh
+curl -X POST http://localhost:19278/api/v1/ontologies:validate \
+  -H 'Content-Type: text/yaml' --data-binary @ontology.yaml
+```
+
+Use this rather than repo creation as your validation step: unlike a create, it
+costs nothing and reports all the problems at once.
 
 <Aside type="caution" title="Changing the ontology of an existing knowledge base">
 There is no API for this, and no way to do it from inside knomit. The fact tools
@@ -528,8 +574,8 @@ That has four practical consequences:
 
 ## Gotchas
 
-1. A broken ontology **falls back to the default silently** — a warning log is
-   the only signal.
+1. A missing or unparseable ontology makes the repo **read-only**. It is not
+   replaced by the default; refused writes and an error log are the signal.
 2. Deleting topics from a preset while keeping its `id` is **silently undone** on
    the next repo open. Change the `id`.
 3. `children` are suggestions. The freeform tail means they never restrict what

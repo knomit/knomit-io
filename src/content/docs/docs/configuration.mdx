@@ -62,6 +62,10 @@ see [Observability](/docs/observability/).
 `repo_origins`) and lens definitions (`lenses`, `lens_reads`). It is
 machine-local operational config: deliberately **not** git-backed, and it does
 not sync.
+
+It is schema-versioned by the same migrator as the per-repo databases, on one
+shared handle, so a home carries a version stamp and an interrupted migration
+self-heals on the next boot rather than leaving every repo unreachable at once.
 </Aside>
 
 A repo's **name and its filename are no longer the same thing.** Each database is
@@ -167,6 +171,7 @@ origin          = ""            # remote URL for the default repo
 serve           = true          # expose the built-in git smart-HTTP server (mounted at /git on the main port)
 port            = ""            # no separate listener: /git rides the main host:port
 network_timeout = "120s"        # bounds every remote git network op (clone/fetch/push)
+max_probe_bytes = 67108864      # 64 MiB: caps the shallow clone the pre-create branch check pulls
 
 [remote]
 token       = ""                # GitHub/PAT token
@@ -385,14 +390,16 @@ provider credentials at all.
 
 ## Verifying integrity
 
-The `knomit verify` subcommand runs integrity checks against a live on-disk repo
-(read-only, but it takes per-branch locks — stop any writing agent for a clean
-snapshot):
+The `knomit verify` subcommand runs integrity checks against a live on-disk repo.
+It is read-only, but it holds the read lock on every branch it checks for its
+whole run, so it **blocks every writer** on those branches — stop any writing
+agent rather than firing it at a busy one:
 
 ```sh
-knomit verify                 # verify the default repo
-knomit verify --repo work     # verify a specific repo
-knomit verify --all --deep    # every repo, including per-fact format checks
+knomit verify --repo work     # verify one repo — there is no default to fall back to
+knomit verify --all           # every ACTIVE repo (archived ones are named as skipped)
+knomit verify --all --deep    # …including per-fact format checks
+knomit verify --all --json    # machine-readable, never truncated
 ```
 
 See the [CLI reference](/docs/cli-reference/) for every flag and exit code.

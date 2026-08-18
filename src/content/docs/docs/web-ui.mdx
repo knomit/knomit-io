@@ -60,6 +60,64 @@ are repaired, replaced or disconnected here too (see
 It is also the ordinary destination on a fresh install: with **no repositories
 yet**, browse has nothing to show, and Manage is where the first repo is made.
 
+### Creating a repository
+
+Creating a repo is a **guided wizard**, not a form with mode tabs. You are never
+asked to classify your remote before you have the information to do it — the
+wizard probes, and derives the rest from the answer.
+
+| Step | What it asks | When it appears |
+|---|---|---|
+| Source | Local-only, or a remote URL | always |
+| Access | Credentials, and what the probe established about them | remote |
+| Branch | Which branch to build the knowledge base on | remote with branches |
+| Ontology | Preset or custom YAML | only when that branch is not already a KB |
+| Review | Confirm, then watch progress stream | when the shape is established |
+
+The step list is **derived**, not stored, so a step is never "skipped" — it is
+simply not part of your case. Joining a branch that already has an ontology
+never asks you to pick one, because that ontology governs.
+
+<Aside type="note" title="A check that did not complete never guesses">
+The branch question — *does this branch already carry `.knomit/ontology.yaml`?* —
+has three answers, and the third is not a formality. Guessing "yes" would
+discard the ontology you chose; guessing "no" would write one over a knowledge
+base that already had its own. The ontology is fixed at create time, so both are
+unrecoverable.
+
+So when the check cannot be established, the step list simply **ends** at
+Branch. There is nowhere to advance to. It is deliberately not a greyed-out Next
+button on a full-length rail: showing Ontology and Review for a remote knomit
+knows nothing about advertises a shape it has not established.
+</Aside>
+
+The Branch step is separate from the initial probe because the answer is
+**per-branch** — a repository can carry the ontology on `main` and not on
+`develop` — and the branch is not known when the origin probe runs. A remote
+with no branches at all is a dead end rather than a mode, and the Access step
+says so: create a `main` first, one commit is enough.
+
+The Ontology step offers the [built-in presets](/docs/ontologies/#the-built-in-presets)
+or a YAML editor with live validation, syntax highlighting and completion. Every
+diagnostic is reported with its line position, and all of them at once rather
+than only the first. An uploaded file is validated the same way before it is
+accepted.
+
+### Renaming and licensing
+
+- **Rename a repository.** In the danger zone, gated on typing the current name.
+  The rename re-keys the registry in place rather than closing the store, so SSE
+  subscribers and the search index survive it. Repos and lenses share one
+  namespace, so a name held by either is refused.
+- **Rename a lens.** A lens is keyed by an internal `uid`, so its name is
+  display-only and free to change. In-flight MCP cursors are pinned to that uid
+  rather than the name, so a rename cannot orphan a paging session.
+- **Create or edit the repository `LICENSE`.** A missing one can be created and
+  an existing one edited. The read view stays preformatted rather than rendered
+  as markdown, which would reflow away the line breaks a licence depends on. A
+  `LICENSE` over 64 KiB is refused rather than replaced — the server cannot read
+  it back to diff it safely, so it leaves the existing file untouched.
+
 ## Browsing a lens
 
 The **browse context** — a repo or a lens — is the single source of truth for
@@ -114,6 +172,12 @@ that exist. Lens management also has a detail view per lens.
   into source code, or out to a URL are labelled as such. Whether a ref resolves
   is judged at the commit you are *viewing*, so a hop is never offered into a
   version where the target did not yet exist.
+- **See when this version was written** — beside the version chip, every fact
+  carries the commit date of *the version you are looking at*, not of the fact
+  as a whole. It reads as a relative time when you are live, and as an absolute
+  date, in amber, when you are in history — so a version from two years ago
+  cannot be mistaken for the current one. It works the same for repo and lens
+  facts.
 - **Time-travel** — view the knowledge graph as-of any past commit; refs resolve
   to the versions that existed at that point in time.
 - **Ontology browser** — navigate topics and categories and see inheritance.

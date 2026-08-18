@@ -140,8 +140,9 @@ Each fact object:
 
 | Field | Type | Req | Default | Notes |
 |-------|------|-----|---------|-------|
-| `topic` | string | ✓ | | Top-level [ontology](/docs/ontologies/) topic. A closed set — an undeclared topic is rejected |
-| `category` | string | ✓ | | Category path within the topic (e.g. `languages/go/concurrency`). Not a closed set — declared children guide placement, but [anything below a topic is accepted](/docs/ontologies/#how-paths-are-validated) |
+| `topic` | string | ✓* | | Top-level [ontology](/docs/ontologies/) topic. A closed set — an undeclared topic is rejected |
+| `category` | string | ✓* | | Category path within the topic (e.g. `languages/go/concurrency`). Not a closed set — declared children guide placement, but [anything below a topic is accepted](/docs/ontologies/#how-paths-are-validated) |
+| `path` | string | ✓* | | **Private state only.** An explicit repo-relative path under `.knomit/<area>/`, used instead of `topic`/`category` — see [private state](#private-state) |
 | `title` | string | ✓ | | Short descriptive title |
 | `body` | string | ✓ | | Fact body, natural language |
 | `kind` | string | | `epistemic` | `epistemic` (descriptive) or `pragmatic` (prescriptive) |
@@ -152,6 +153,9 @@ Each fact object:
 | `confidence` | number | | `0.7` | 0.0–1.0 |
 | `sources` | integer | | `1` | Independent sources |
 | `refs` | string[] | | | External URLs or source refs |
+
+\* Either `topic` **and** `category`, or `path` — never both. Supplying `path`
+alongside either is an error, not a precedence rule.
 
 **Types** — epistemic: `observation`, `concept`, `process`, `principle`,
 `pattern`, `reference`, `synthesis`, `insight`, `hypothesis`, `methodology`.
@@ -244,6 +248,69 @@ resolves under commit-anchored reads (e.g. `?fallback=before`).
 Both `knomit_update` and `knomit_retract` reject a `kb://<read-mount-id>/…`
 path: *read-only mount: repo X is not this binding's write repo — facts there
 can only be changed through their own endpoint*.
+
+### Every write says where it landed
+
+The write destination is a property of the **connection** — fixed when the
+bridge starts, resolved from the request, and deliberately not expressible as a
+tool argument. (A `repo:` argument would relocate the choice into model output,
+where a model invents a plausible value rather than asking.) The cost of that
+design is that a fact written to an unintended repo used to return success
+identical to one written to the intended repo.
+
+So `knomit_learn`, `knomit_update` and `knomit_retract` each stamp the
+destination onto their result:
+
+```json
+{
+  "commits": [{"file": "kb/gotchas/x/1a2b3c4d.md", "hash": "abc1234"}],
+  "written_to": {"repo": "knomit-kb", "branch": "agent/main", "lens": "knomit-dev"},
+  "summary": "wrote 2 facts to repo \"knomit-kb\" on branch \"agent/main\" — the write repo of lens \"knomit-dev\""
+}
+```
+
+`repo` is always the **write repo**, never the lens: a lens reads a union but
+writes to exactly one member, so naming the lens would misdescribe where the
+bytes are. `lens` is reported alongside as the reason that repo was chosen, and
+is omitted entirely on a repo-bound binding rather than carried as an empty
+field. The prose `summary` is not redundant with the struct — a caller reacts to
+prose, and the point of stamping is that a wrong destination gets *noticed* in
+the same turn it happens.
+
+### Private state
+
+Facts are knowledge. A periodic job's bookkeeping is machinery, and putting it
+in `kb/` means it gets indexed, embedded, ranked in `knomit_query`, browsed in
+the UI, exported by OKF and swept by synthesis.
+
+`knomit_learn` therefore accepts an explicit `path` instead of
+`topic`/`category`, and `knomit_update`, `knomit_retract` and the equivalent
+`PUT`/`DELETE /facts/{path}` accept the same paths:
+
+> **Agent-writable** = `.knomit/<area>/…` — at least one subdirectory deep, with
+> `<area>` a dotless directory name, minus a small reserved list.
+
+- It is an **allow-list rooted in ownership**, not a deny-list of foreign dot
+  directories. A deny-list fails open: the moment a KB repo grows `.vscode/`,
+  knomit would be authorized to write another tool's territory.
+- `<area>` is any name the caller picks — nothing in knomit knows what your
+  areas are called, so a new category of private state needs no release.
+- Loose files at the root of `.knomit/` are knomit's own config (the
+  [ontology](/docs/ontologies/)) and stay refused. `<area>` must be dotless so
+  that a server-owned file's name cannot be reused as a directory.
+- A writable private path is **still private**: excluded from discovery at every
+  walker. That is the whole point — job state stays invisible to readers while
+  remaining writable by its job.
+- [Ontology validation rules](/docs/ontologies/#validation-rules) are skipped
+  for these writes, root rules included. Private state has no ontology placement,
+  and without the exemption a root rule would let a job create its slot and then
+  refuse every update to it.
+
+<Aside type="caution">
+`knomit_retract` and `DELETE /facts/{path}` **gained** this guard — previously
+they accepted any private path that create and update refused. A delete is a
+write, and it is now judged by the same rule.
+</Aside>
 
 ### `knomit_review` — maintain the KB
 
