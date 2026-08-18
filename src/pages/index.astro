@@ -10,7 +10,7 @@ import BlogCard from '../components/BlogCard.astro';
 import Icon from '../components/Icon.astro';
 import { GITHUB_URL, SITE_DESCRIPTION_SHORT } from '../lib/site';
 import { getPublishedPosts, postHref } from '../lib/blog';
-import { FAQ_ITEMS } from '../lib/faq';
+import { HOME_FAQ_ITEMS } from '../lib/faq';
 
 const posts = (await getPublishedPosts()).slice(0, 3);
 
@@ -80,6 +80,7 @@ const steps = [
     title: 'Assert a fact, in the flow of work',
     body: 'Learning isn’t a side chore. Through MCP — wired into Claude Code, your editor, or any agent — a peer asserts a typed claim as part of its normal execution: it learns while it works. Humans assert the same way, by editing markdown.',
     code: 'knomit_learn (MCP)  ·  Claude Code · editor · agent loop',
+    more: { href: '/docs/mcp-tools/', label: 'See the MCP tools' },
   },
   {
     n: '02',
@@ -125,10 +126,10 @@ const steps = [
             as primary. GitHub is not lost: it sits in the header on every
             page, and closes this one in the final CTA below. */}
         <div class="hero__cta">
-          <a href="/download" class="k-btn">
+          <a href="/download/" class="k-btn">
             <Icon name="arrow" size={17} /> Download knomit
           </a>
-          <a href="/docs/quick-start" class="k-btn k-btn--ghost">
+          <a href="/docs/quick-start/" class="k-btn k-btn--ghost">
             Quick start <Icon name="arrow" size={17} />
           </a>
         </div>
@@ -273,7 +274,7 @@ const steps = [
       />
       <FeatureGrid features={pillars} />
       <p class="features__more">
-        <a href="/use-cases">And what people build with it <Icon name="arrow" size={16} /></a>
+        <a href="/use-cases/">And what people build with it <Icon name="arrow" size={16} /></a>
       </p>
     </div>
   </section>
@@ -288,11 +289,11 @@ const steps = [
           <p class="k-text-2 okfband__body">
             A knomit knowledge base is private and agent-shaped.
             <strong>knomit-okf</strong> publishes it as a portable
-            <a href="/okf">OKF</a> repository — Google Cloud's open spec — from a
+            <a href="/okf/">OKF</a> repository — Google Cloud's open spec — from a
             single git URL. Plain markdown any conformant consumer can read, and
             a bundle that is validated against the spec before it commits.
           </p>
-          <a href="/okf" class="k-btn k-btn--ghost okfband__cta">
+          <a href="/okf/" class="k-btn k-btn--ghost okfband__cta">
             How publishing works <Icon name="arrow" size={16} />
           </a>
         </div>
@@ -314,7 +315,7 @@ const steps = [
         <div class="k-container">
           <div class="blogstrip__head">
             <SectionHeading eyebrow="From the blog" title="Real-world use cases." />
-            <a href="/blog" class="k-blogstrip__all">All posts <Icon name="arrow" size={16} /></a>
+            <a href="/blog/" class="k-blogstrip__all">All posts <Icon name="arrow" size={16} /></a>
           </div>
           <div class="blogstrip">
             {posts.map((post) => (
@@ -341,7 +342,7 @@ const steps = [
         align="center"
       />
       <dl class="home-faq">
-        {FAQ_ITEMS.slice(0, 5).map((item) => (
+        {HOME_FAQ_ITEMS.map((item) => (
           <div class="home-faq__item k-reveal">
             <dt class="home-faq__q">{item.q}</dt>
             <dd class="home-faq__a k-text-2">{item.a}</dd>
@@ -349,7 +350,7 @@ const steps = [
         ))}
       </dl>
       <p class="home-faq__more">
-        <a href="/faq" class="k-btn k-btn--ghost">All questions <Icon name="arrow" size={16} /></a>
+        <a href="/faq/" class="k-btn k-btn--ghost">All questions <Icon name="arrow" size={16} /></a>
       </p>
     </div>
   </section>
@@ -365,7 +366,7 @@ const steps = [
           diff, and host anywhere.
         </p>
         <div class="cta__actions">
-          <a href="/download" class="k-btn">Download knomit</a>
+          <a href="/download/" class="k-btn">Download knomit</a>
           <a href={GITHUB_URL} class="k-btn k-btn--ghost" rel="noopener">View on GitHub</a>
         </div>
       </div>

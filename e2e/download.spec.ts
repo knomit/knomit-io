@@ -8,7 +8,7 @@ import { test, expect } from '@playwright/test';
 
 test.describe('/download', () => {
   test('offers a desktop build and a server build per platform', async ({ page }) => {
-    await page.goto('/download');
+    await page.goto('/download/');
 
     const grid = page.getByTestId('download-grid');
     await expect(grid).toBeVisible();
@@ -23,7 +23,7 @@ test.describe('/download', () => {
   });
 
   test('every download points at a real release asset on GitHub', async ({ page }) => {
-    await page.goto('/download');
+    await page.goto('/download/');
     const links = page.locator('[data-testid^="download-"]');
     const hrefs = await links.evaluateAll(els =>
       els.map(e => e.getAttribute('href')).filter((h): h is string => !!h));
@@ -38,7 +38,7 @@ test.describe('/download', () => {
   });
 
   test('states the platform-specific update behaviour', async ({ page }) => {
-    await page.goto('/download');
+    await page.goto('/download/');
     const body = page.locator('body');
     // Self-update is macOS-only, and saying so is the point of the section —
     // a reader must not infer that the AppImage updates itself too.
@@ -49,7 +49,7 @@ test.describe('/download', () => {
   });
 
   test('tells you how to verify what you downloaded', async ({ page }) => {
-    await page.goto('/download');
+    await page.goto('/download/');
     await expect(page.locator('body')).toContainText('.ed25519');
     await expect(page.locator('body')).toContainText('shasum -a 256');
   });
@@ -59,7 +59,7 @@ test.describe('/download', () => {
     // The hero's PRIMARY action. `.k-btn:not(.k-btn--ghost)` is what makes it
     // primary in this design system, so asserting the class is asserting the
     // decision — a demotion to ghost would pass a bare href check.
-    const heroCta = page.locator('.hero__cta a[href="/download"]');
+    const heroCta = page.locator('.hero__cta a[href="/download/"]');
     await expect(heroCta).toHaveCount(1);
     await expect(heroCta).not.toHaveClass(/k-btn--ghost/);
 
@@ -73,6 +73,6 @@ test.describe('/download', () => {
     // The header carries two: the desktop actions button and the burger
     // menu's link. Both are always in the DOM and CSS picks one by viewport,
     // so assert on what a visitor can actually see rather than on the count.
-    await expect(page.locator('header a[href="/download"]:visible')).toHaveCount(1);
+    await expect(page.locator('header a[href="/download/"]:visible')).toHaveCount(1);
   });
 });

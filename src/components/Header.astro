@@ -3,11 +3,11 @@ import Logo from '../assets/logo.svg';
 import { GITHUB_URL, DEMO_LIVE } from '../lib/site';
 
 const nav = [
-  { label: 'Concepts', href: '/concepts' },
-  { label: 'Use cases', href: '/use-cases' },
-  { label: 'Compare', href: '/compare' },
-  { label: 'Docs', href: '/docs/quick-start' },
-  { label: 'Blog', href: '/blog' },
+  { label: 'Concepts', href: '/concepts/' },
+  { label: 'Use cases', href: '/use-cases/' },
+  { label: 'Compare', href: '/compare/' },
+  { label: 'Docs', href: '/docs/quick-start/' },
+  { label: 'Blog', href: '/blog/' },
 ];
 const path = Astro.url.pathname;
 const isActive = (href: string) =>
@@ -36,8 +36,8 @@ const isActive = (href: string) =>
     </nav>
 
     <div class="k-header__actions">
-      {DEMO_LIVE && <a href="/explore" class="k-header__link k-header__link--demo">Explore</a>}
-      <a href="/download" class="k-btn k-header__dl">Download</a>
+      {DEMO_LIVE && <a href="/explore/" class="k-header__link k-header__link--demo">Explore</a>}
+      <a href="/download/" class="k-btn k-header__dl">Download</a>
       <a href={GITHUB_URL} class="k-btn k-btn--ghost k-header__gh" rel="noopener">
         <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true" fill="currentColor">
           <path
@@ -55,8 +55,8 @@ const isActive = (href: string) =>
 
   <nav class="k-header__mobile" aria-label="Mobile" hidden>
     {nav.map((item) => <a href={item.href} class="k-header__link">{item.label}</a>)}
-    {DEMO_LIVE && <a href="/explore" class="k-header__link">Explore</a>}
-    <a href="/download" class="k-header__link">Download</a>
+    {DEMO_LIVE && <a href="/explore/" class="k-header__link">Explore</a>}
+    <a href="/download/" class="k-header__link">Download</a>
     <a href={GITHUB_URL} class="k-header__link" rel="noopener">GitHub</a>
   </nav>
 </header>

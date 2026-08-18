@@ -18,13 +18,18 @@ const jsonLd = faqPageSchema(FAQ_ITEMS.map((i) => ({ q: i.q, a: i.a })));
         as="h1"
         eyebrow="FAQ"
         title="Questions, answered."
-        lead="What knomit is, how it differs from the tools you already use, and how the pieces fit."
+        lead="What knomit is, how typed facts with provenance differ from RAG and vector search, and how ontologies, MCP tools, and agent consensus fit together."
       />
       <div class="faq">
         {FAQ_ITEMS.map((item) => (
           <div class="faq__item">
             <h2 class="faq__q">{item.q}</h2>
             <p class="faq__a k-text-2">{item.a}</p>
+            {item.more && (
+              <p class="faq__more">
+                <a href={item.more.href}>{item.more.label} &rarr;</a>
+              </p>
+            )}
           </div>
         ))}
       </div>
@@ -40,4 +45,5 @@ const jsonLd = faqPageSchema(FAQ_ITEMS.map((i) => ({ q: i.q, a: i.a })));
   }
   .faq__q { font-size: 1.15rem; margin: 0 0 0.5rem; }
   .faq__a { line-height: 1.65; max-width: 60ch; }
+  .faq__more { margin: 0.5rem 0 0; font-size: 0.9rem; }
 </style>

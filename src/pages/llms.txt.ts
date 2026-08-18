@@ -7,13 +7,13 @@ export const GET: APIRoute = async ({ site }) => {
 
   // Curated marketing routes, in the order we want an LLM to read them.
   const marketing: { title: string; path: string; note: string }[] = [
-    { title: 'How knomit works (concepts)', path: '/concepts', note: 'Facts, ontology, provenance, consensus, temporal graph' },
-    { title: 'Use cases', path: '/use-cases', note: 'What you can build on a fact-based, git-native KB' },
-    { title: 'Comparison', path: '/compare', note: 'knomit vs RAG, vector DBs, and agent-memory tools' },
-    { title: 'OKF export', path: '/okf', note: 'Publish a knowledge base as an Open Knowledge Format repository with knomit-okf' },
-    { title: 'Security & privacy', path: '/security', note: 'Local-first, signed history, encrypted credentials, guarded remotes' },
-    { title: 'Explore a live knowledge base', path: '/explore', note: 'Browse a real KB — facts, refs, history — in the product UI' },
-    { title: 'FAQ', path: '/faq', note: 'Common questions, answered' },
+    { title: 'How knomit works (concepts)', path: '/concepts/', note: 'Facts, ontology, provenance, consensus, temporal graph' },
+    { title: 'Use cases', path: '/use-cases/', note: 'What you can build on a fact-based, git-native KB' },
+    { title: 'Comparison', path: '/compare/', note: 'knomit vs RAG, vector DBs, and agent-memory tools' },
+    { title: 'OKF export', path: '/okf/', note: 'Publish a knowledge base as an Open Knowledge Format repository with knomit-okf' },
+    { title: 'Security & privacy', path: '/security/', note: 'Local-first, signed history, encrypted credentials, guarded remotes' },
+    { title: 'Explore a live knowledge base', path: '/explore/', note: 'Browse a real KB — facts, refs, history — in the product UI' },
+    { title: 'FAQ', path: '/faq/', note: 'Common questions, answered' },
   ];
 
   const docs = (await getCollection('docs')).sort((a, b) =>

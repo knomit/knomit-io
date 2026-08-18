@@ -4,14 +4,22 @@
 // (we keep GitHub here as the single icon link).
 import { GITHUB_URL, DEMO_LIVE } from '../../lib/site';
 
+// Mirrors the marketing header's nav, Docs included: without it the docs pages
+// were the only place on the site whose top nav could not name where you are.
+// `match` exists because Docs points at a specific page (there is no /docs/
+// landing page) but should highlight across the whole section.
 const nav = [
-  { label: 'Concepts', href: '/concepts' },
-  { label: 'Use cases', href: '/use-cases' },
-  { label: 'Compare', href: '/compare' },
-  { label: 'Blog', href: '/blog' },
+  { label: 'Concepts', href: '/concepts/' },
+  { label: 'Use cases', href: '/use-cases/' },
+  { label: 'Compare', href: '/compare/' },
+  { label: 'Docs', href: '/docs/quick-start/', match: '/docs/' },
+  { label: 'Blog', href: '/blog/' },
 ];
 const path = Astro.url.pathname;
-const isActive = (href: string) => path === href || path.startsWith(href + '/');
+// Hrefs are canonical (trailing slash), so a plain prefix test covers both the
+// page itself and everything under it — `href + '/'` would never match.
+const isActive = (item: { href: string; match?: string }) =>
+  path.startsWith(item.match ?? item.href);
 ---
 
 <nav class="docs-topnav" aria-label="Site">
@@ -20,17 +28,17 @@ const isActive = (href: string) => path === href || path.startsWith(href + '/');
       <a
         href={item.href}
         class="docs-topnav__link"
-        aria-current={isActive(item.href) ? 'page' : undefined}
+        aria-current={isActive(item) ? 'page' : undefined}
       >
         {item.label}
       </a>
     ))
   }
-  {DEMO_LIVE && <a href="/explore" class="docs-topnav__link docs-topnav__link--demo">Explore</a>}
+  {DEMO_LIVE && <a href="/explore/" class="docs-topnav__link docs-topnav__link--demo">Explore</a>}
   {/* Download is the site's primary action everywhere else, and Quick start
       and Desktop are exactly the pages a reader decides to install from — so
       its absence here was worst where it mattered most. */}
-  <a href="/download" class="docs-topnav__dl">Download</a>
+  <a href="/download/" class="docs-topnav__dl">Download</a>
   <a href={GITHUB_URL} class="docs-topnav__gh" rel="noopener" aria-label="knomit on GitHub">
     <svg width="18" height="18" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
       <path
