@@ -15,12 +15,12 @@ Use when:
 DON'T use for:
 
 - Partial correction — use `/knomit-update`
-- A stale `src://` ref only — `/knomit-update` to add a fresh ref (note: refs are append-only, so old ones linger)
+- A stale `src://` ref only — `/knomit-update` and resend the refs list with the fresh anchor added and the stale one dropped (refs replace wholesale)
 - Hypothesis that turned out to be wrong AND has a confirming-observation companion — keep the hypothesis retracted *via the dedup-collision lifecycle in knomit_learn*, not by hand
 
 ## How
 
-Call `mcp__knomit__knomit_retract` with:
+Call `knomit_retract` with:
 
 - `file`: the fact path (e.g. `kb/decisions/.../<uuid>.md`)
 - `moment_name`: short label explaining why (e.g. `"synthesize/recipes deleted in 0938d83"`)
