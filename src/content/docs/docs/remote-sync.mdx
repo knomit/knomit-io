@@ -89,9 +89,11 @@ origin gate and host-key pinning above are the others. See
 
 ## The origin record
 
-Set the origin via `knomit.toml` (`[git] origin` / `[remote]`), the
-`KNOMIT_GIT_ORIGIN` + `KNOMIT_REMOTE_*` env vars, or at runtime through the origin
-REST endpoints / the web UI's "Connect Remote" flow. The stored record carries:
+An origin is attached **at runtime** — when the repo is created from a remote
+(below), through the origin REST endpoints, or through the web UI's "Connect
+Remote" flow. There is no config key or environment variable for the URL: config
+holds only the credentials used to reach it (`[remote]` in `knomit.toml`, or the
+`KNOMIT_REMOTE_*` variables). The stored record carries:
 
 | Field | Meaning |
 |-------|---------|
@@ -171,8 +173,7 @@ your own server needs no credentials.
 
 ## Creating a repo from a remote
 
-`KNOMIT_GIT_ORIGIN` seeds the default repo's origin at startup. You can also
-create a repo directly from a remote through the REST API, in one of two modes.
+Create a repo directly from a remote through the REST API, in one of two modes.
 They are the two halves of a single question about the branch you name — *does
 it already carry `.knomit/ontology.yaml`?* — which
 `POST /api/v1/repos:probe-initialized` answers.

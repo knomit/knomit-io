@@ -145,8 +145,17 @@ Renders embedded templates into the current directory. See
 
 Whichever name is used is validated against the server's grammar
 (`[a-z0-9_-]+`) before any file is written, so an invalid value is rejected
-rather than baked into a broken `.mcp.json`. The generated file contains
-`"args": ["--repo", "<name>"]`, or `"args": ["--lens", "<name>"]` in lens mode.
+rather than baked into a broken `.mcp.json`. It is also capped at **27
+characters** — the `mcpServers` key is derived from it as `knomit-repo-<repo>`
+or `knomit-lens-<lens>`, and Claude Code builds tool names as `mcp__<key>__<tool>`
+against a 64-character API limit. A name that would overflow is rejected here
+rather than producing an entry whose tools silently cannot be called.
+
+The generated file contains `"args": ["--repo", "<name>"]`, or
+`"args": ["--lens", "<name>"]` in lens mode, under that derived key. See
+[the `.mcp.json` key](/docs/claude-code/#the-mcpjson-key-is-derived-from-the-scope)
+for why it is no longer the constant `knomit`, and why a project should carry
+only one knomit scope.
 
 ### `knomit-bridge claude hook <event>` — run an editor hook
 

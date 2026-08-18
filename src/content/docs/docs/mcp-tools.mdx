@@ -340,10 +340,24 @@ See [Synthesis & hypotheses](/docs/synthesis/) and [Emergent discovery](/docs/di
 |-------|------|-------|
 | `session_id` | string | Omit to start a new session |
 | `response` | string | JSON decisions for the previous work item |
+| `page` | number | Fetch another page of the **current** item without answering it. Omit when submitting a `response`; paging advances nothing, so pages may be re-fetched freely |
+| `completion_token` | string | Echo back the token from the **final** page of a multi-page item. Required to answer one — see below. Single-page items carry no token |
 | `item_id` | number | Echo back `item.id` from the work item you are answering, so the server can reject a stale answer. Optional and additive — omitting it keeps the old "answer whatever is current" behaviour. It matters because applying a distill item enqueues RAPTOR follow-up items, so the current item can change between render and answer |
 | `effort` | string | `normal` (default) · `medium` · `high` — medium/high engage the bridge discovery engine |
 | `domain` | string[] | Scope filter on the seed pool (empty = whole corpus) |
 | `entities` | string[] | Scope filter on the seed pool |
+
+<Aside type="caution" title="A paged item must be read before it can be answered">
+A work item whose facts exceed one tool result arrives split across pages. If a
+result carries `more_available: true` you have **not** seen the whole item — call
+again with `session_id`, `item_id` and `page` = the next page number until it is
+false, accumulating every page, then answer once using the `completion_token`
+from the final page.
+
+Answering early is **rejected**, not silently accepted on a partial read. The
+item stays available, so the recovery is to page properly and resubmit. See
+[Synthesis](/docs/synthesis/#answering-the-right-work-item) for the byte bounds.
+</Aside>
 
 ### `knomit_hypothesize` — generate predictions
 

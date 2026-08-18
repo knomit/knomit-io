@@ -37,10 +37,21 @@ A response is decoded and validated before the item is claimed, and the claim
 itself is an atomic compare-and-swap, so a failed validation leaves the item
 unanswered and retryable, while a lost claim applies nothing twice.
 
-Distill work items are **chunked** at roughly 64 KiB of marshalled fact JSON per
-item, so a large cluster arrives as several items rather than one oversized
-prompt. Prune clusters are not chunked. The bound is a constant, not a
-configuration knob — there is no setting to tune it.
+Distill work items are **chunked** at roughly 256 KiB of marshalled fact JSON
+per item, so a large cluster arrives as several items rather than one oversized
+prompt. Prune clusters are not chunked.
+
+A single item can still exceed what one tool result should carry, so an
+oversized item is additionally **paged** at roughly 24 KiB of delivered facts
+per page. A result carrying `more_available: true` is a partial view of the
+item: keep calling with `session_id`, `item_id` and the next `page` until it is
+false, then answer once with the `completion_token` from the final page. The
+token is the server's proof you read every page, and a response without it is
+rejected — the item stays available, so you can page properly and resubmit.
+Items that fit in one page carry no token.
+
+Both bounds are constants, not configuration knobs — there is no setting to
+tune either.
 
 <Aside type="note">
 Only **epistemic** facts seed the pipeline — pragmatic facts (policies,

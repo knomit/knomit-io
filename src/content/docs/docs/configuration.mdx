@@ -85,7 +85,7 @@ which is a separate layout:
 <repo>/
 ├── kb/                       # the ontology root — facts live here
 ├── README.md                 # the repo description, read and written by knomit
-├── LICENSE                   # the KB's terms, read-only
+├── LICENSE                   # the KB's terms, read and written by knomit
 └── .knomit/
     ├── ontology.yaml         # the ontology definition
     └── <area>/               # agent-written private state, one dir per area
@@ -167,7 +167,6 @@ batch    = false
 model = "embeddinggemma"
 
 [git]
-origin          = ""            # remote URL for the default repo
 serve           = true          # expose the built-in git smart-HTTP server (mounted at /git on the main port)
 port            = ""            # no separate listener: /git rides the main host:port
 network_timeout = "120s"        # bounds every remote git network op (clone/fetch/push)
@@ -273,7 +272,6 @@ succeeding silently.
 | `KNOMIT_API_KEY` | `llm.api_key` — use the provider's own variable, see below | — |
 | `KNOMIT_LLM_CACHE` | `llm.cache` | `false` |
 | `KNOMIT_LLM_BATCH` | `llm.batch` | `false` |
-| `KNOMIT_GIT_ORIGIN` | `git.origin` | — |
 | `KNOMIT_GIT_SERVE` | `git.serve` | `true` |
 | `KNOMIT_GIT_PORT` | `git.port` — `/git` rides the main port, see below | — |
 | `KNOMIT_GIT_NETWORK_TIMEOUT` | `git.network_timeout` | `120s` |
@@ -346,10 +344,11 @@ These are read by the LLM adapters, not through `knomit.toml`:
 | `KNOMIT_MCP_DEBUG` | `knomit-bridge` | Non-empty → debug logging | — (info) |
 | `KNOMIT_LLM_TRACE` | app wiring | Non-empty → wraps the LLM adapter in a tracing adapter that writes every request/response to this path | — (off) |
 | `ORT_LIB_PATH` | embeddings | ONNX Runtime shared library — the variable the embedder actually reads | — (probes `lib/` next to the binary) |
-| `GRAPHQLITE_LIB_PATH` | store | graphqlite SQLite extension, given **without** the file extension — the driver appends `.so` / `.dylib` / `.dll` | — (probes exe-relative, then source tree) |
 
 <Aside type="note">
-`KNOMIT_PPROF_ADDR` was replaced by the gated **runtime diagnostics port**
+`GRAPHQLITE_LIB_PATH` no longer exists — the GraphQLite dependency was removed
+before v0.5.0 and nothing reads the variable. `KNOMIT_PPROF_ADDR` was likewise
+replaced, by the gated **runtime diagnostics port**
 (`KNOMIT_RUNTIME_ADDR`), which serves pprof, Prometheus `/metrics`, expvar, and
 live process controls together. See [Observability](/docs/observability/).
 </Aside>
