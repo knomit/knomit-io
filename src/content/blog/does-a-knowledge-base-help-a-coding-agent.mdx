@@ -49,7 +49,7 @@ therefore lives upstream, in how facts are written and whether the store can
 be audited. knomit stores facts as plain markdown in git
 ([why that substrate](/blog/git-is-not-storage/)) so agents and humans read
 the same file, and either can verify it against the code — an agent through
-an adversarial audit ([`/knomit-harden`](/docs/claude-code/#the-11-slash-commands)),
+an adversarial audit ([`/knomit-harden`](/docs/claude-code/#the-10-slash-commands)),
 a human with their own two eyes.
 
 ## Caveats first
@@ -295,7 +295,7 @@ it only because the harness forced a conformance check against ground truth.
 - **Authoring contract** (recorded in the corpus itself): invariant facts must
   state operational consequences, name foreseeable misreadings, and reference
   enforcing code.
-- **A hardening pass** ([`/knomit-harden`](/docs/claude-code/#the-11-slash-commands)): an adversarial audit that
+- **A hardening pass** ([`/knomit-harden`](/docs/claude-code/#the-10-slash-commands)): an adversarial audit that
   deliberately compresses each fact to its slogan, derives the consequences a
   hurried consumer would, and verifies those derivations — not the fact —
   against the code.

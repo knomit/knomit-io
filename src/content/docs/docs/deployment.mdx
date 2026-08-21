@@ -71,7 +71,6 @@ The image ships these defaults (set in the `Dockerfile`):
 | `KNOMIT_PORT` | `19278` | Exposed port |
 | `KNOMIT_HOME` | `/data` | Data root — mount a volume here |
 | `ORT_LIB_PATH` | `/opt/knomit/lib/libonnxruntime.so` | Baked ONNX Runtime |
-| `GRAPHQLITE_LIB_PATH` | `/opt/knomit/lib/graphqlite` | Baked SQLite graph extension |
 
 Common additions for a container deployment:
 
@@ -112,13 +111,18 @@ runtime) and, across every surface:
 ```sh
 docker run -d --name knomit-demo \
   -e KNOMIT_READ_ONLY=true \
-  -e KNOMIT_GIT_ORIGIN=https://github.com/your-org/your-kb.git \
   -p 19278:19278 -v knomit-demo:/data \
   knomit:latest
 ```
 
+There is no environment variable for the origin URL: a repo is created from a
+remote through `POST /api/v1/repos` (`mode: "clone"`), and the `[remote]` /
+`KNOMIT_REMOTE_*` settings supply only the **credentials** that call uses. For a
+demo instance, create the repo once against the mounted volume; the origin is
+recorded in `control.db` and survives restarts.
+
 <Aside type="note">
 A read-only instance needs no LLM credentials at all — synthesis is a write path.
-Point it at an origin (`KNOMIT_GIT_ORIGIN`) and it will keep pulling consensus
-from `main` without ever writing back.
+Give its repo an origin and it will keep pulling consensus from `main` without
+ever writing back.
 </Aside>

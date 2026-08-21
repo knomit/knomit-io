@@ -1,14 +1,30 @@
-<!-- knomit:integration -->
+<!-- knomit:integration v3 -->
 ## Working with knomit memory
 
-This project uses knomit as long-term memory. Eleven `/knomit-…` slash commands
+This project uses knomit as long-term memory. Ten `/knomit-…` slash commands
 wrap knomit's MCP tools. Use them in these moments:
 
-**Before non-trivial work** — call `/knomit-recall <area>` before:
-- Editing or writing files under <KNOWN_INVARIANT_PATHS>
+**Before non-trivial work** — call `/knomit-recall <what you are about to
+work on>` before:
+- Editing or writing code in an area you have not already recalled for this session
 - Picking where new code goes
 - Implementing a pattern that may already exist
 - Answering "why does X work this way?"
+- Committing to an explanation of a failure — before you name the cause,
+  not after. Reproducing a bug tells you THAT it happens; the corpus may
+  already say WHY, and may say your reproduction points at the wrong cause.
+- Briefing a subagent on an area — recall for them and put it in the brief,
+  or tell them to recall.
+
+The argument is free text, not a taxonomy term — `/knomit-recall lens write-repo
+resolution` is a valid call. Name a KIND of knowledge as well when you want one:
+`/knomit-recall invariants for internal/fact` scopes the query to the
+`invariants` topic. The kinds are this repo's ontology topics, listed in the
+knomit MCP server instructions; the skill turns the name you type into the
+path filter.
+
+Recall is a habit, not a phase: two recalls at the start of a session do
+not cover the debugging you do an hour later.
 
 After recall returns, VERIFY load-bearing claims (3–5 facts your work
 depends on) against HEAD before building on them. See the skill for the
@@ -46,13 +62,10 @@ compress each to the slogan a hurried reader would take away, derive the
 consequences a consumer would act on, verify those against the code, and
 repair the traps (consequences, named misreadings, enforcing-code refs).
 
-**When an area has zero facts and you're about to work in it** — call
-`/knomit-bootstrap <area>` to seed foundational facts (invariants,
-architecture, conventions, decisions, gotchas). Strict trigger: only first
-time, with a real upcoming work driver.
-
 **Philosophy** — knomit is your colleague's tribal knowledge. Invariants are
 load-bearing; re-read before touching the area they cover. Facts can be
 stale; `/knomit-why` and `/knomit-update`/`/knomit-retract` are how you
 keep the corpus from rotting. When uncertain, `/knomit-recall` — also cheap.
+When you have just measured your way to a confident cause, recall then too:
+that is when the felt gap is gone but the ignorance isn't.
 <!-- /knomit:integration -->

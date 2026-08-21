@@ -1,6 +1,6 @@
 {
   "mcpServers": {
-    "knomit": {
+    "knomit-lens-knomit-website": {
       "command": "knomit-bridge",
       "args": ["--lens", "knomit-website"]
     }

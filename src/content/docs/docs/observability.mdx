@@ -33,6 +33,19 @@ Logging is config-driven (`[log]` in `knomit.toml`, or `KNOMIT_LOG_*` — see
 - **Slow-request log** — any HTTP or MCP request slower than `slow_request_ms`
   (default `1000`) is logged at `WARN`. Set `0` to disable.
 
+  The line **names the request**, not just its route: alongside `route`,
+  `method`, `status` and `elapsed`, it carries `path`, `query`, `req_id`,
+  `repo`/`branch`/`lens`, `remote`, `ua`, and — for MCP — `mcp_session` and
+  `mcp_tool`. That last one matters most: every MCP call arrives on the same
+  route, so without the tool name a slow-MCP warning says only that *something*
+  was slow. Empty fields are omitted, so a plain REST line stays short.
+
+  Every client-supplied field is length-capped, because one unbounded header
+  would otherwise be able to swallow the whole log line. Streaming responses
+  (SSE, MCP streamable HTTP) are excluded outright — they are long-lived by
+  design, so their elapsed time is not a latency signal and would fire a
+  spurious `WARN` on every normal disconnect.
+
 ## Crash safety
 
 These are always on and write under `KNOMIT_HOME` — no port required.
