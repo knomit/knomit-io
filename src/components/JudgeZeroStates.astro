@@ -1,0 +1,135 @@
+---
+/**
+ * Move 5: three states of an unattended judge that all print the same zero.
+ * The top line reports a count and cannot distinguish them; the three below
+ * name the state, which is the discipline the article argues for.
+ *
+ * Text rather than a picture of text — it stays legible at phone width, and
+ * the colours are semantic: green for the healthy state, red for the one
+ * that is actually broken, neutral for the state that is working as designed.
+ */
+interface Props {
+  class?: string;
+}
+const { class: className = '' } = Astro.props;
+
+const states = [
+  {
+    variant: 'idle',
+    name: 'nothing qualified',
+    gloss: 'no pair cleared the bar to be offered at all',
+  },
+  {
+    variant: 'ok',
+    name: 'caught up',
+    gloss: '146 verdicts stored, every current candidate already answered',
+  },
+  {
+    variant: 'broken',
+    name: 'broken',
+    gloss: 'candidates are waiting and the offering path served none of them',
+  },
+] as const;
+---
+
+<figure class={`zeros ${className}`}>
+  <p class="zeros__count">
+    <span class="zeros__label">reports a count</span>
+    <span class="zeros__line">alias pass · 138 candidates · 0 offered</span>
+  </p>
+  <p class="zeros__label zeros__label--list">names the state</p>
+  <ul class="zeros__list">
+    {
+      states.map((s) => (
+        <li class={`zeros__state zeros__state--${s.variant}`}>
+          <span class="zeros__name">{s.name}</span>
+          <span class="zeros__gloss">{s.gloss}</span>
+        </li>
+      ))
+    }
+  </ul>
+  <figcaption class="zeros__caption">
+    Three states print the same zero. A status line that reports the count
+    cannot tell them apart, and only one of them is a fault.
+  </figcaption>
+</figure>
+
+<style>
+  .zeros {
+    margin: 1.75rem 0;
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius);
+    background: var(--k-surface-1);
+    box-shadow: var(--k-shadow);
+    overflow: hidden;
+  }
+  .zeros__count {
+    margin: 0;
+    padding: 1rem 1.15rem 1.05rem;
+    border-bottom: 1px solid var(--k-hairline-soft);
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .zeros__label {
+    font-family: var(--k-font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    /* Surface-1 is one of the two darkest surfaces: muted clears AA here. */
+    color: var(--k-text-muted);
+  }
+  .zeros__line {
+    font-family: var(--k-font-mono);
+    font-size: 0.8rem;
+    color: var(--k-text-2);
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+  .zeros__label--list {
+    margin: 0;
+    padding: 0.95rem 1.15rem 0;
+  }
+  .zeros__list {
+    margin: 0;
+    padding: 0.6rem 1.15rem 1rem;
+    list-style: none;
+    display: grid;
+    gap: 0.7rem;
+  }
+  .zeros__state {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+    border-left: 2px solid var(--k-hairline);
+    padding-left: 0.75rem;
+  }
+  .zeros__name {
+    font-family: var(--k-font-mono);
+    font-size: 0.85rem;
+    color: var(--k-text-2);
+  }
+  .zeros__gloss {
+    font-size: 0.88rem;
+    line-height: 1.5;
+    color: var(--k-text-2);
+  }
+  .zeros__state--ok {
+    border-left-color: var(--k-brand);
+  }
+  .zeros__state--ok .zeros__name {
+    color: var(--k-brand);
+  }
+  .zeros__state--broken {
+    border-left-color: var(--k-retracted);
+  }
+  .zeros__state--broken .zeros__name {
+    color: var(--k-retracted);
+  }
+  .zeros__caption {
+    padding: 0 1.15rem 1.05rem;
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: var(--k-text-muted);
+  }
+</style>

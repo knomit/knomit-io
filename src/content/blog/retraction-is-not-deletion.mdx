@@ -1,0 +1,298 @@
+---
+title: 'Retraction is not deletion: what happens when an agent memory deletes a source'
+description: "Agent-memory products ship add/update/delete as if memory were a CRUD store. But a memory that derives has downstream state resting on what it deletes, and one delete destroys both the record of what was believed and the means of finding what depended on it. What that costs, what Graphiti already fixes, and the two rules a store needs instead: every reference resolves at the commit it was written on, and a retraction may assert falsehood but never that history should leave the corpus."
+seoTitle: "Retraction is not deletion in agent memory"
+seoDescription: "In agent memory, derived knowledge rests on what you delete — and references survive removal. Retraction is a temporal contract, not a CRUD verb."
+pubDate: 2026-08-15
+author: The knomit team
+tags: [knowledge, provenance, agents, retraction, temporal, git]
+faq:
+  - q: "What happens in knomit to facts that cite a retracted fact?"
+    a: "Their references keep resolving — each one pins the cited fact as it stood when the citation was written, and a retracted fact keeps a navigable last-valid version — so the lineage stays walkable. Live reads report the target retracted, which is how consumers detect the staleness and decide: update the depending fact, retract it, or keep it as a dated snapshot. Its weight contribution drops out automatically."
+  - q: "Can you hard-delete from a git-backed memory?"
+    a: "Not without breaking the proof layer. Retraction removes a fact from every default read, and commit-anchored reads report it gone from the retraction onward — but the bytes remain in history, because signed-commit attribution depends on history staying intact. GDPR-style erasure requirements conflict with that design."
+  - q: "Is retraction the same as machine unlearning?"
+    a: "No. Machine unlearning removes a training example's influence from a model's weights. Retraction governs explicit stored knowledge — the fact, its citations, and the derived state resting on it."
+  - q: "What happens to derived summaries when a RAG index deletes a source document?"
+    a: "In most stacks, nothing: the summaries keep serving the deleted document's claims. That is the general form of the problem this article describes, and the reason a delete-shaped API is the wrong contract for any memory that derives."
+draft: false
+---
+
+import RetractionTimeline from '../../components/RetractionTimeline.astro';
+import PinnedRef from '../../components/PinnedRef.astro';
+
+
+What happens to derived knowledge when an AI memory deletes a source?
+Usually nothing — and that is the problem. Any memory that derives —
+summarizes, synthesizes, weights evidence — has downstream state resting on
+the facts it deletes. Delete a source, and the summaries keep serving its
+claims, the citations keep pointing at nothing, and the confidence numbers
+keep counting evidence that was disowned. The current wave of agent-memory
+products ships add/update/delete as if memory were a CRUD store —
+[Mem0](https://mem0.ai), for one, documents a
+[delete-memory endpoint](https://docs.mem0.ai/api-reference/memory/delete-memory)
+with an optional flag that cascades the delete to linked memories. Zep's
+[Graphiti](https://github.com/getzep/graphiti) has published half of the
+correction: "When information changes,
+old facts are invalidated — not deleted." The other half is what the
+knowledge derived from a dead fact is owed, and the shape we think the full
+answer takes: a temporal contract, plus a rule about what a retraction may
+assert.
+
+## Why is deleting a memory not enough?
+
+Because the delete only removes the target. The references pointing at it
+survive, and they keep presenting the absent target as though it were
+still current. Delete a source document from a RAG index and the derived
+summaries that cite it keep serving its claims; drop a node from a
+knowledge graph and the community summaries built over it keep telling its
+story until something regenerates them.
+
+The failure has a direction. Outbound references are visible: read a fact
+and you see what it cites. Inbound references are not: nothing on the
+target lists what rests on it, and a delete-based store keeps no
+instrument for that question. So the deleter cannot see what the delete
+will orphan — and after the delete, nobody can, because the target that
+would anchor the question no longer exists. One operation destroys two
+things at once: the record of what was believed, and the means of finding
+out what depended on it. No cleanup pass bolted on afterward can recover
+either; the fix has to be a property of how references are written in the
+first place.
+
+## Why is "is it there?" two questions in a temporal store?
+
+[knomit](https://knomit.io)
+([github.com/knomit/knomit](https://github.com/knomit/knomit)) is a
+git-backed knowledge base for AI agents, and its store answers "is this
+fact there?" with two named predicates, because in a store with retraction
+it is two different questions. `FactLiveAtCommit` answers "is this fact
+present — un-retracted — as of commit X". `FactExistsAt` answers "what is
+the last navigable version at or before X", stepping over retractions on
+the way. Both read the same index. In a store without deletion the two
+agree everywhere, which is why single-predicate designs feel complete;
+with retraction they disagree exactly where it matters, and each has
+surfaces where it is the right question. The write-side reference gate
+deliberately asks `FactExistsAt`, because a reference to a retracted fact
+is still navigable and must validate; a liveness check must ask
+`FactLiveAtCommit`, or it steps over the very retraction it exists to
+report. The question decides the instrument, and a deletion-aware store needs both
+questions as named API surface, not one predicate doing double duty.
+
+<RetractionTimeline />
+
+## How does Graphiti's invalidation model compare?
+
+Zep's [Graphiti](https://github.com/getzep/graphiti) is the closest
+published cousin, and its README already states the storage half of the
+position: "Facts have validity windows. When information changes, old
+facts are invalidated — not deleted." Edges carry "temporal validity
+windows" under "explicit bi-temporal tracking with automatic fact
+invalidation", and the query layer can answer both of the previous
+section's questions: "Query what's true now, or what was true at any point
+in time." Lineage runs backward from derived facts: "Every entity and
+relationship traces back to the episodes (raw data) that produced it."
+The team's paper — Rasmussen et al.,
+[*Zep: A Temporal Knowledge Graph Architecture for Agent Memory*](https://arxiv.org/abs/2501.13956)
+(arXiv 2501.13956) — gives the mechanism: "When the system identifies
+temporally overlapping contradictions, it invalidates the affected edges
+by setting their t_invalid to the t_valid of the invalidating edge."
+
+That is the storage half of the contract, published and shipped. What we
+could not find, in the README or the paper, is the forward direction: what
+the artifacts derived from an invalidated edge — entity summaries,
+community summaries, anything weighted over it — owe the invalidation. The
+lineage that is documented traces derived facts back to sources;
+propagating an invalidation forward to what was derived is not addressed
+in the material we reviewed.
+
+So what follows adds four things to the published position: references
+that pin their moment in time, making staleness detectable by
+construction; commit-anchored reproducibility of the whole evidence chain,
+with signed commits as the proof layer; the rule that retraction asserts
+falsehood, never supersession; and the two-questions discipline as named
+API surface.
+
+This is also not machine unlearning. Unlearning removes a training
+example's influence from a model's weights; retraction governs a store of
+explicit knowledge.
+
+## What does retraction as a temporal contract look like?
+
+knomit's substrate is [git](https://git-scm.com): every fact is a file,
+every write is a signed commit attributable to the agent that made it, and
+history is the temporal model rather than a timestamp column.
+
+The contract's first clause, as the store's own documentation states it:
+"Every ref, edge, and provenance link resolves at the commit point in time
+of the referrer — never at HEAD." The designer principle behind it: "the
+graph is a record of what was believed and when. Resolving against HEAD
+would silently rewrite history — a synthesis that cited three observations
+in 2024 would suddenly cite their 2026 revisions, breaking the evidence
+chain and making 'why is this true?' non-reproducible." The rule is
+enforced in structure, not convention. Every write path routes through a
+single reference gate — "a ref cannot be laundered past the check by
+choosing a different API" — which checks each reference once, against the
+commit the write lands on; references a fact already carried are never
+re-litigated, because they resolved at their commit and that is, in the
+doc's words, "a fact about the past, not a claim about now." Derivation
+edges are written by the store after the commit lands, immutable, both
+endpoints pinned to their commits, with no public add-edge API to bypass
+that. And edges are never deleted on retraction — removing them would
+erase the lineage rail.
+
+This buys back exactly what the delete-based store destroyed. A citation
+to a fact that was later retracted is not a dangling pointer; it is a
+permanently resolvable historical statement — when I was written, I rested
+on this, as it stood then — and it keeps resolving, because a retracted
+target still has a navigable last-valid version. At the same time, the
+target's current state is one query away. A consumer holding a fact holds
+both ends of every reference: what was believed then, and what the corpus
+says now. Comparing them is how staleness stops being silent decay and
+becomes a detectable condition — this fact rests on something since
+retracted or superseded — that the consumer can act on: update the
+depending fact, retract it too, or keep it as a correctly-dated snapshot.
+The lineage is provable, every link of it a signed commit.
+
+<PinnedRef />
+
+Retracted still means gone by default. A commit-anchored read of a
+retracted fact answers 404 from the retraction onward: absence is an
+answer, and the default read gives it honestly. The escape hatch is
+explicit — a fallback parameter that steps over the deletion to the last
+valid version and serves it together with its edges, labeled as exactly
+that. The inbound direction is enumerable too: the store lists a fact's
+inbound citations as of any commit, so a retractor sees everything
+resting on a fact before acting.
+
+And a retracted source stops corroborating, without anyone rewriting its
+citers. Three separate mechanisms produce this. Consolidation merges — the
+operation [consensus by merge](/blog/consensus-by-merge/) describes —
+compute their pooled evidence weight before deleting their sources (the
+code's own doc line: "Must be called before the source facts are
+deleted"), so a synthesis keeps the evidence it absorbed. The recursive
+evidence walk treats a reference it cannot resolve as contributing
+nothing, falling back to the fact's own mass. And the read side drops
+self-references and non-local references before any weight math runs. The
+net effect: a citation to a retracted source still displays — the reader
+sees the history — but it stops counting.
+
+## Who should be allowed to retract — the pipeline or a human?
+
+Depends on what the retraction asserts. knomit runs LLM judges over its
+corpora in review sessions — they merge duplicates, distill clusters,
+adjust confidence, and retract
+([the judge that gates merges](/blog/unattended-llm-judges/) is its own
+article). The review prompt instructs the judge: "If the BODY is wrong,
+correct the body or retract — do not quietly lower confidence and leave
+the wrong words standing." A falsified hypothesis is retracted the same
+way. What the judge may never retract is history. The same prompt: "Do
+not retract a correctly-dated snapshot merely because a newer fact has
+overtaken it. A fact that was true as of its date and says so is history,
+not error; retracting it deletes the trail that makes the later
+correction legible. Supersession is recorded by the newer fact existing,
+not by erasing the older one."
+
+So the split is not pipeline-versus-human by verb; it is what the verb is
+allowed to assert. "This fact is false" — a wrong body, a failed
+conjecture — is a verdict the judge may reach and act on. Retiring a fact
+that was true and has merely been overtaken asserts something else: that
+history should leave the corpus. The prompt forbids the judge that call;
+making it is left to a human, through an explicit retract.
+
+Supersession by addition leaves both statements standing — the older as a
+correctly-dated snapshot, the newer as the current claim — and everything
+built on the older fact keeps resolving. Correction in place is versioned
+the same way: a revision is a new version and the old one stays
+navigable, so the provenance walk can tell a dependent fact when its
+ground has moved — a source that is still live but newer than the version
+the referrer reasoned over comes back flagged as superseded — and the
+facts built on the old statement can be re-analyzed against the new one.
+One narrow case writes the lineage link itself: an incoming observation
+that subsumes a hypothesis cites the conjecture as lineage and retracts
+it in the same commit, so even there the trail to what was overtaken
+survives. In a store without history, an edit in place or a delete would
+orphan the entire dependent layer; addition and versioned revision hand
+it an upgrade path.
+
+Between them, the two prompt rules split the CRUD verb into three: merge,
+for duplicates; supersede, by addition — the newer fact simply exists;
+retract, for falsehood and never for being overtaken. Deletion in the
+storage sense appears in none of them.
+
+## What this does not solve
+
+1. **Detection is mechanical; revision is a judgment.** The store tells a
+   consumer that a dependency was retracted; it does not decide what that
+   means for the fact depending on it — update it, retract it too, or
+   keep it as a correctly-dated snapshot. That decision runs at review
+   time, by whoever holds the context. An automated pass that enumerates
+   a retraction's inbound citations and queues them for review could take
+   a larger share of this in the future.
+2. **True deletion is hard on this substrate.** Git history is immutable
+   by design, and the proof layer — signed, attributable commits — rests
+   on that immutability. Retraction hides content from every default
+   read; it does not destroy bytes. Purging bytes means rewriting
+   history, which breaks the commit chain the attribution depends on. An
+   erasure obligation in the sense of
+   [GDPR Article 17](https://gdpr-info.eu/art-17-gdpr/) ("right to
+   erasure ('right to be forgotten')") conflicts with that design, and
+   knomit chose the proof layer. A reader with erasure-shaped
+   requirements should know this trade before adopting any git-backed
+   memory.
+3. **The weight behavior is a property, not a feature toggle.** A
+   retracted source stops counting because three independent rules
+   compose that way. If you need a guarantee with that name — a single
+   audited gate excluding retracted evidence — that is a feature to
+   build, in knomit or in your own stack, not something to assume from
+   this description.
+
+Deletion is an answer about storage; retraction is an answer about
+belief. A memory that only stores can get away with the first. A memory
+that derives needs the second — a temporal contract, so that what was
+believed and when stays resolvable and provable, and a retraction that
+asserts falsehood and never erases what was merely overtaken, with every
+reference still resolving where history left it.
+
+## FAQ
+
+**What happens in knomit to facts that cite a retracted fact?**
+Their references keep resolving — each one pins the cited fact as it
+stood when the citation was written, and a retracted fact keeps a
+navigable last-valid version — so the lineage stays walkable. Live reads
+report the target retracted, which is how consumers detect the staleness
+and decide: update the depending fact, retract it, or keep it as a dated
+snapshot. Its weight contribution drops out automatically.
+
+**Can you hard-delete from a git-backed memory?**
+Not without breaking the proof layer. Retraction removes a fact from
+every default read, and commit-anchored reads report it gone from the
+retraction onward — but the bytes remain in history, because signed-commit
+attribution depends on history staying intact. GDPR-style erasure
+requirements conflict with that design.
+
+**Is retraction the same as machine unlearning?**
+No. Machine unlearning removes a training example's influence from a
+model's weights. Retraction governs explicit stored knowledge — the fact,
+its citations, and the derived state resting on it.
+
+**What happens to derived summaries when a RAG index deletes a source
+document?**
+In most stacks, nothing: the summaries keep serving the deleted
+document's claims. That is the general form of the problem this article
+describes, and the reason a delete-shaped API is the wrong contract for
+any memory that derives.
+
+## References
+
+- Zep — *Graphiti* (temporal knowledge graph engine) —
+  https://github.com/getzep/graphiti — https://www.getzep.com
+- Preston Rasmussen, Pavlo Paliychuk, Travis Beauvais, Jack Ryan, and
+  Daniel Chalef (Zep) — *Zep: A Temporal Knowledge Graph Architecture for
+  Agent Memory* — arXiv 2501.13956 — https://arxiv.org/abs/2501.13956
+- Mem0 — *Delete Memory* (API reference) —
+  https://docs.mem0.ai/api-reference/memory/delete-memory —
+  https://mem0.ai
+- GDPR Article 17 — *Right to erasure ('right to be forgotten')* —
+  https://gdpr-info.eu/art-17-gdpr/
+- git — https://git-scm.com
+- knomit — https://knomit.io — https://github.com/knomit/knomit

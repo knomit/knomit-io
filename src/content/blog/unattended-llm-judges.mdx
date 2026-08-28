@@ -1,0 +1,442 @@
+---
+title: 'LLM-as-a-judge in production: what changes when the judge runs unattended'
+description: "The published LLM-judge discipline — a calibration set, an expert to agree with, a dashboard someone reads — assumes a person nearby and a run that ends. knomit's judges run unattended in every maintenance pass, and their verdicts act: they merge and retract facts. Six things the nearby human used to provide have to be engineered into the judge itself."
+seoTitle: 'Unattended LLM-as-a-judge in production'
+seoDescription: 'The LLM-judge playbook assumes a human nearby and a bounded run. Six design moves for judges that run unattended, forever — with the shipped code.'
+pubDate: 2026-08-28
+author: The knomit team
+tags: [evaluation, llm-as-judge, agents, knowledge, dogfooding]
+faq:
+  - q: >-
+      Do these judges cancel position bias?
+    a: >-
+      No. The standard fix — judge each pair twice, once in each order, and
+      treat a split answer as a tie — is not implemented, and whether order
+      changes the alias judge's answers has never been tested; the test is
+      cheap and we have not run it. Two mitigating facts: the judge answers
+      "are these the same?" rather than "which is better?", and when order
+      does nudge an answer, the default-to-different bias usually turns the
+      nudge into the recoverable mistake (two names kept separate) rather than
+      a false merge.
+  - q: >-
+      How are the judges calibrated against a human expert?
+    a: >-
+      They are not, by the published standard — nobody has measured how often
+      their verdicts match a human's. Human judgment got in by a one-time
+      route instead: a person worked through the whole corpus ruling case by
+      case, and those rulings were written into the judges' prompts as rules.
+      The design limits how much damage a wrong-leaning judge can do; it does
+      not measure how wrong the judge is.
+  - q: >-
+      Is the outcome-funded throttle novel?
+    a: >-
+      The components are published: AWS's adaptive retries refill a token
+      bucket from successes, Martin Fowler's circuit breaker probes recovery
+      from its half-open state, and allocating a fixed judge budget across
+      pairs is published too. The composition — a judge budget funded by
+      whether past verdicts resolved anything, where success means a pair
+      resolved and a probe counts only once it actually reached the judge — is
+      not something we have found published.
+draft: false
+---
+
+import JudgeThrottle from '../../components/JudgeThrottle.astro';
+import JudgeZeroStates from '../../components/JudgeZeroStates.astro';
+
+What changes when an LLM judge runs in production forever, instead of inside
+a bounded eval? Six things a nearby human quietly provides have to be
+engineered into the judge itself:
+
+- the evidence it reads
+- the default it falls back on
+- the budget that funds its attention
+- the memory of what it already answered
+- the status line that tells a caught-up judge from a broken one
+- the storage class of its verdicts
+
+The published judge discipline — a
+calibration set, an expert to agree with, a dashboard someone reads — is an
+eval-phase discipline: it assumes a person nearby and a run that ends.
+[knomit](https://knomit.io)
+([github.com/knomit/knomit](https://github.com/knomit/knomit)) is a
+git-backed knowledge base written and maintained by AI agents. Its judges
+run unattended in every review session — knomit's periodic maintenance
+run — and their verdicts act: they merge and retract facts.
+Each of the six moves below fixes one specific thing that goes wrong when
+the judge keeps running and nobody is there to catch it.
+
+## What is critique shadowing?
+
+Hamel Husain's guide, [*Using LLM-as-a-Judge For Evaluation: A Complete
+Guide*](https://hamel.dev/blog/posts/llm-judge/) (October 2024), names its
+central technique critique shadowing: one principal domain expert — not a
+committee — grades real examples pass/fail and writes a critique with each
+verdict, "detailed enough so that you can use it in a few-shot prompt for
+a LLM judge."
+Agreement is measured as precision and recall, not raw agreement — "using
+raw agreement is generally not recommended and can be misleading when
+classes are imbalanced. Instead, you should typically measure precision and
+recall separately" — and the method's standing warning is "you can never
+completely eliminate looking at your data!"
+
+Hamel is explicit that the work recurs: "This process never truly ends. It
+repeats periodically or when material changes occur." Each repetition is a
+human returning to look. Between repetitions, the judge is alone, and the
+method has no machinery for that stretch.
+
+Eugene Yan's [*Patterns for Building LLM-based Systems &
+Products*](https://eugeneyan.com/writing/llm-patterns/) catalogues what
+judges get wrong, drawing on Zheng et al.'s *Judging LLM-as-a-Judge with
+MT-Bench and Chatbot Arena* (arXiv 2306.05685, NeurIPS 2023). Position
+bias has a standard fix: evaluate each pair twice with the order swapped;
+a response preferred in both orders wins, anything else scores as a tie. Verbosity bias — judges "tend
+to favor longer, wordier responses over more concise ones, even if the
+latter is clearer and of higher quality." Self-preference: "GPT-4 favors
+itself with a 10% higher win rate while Claude-v1 favors itself with a 25%
+higher win rate" — 2023-era magnitudes; the direction has aged better than
+the sizes. And the agreement ceiling: "Under the single answer grading
+paradigm, GPT-4 had higher agreement with humans (85%) than the humans had
+amongst themselves (81%)" — the honest bar for a judge is human-to-human
+agreement, not perfection.
+
+## What breaks when nobody is watching?
+
+The closest the published discipline comes to unattended operation is
+online evaluation. LangChain's [LangSmith evaluation-concepts
+documentation](https://docs.langchain.com/langsmith/evaluation-concepts)
+draws the line: "Reference-based evaluators require reference outputs and
+only work for offline evaluation," so production monitoring runs on
+reference-free evaluators designed for it. But an online evaluator
+watches: its output is a score a human acts on.
+
+knomit stores its knowledge as a corpus of facts, and its judges act. In
+every review session, an alias judge decides whether two motif spellings
+name the same mechanism — a **motif** is a short, deliberately
+subject-free tag naming the general regularity a fact is an instance of,
+like `penalty-blocks-own-recovery`. Prune judges decide whether two facts
+are one. A discovery judge decides whether a group of related facts entails
+a new fact worth writing. No expert grades a verdict before it takes
+effect, and a wrong merge of two motif names is irreversible: afterward,
+nothing downstream can tell it happened.
+
+That difference — acting instead of watching, forever instead of for a
+run — is what the six moves answer: each one replaces something the
+nearby human used to provide.
+
+## Move 1: show the judge evidence, not names
+
+The alias judge decides whether two motif spellings name one mechanism,
+and the names alone are not enough to decide it. The calibration
+experiment behind this design planted six mechanism pairs among
+distractor facts — one pair an adversarial trap — across 72 test corpora
+and four models. Exact and stemmed string
+matching recovered 8% of the true pairs with zero false merges. An
+embedding threshold recovered 22%, with three false pairs. LLM clustering
+over the names alone did best at 53% — but produced seven false merges,
+and the failure mode was always the same: two names read as synonyms
+while the facts behind them describe different mechanisms. The trap pair
+was planted exactly that way — synonym-looking names, different
+mechanisms — and the clustering that saw only the names merged it.
+
+So the shipped pass splits the work: embedding similarity only selects
+which candidates get shown to the judge, and the merge decision is the
+judge's alone — "It decides what the judge LOOKS AT; the judge decides
+what merges," as the comment in the alias pass puts it. And the judge is
+not shown names — it is shown up to four titles of the facts that carry
+each motif, under a prompt that opens:
+
+> READ THE CARRIER TITLES. They are the evidence, and the names alone are
+> not. Two names can read as synonyms while their carriers describe visibly
+> different mechanisms, and that is the single most common way this task
+> goes wrong.
+
+An unattended judge must be handed what the expert would have walked over
+to check. Hamel's expert reads the trace; the alias judge reads the
+carriers.
+
+## Move 2: set the default by which error is irreversible
+
+The published pairwise discipline uses ties to absorb noise. knomit's
+judges are biased on purpose instead, and each bias is chosen by asking
+one question: which error can the system later detect and undo? The alias
+judge's prompt:
+
+> DEFAULT TO 'different'. Merge only when you can state, in one sentence,
+> the mechanism both names describe… There is no cost to leaving two names
+> separate: a later pass will see them again if evidence accumulates. There
+> is a real cost to merging two mechanisms that are not the same, because
+> nothing downstream can tell it happened.
+
+The discovery judge's prompt has the same shape — "DECISION RULE — DEFAULT
+TO NO… Skipping is the expected outcome" — and so does the rule for
+deciding whether a rediscovered claim equals an existing fact: "PROPOSE AND
+LINK instead of reinforcing: a false link is recoverable, a false merge is
+not."
+
+A missed merge costs a duplicate slot until the next session; a false
+merge becomes evidence in later decisions that cannot be undone. With
+nobody present to catch the second kind, the prior carries the asymmetry.
+
+## Move 3: how do you budget an LLM judge that runs forever?
+
+An eval run's budget is a config value, spent once. A permanent judge's
+attention is a recurring spend. knomit's restatement pass — which shortlists pairs of facts suspected of
+saying one thing in two ways and offers them to a judge — decides how many
+pairs it may offer the judge next by how often its recent verdicts
+*resolved* something. This throttle has four states: `optimistic` (no verdicts yet — a
+cap bounds the downside), `funded` (the judge resolved a pair recently),
+`unproven` (judged, nothing resolved, too little evidence to defund), and
+`defunded` (enough verdicts, none resolved: stop spending).
+
+What counts as "resolved" was itself a design decision. A judge shown a
+suspected duplicate pair can consolidate it two ways: merge the two
+facts, or keep one and retract the redundant other. Both end with one
+fact instead of two, which is the outcome the whole pass spends its judge
+slots to get — so counting only merges was rejected. It would score a
+retraction as zero and, in the decision record's words, make that working
+judge "INDISTINGUISHABLE from 'the shortlist finds nothing', so the
+failure is silent and self-confirming."
+
+Defunding creates its own failure: a defunded pass offers the judge
+nothing, so it gets no verdicts, and without verdicts the rule that
+restores funding — a resolution happened — can never fire. The throttle's
+code comment calls this state a latch. The escape is a probe: even
+defunded, the pass still offers one pair on a fixed interval, so the
+restore rule has evidence to read.
+
+<JudgeThrottle />
+
+The components of this design are published. AWS's Builders' Library
+describes adaptive retries where a token bucket is refilled by successes
+([*Timeouts, retries, and backoff with
+jitter*](https://builder.aws.com/content/3EumjoZascWd1oZiEgL8ORlv3qE/timeouts-retries-and-backoff-with-jitter)),
+and the half-open state of
+Martin Fowler's [Circuit
+Breaker](https://martinfowler.com/bliki/CircuitBreaker.html) is the probe
+pattern's ancestor: a trial call let through to test whether the failing
+thing recovered. The LLM-evaluation literature has budget work too — Saha, Wagde and
+Kveton's [*LLM-as-Judge on a Budget*](https://arxiv.org/abs/2602.15481)
+(arXiv 2602.15481, 2026) allocates a fixed budget optimally across pairs. What we have not found published is
+the composition: a budget that the judge's own verdicts fund, where a
+verdict counts as a success because it resolved a pair — not because an
+API call returned. It is a circuit breaker for judge attention, with one
+twist: an ordinary breaker trips when calls start failing, and this one
+trips when the verdicts keep arriving but change nothing — pair after
+pair judged, nothing merged, nothing retracted.
+
+The composition needed its own auditing, twice. One audit found the
+probe's slot was spent when a pair was *selected*, not when it was
+*served*: a probe whose pair never actually reached the judge still
+counted as used, so the corpus stayed silent for another full interval —
+the latch rebuilt inside the very mechanism written to prevent it. Another
+found that the route for structurally obvious duplicates — two facts at
+the same path, for instance — sat behind a minimum budget that a defunded
+throttle never grants: a second latch. Both are fixed; the corpus
+record states the portable lesson: "the existence of a recovery CONDITION is not the
+existence of a recovery PATH. Ask what generates the evidence the
+condition reads, and whether the off-state still generates it."
+
+## Move 4: why must a judge remember its own rejections?
+
+An eval run has no memory problem because it ends. A permanent judge sees
+the same candidates again every session, and the expensive answers are the
+rejections. The alias pass stores every verdict, and its schema comment
+says why both directions matter:
+
+> Both answers are recorded, and that symmetry is the point. Storing only
+> merges leaves the pass half incremental: the YES answers get cheap while
+> the NO answers are re-litigated every session, so a stable corpus spends
+> its entire budget re-asking questions it already has answers to.
+
+A stored "no" cannot bind forever, though. The judge answered the
+question as the two motifs stood that day; when a new fact or spelling
+joins one side, what that name covers has shifted, and two motifs that
+were honestly different last month can genuinely be the same mechanism
+now. So each verdict is stored with a fingerprint of what each side
+contained at judging time — when the membership changes, the fingerprint
+stops matching, the stored answer stops applying, and the pair becomes
+askable again. Expiry falls out of the keying by itself: no timestamp to
+check, no staleness scan, no cleanup job that could silently stop
+running. The restatement pass gets the same property from
+content-addressed fact ids: "the judge kept this pair" expires the moment
+either fact is edited.
+
+## Move 5: zero verdicts — caught up, or broken?
+
+A healthy unattended judge converges to nothing-to-judge. That is the
+steady state of success, and it is numerically identical to the judge
+being dead.
+
+knomit hit this ambiguity live. A status line (the one-line report each
+pass prints about its own run) showed 138 alias candidates and 0 offered
+across 178 sessions, which read as a stalled offering path —
+until measurement showed the pass was working: 146 verdicts stored, a
+recent merge among them, and nearly all current candidates already
+answered. Zero offered meant caught up. The fix flipped from "unblock the
+offering path" to "make the status line say which zero this is," and an
+earlier acceptance test requiring offered > 0 was dropped as wrong — it
+had encoded the eval-phase assumption that a working judge always has work.
+(These figures are from the incident record of one live corpus, not a
+benchmark.)
+
+<JudgeZeroStates />
+
+The resulting discipline is a status line that names the state instead of
+reporting a count. One shipped example comes from bridging — the machinery
+that connects facts from unrelated areas of the corpus. Bridges built on a
+shared name alone no longer qualify, and the surfaces that used to serve
+them print, in their place: "Zero entity bridges here is the designed
+state, not a stall." Monitoring built for eval-phase judges alarms on silence.
+Monitoring for permanent judges has to distinguish three silences:
+nothing qualified, everything already answered, and the mechanism is
+broken.
+
+## Move 6: which verdicts did you pay for?
+
+An eval run's verdicts die with the report. A permanent judge's verdicts
+are state, and knomit classifies that state into two storage classes,
+stated in the schemas. The alias table is one class: "DERIVED STATE…
+Dropping every row and rebuilding reproduces the mechanical layer
+exactly." The verdict table is the other: "A durable DECISION table,
+not a derivation… Recomputing it would make every review session re-judge
+the whole vocabulary… Persisting makes the pass INCREMENTAL: only
+vocabulary it has not seen costs a slot."
+
+Which class a table belongs to comes down to one question: if these rows
+were deleted, could the system recompute them, or were they bought? The
+alias table can be recomputed — the same mechanical rules would produce
+the same rows. A judge's verdict cannot: model, prompt, and corpus have
+all moved since it was made, so running the judge again doesn't recompute
+the old answer, it buys a new one. Misclassify in either direction and
+you pay — treat verdicts as recomputable and every session re-buys
+answers the system already owns; treat rebuildable rows as precious and
+you maintain by hand what a rebuild would restore for free.
+
+knomit chose the re-buying cost once, deliberately. A one-time backfill
+pass had offered motifs for the facts that predate the motif field,
+recording a negative judgment for each fact that carried no regularity.
+When the pass was removed — one-off work that had wrongly been built as
+permanent machinery — its table of stored no's went with it. The migration that dropped the table states
+what was given up: "if a backfill-shaped pass is ever reintroduced, this
+history is gone and it will re-offer facts a human already declined."
+
+The classification also names a limit: the verdict tables live in a local
+sqlite database tied to the agent's git branch, not in the git history
+itself. The fact changes verdicts produce — merges, retractions — are
+durable git commits, but the verdicts are lost when that database is lost
+or the agent starts on a fresh branch, and the system re-buys judgments
+in exactly the case its own design says it shouldn't.
+
+## What this does not solve
+
+1. **There is no ongoing human-expert calibration loop.** By Hamel's own
+   standard — "measure precision and recall separately" — these judges are
+   uncalibrated: nobody has ever measured, for any of them, how often the
+   judge's verdict matches a human expert's. Human judgment did get in,
+   but by a one-time route: a person worked through the entire corpus in a
+   guided judging campaign, ruling case by case — what counts as a
+   mechanism, when two facts must stay separate — and those rulings were
+   written into the judges' prompts as rules. The experiments behind the
+   design, like the planted-pairs one in Move 1, were built to disprove
+   design choices, not to score judge-against-human agreement. So the six
+   moves limit how much damage a wrong-leaning judge can do; nothing
+   measures how wrong it leans.
+2. **The guardrails needed the same auditing as the judges.** The
+   throttle's probe and its structural-duplicates route both reintroduced
+   the latch they were built to prevent (Move 3). A rule stated in a
+   comment is not a rule the code implements — the safety mechanisms of
+   unattended machinery drift exactly like the machinery.
+3. **No cancellation of position bias.** The standard fix — show the
+   judge each pair twice, once in each order, and treat a split answer as
+   a tie — is not implemented, and whether the alias judge answers
+   differently when shown (A, B) instead of (B, A) has never been tested
+   here. Two things soften this: the judge answers "are these the same?"
+   rather than "which is better?", the setting where position bias was
+   measured; and when order does nudge an answer, the default-to-different
+   bias means the nudge usually produces the recoverable mistake — two
+   names kept separate — rather than a false merge. Still, the swap test
+   is cheap and we have not run it.
+4. **Self-preference and verbosity biases are unexamined.** Multiple
+   models wrote the corpus, and whether a judge favors its own family's
+   phrasings, or longer fact bodies, has not been measured here. Once a
+   merge is decided, which fact survives is settled by fixed rules —
+   higher confidence, then more sources — so no bias enters there. But
+   the decision to merge at all is the judge's, and that is where these
+   biases would act.
+5. **The patience budgets are hand-set.** The throttle's window, minimum
+   verdict count, and probe interval are declared in the code as "PATIENCE
+   BUDGETS, trading wasted judge slots against how fast a corpus can
+   change its own mind" — labeled honestly as budgets, but no measurement
+   selected their values.
+6. **Verdict durability is incomplete** (Move 6): the stored verdicts
+   live outside git, so a lost database or a fresh branch means paying
+   for them all again.
+
+Where the shipped judges do align with the published discipline, the
+alignment is Hamel's: verdicts are binary (same/different, keep/merge,
+propose/skip), and a merge verdict must carry a written rationale — the
+system refuses to record a merge without one, and later maintenance
+passes re-read the rationale when deciding whether the merge should
+stand. Critique shadowing has the expert
+write critiques to teach the judge. Here the judge writes the critique for
+the future maintainer, because at verdict time there is no one else to
+write it.
+
+The published discipline teaches how to build a judge you can trust while
+you watch it. Permanence means designing for the day nobody watches: hand
+the judge the expert's evidence, give it the survivable default, fund its
+budget from its own outcomes, keep its memory of what it already answered,
+give it a status line that can say "done" — and know which of its words
+you paid for.
+
+How these verdicts feed the merge machinery is the subject of [consensus
+by merge](/blog/consensus-by-merge/); how the judges' own guardrails get
+adversarially verified is the subject of sabotage the
+test.
+
+## FAQ
+
+**Do these judges cancel position bias?**
+No. The standard fix — judge each pair twice, once in each order, and
+treat a split answer as a tie — is not implemented, and whether order
+changes the alias judge's answers has never been tested; the test is
+cheap and we have not run it. Two mitigating facts: the judge answers
+"are these the same?" rather than "which is better?", and when order
+does nudge an answer, the default-to-different bias usually turns the
+nudge into the recoverable mistake (two names kept separate) rather
+than a false merge.
+
+**How are the judges calibrated against a human expert?**
+They are not, by the published standard — nobody has measured how often
+their verdicts match a human's. Human judgment got in by a one-time
+route instead: a person worked through the whole corpus ruling case by
+case, and those rulings were written into the judges' prompts as rules.
+The design limits how much damage a wrong-leaning judge can do; it does
+not measure how wrong the judge is.
+
+**Is the outcome-funded throttle novel?**
+The components are published: AWS's adaptive retries refill a token bucket
+from successes, Martin Fowler's circuit breaker probes recovery from its
+half-open state, and allocating a fixed judge budget across pairs is
+published too. The composition — a judge budget funded by whether past verdicts
+resolved anything, where success means a pair resolved and a probe counts
+only once it actually reached the judge — is not something we have found
+published.
+
+## References
+
+- Hamel Husain — *Using LLM-as-a-Judge For Evaluation: A Complete Guide* —
+  October 2024 — https://hamel.dev/blog/posts/llm-judge/
+- Eugene Yan — *Patterns for Building LLM-based Systems & Products* — 2023 —
+  https://eugeneyan.com/writing/llm-patterns/
+- Lianmin Zheng et al. — *Judging LLM-as-a-Judge with MT-Bench and Chatbot
+  Arena* — NeurIPS 2023 — https://arxiv.org/abs/2306.05685 (cited via Yan)
+- LangChain — *LangSmith documentation: Evaluation concepts* —
+  https://docs.langchain.com/langsmith/evaluation-concepts
+- AWS Builders' Library — *Timeouts, retries, and backoff with jitter* —
+  https://builder.aws.com/content/3EumjoZascWd1oZiEgL8ORlv3qE/timeouts-retries-and-backoff-with-jitter
+- Martin Fowler — *Circuit Breaker* — March 2014 —
+  https://martinfowler.com/bliki/CircuitBreaker.html
+- Aadirupa Saha, Aniket Wagde, and Branislav Kveton — *LLM-as-Judge on a
+  Budget* — 2026 — https://arxiv.org/abs/2602.15481
+- knomit — https://knomit.io — https://github.com/knomit/knomit

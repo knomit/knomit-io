@@ -1,0 +1,151 @@
+---
+/**
+ * "Is this fact there?" asked at one commit, answered two ways.
+ *
+ * One fact's history runs along the top: written, revised, retracted. Both
+ * lanes below ask about that fact as of the same later commit — the live
+ * predicate stops at the retraction, the navigable one steps over it and
+ * returns the last version before it. Hashes and paths are placeholders.
+ */
+interface Props {
+  class?: string;
+}
+const { class: className = '' } = Astro.props;
+
+const nodes = [
+  { x: 70, hash: 'a1b2c3d', label: 'written' },
+  { x: 190, hash: 'b2c3d4e', label: 'revised' },
+  { x: 310, hash: 'c3d4e5f', label: 'retracted' },
+];
+---
+
+<figure class={`k-reveal retract-tl ${className}`}>
+  <svg
+    viewBox="0 0 420 296"
+    role="img"
+    aria-label="Asked about the same fact at the same commit, FactLiveAtCommit reports it retracted while FactExistsAt steps over the retraction and returns the last version before it."
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <!-- the fact's history -->
+    <line x1="30" y1="70" x2="404" y2="70" stroke="var(--k-hairline)" stroke-width="1.5" />
+
+    {
+      nodes.map((n) => (
+        <>
+          <text
+            x={n.x}
+            y="46"
+            class="tl-hash"
+            text-anchor="middle">{n.hash}</text>
+          <text
+            x={n.x}
+            y="98"
+            class={`tl-cap ${n.label === 'retracted' ? 'tl-cap--out' : ''}`}
+            text-anchor="middle">{n.label}</text>
+        </>
+      ))
+    }
+
+    <circle cx="70" cy="70" r="6" fill="var(--k-brand)" />
+    <circle cx="190" cy="70" r="6" fill="var(--k-brand)" />
+    <circle cx="310" cy="70" r="5.5" fill="var(--k-bg)" stroke="var(--k-retracted)" stroke-width="2.5" />
+    <path d="M305 65 L315 75 M315 65 L305 75" stroke="var(--k-retracted)" stroke-width="2" stroke-linecap="round" />
+
+    <!-- the commit both lanes ask at -->
+    <path d="M392 62 V78" stroke="var(--k-temporal)" stroke-width="2.5" stroke-linecap="round" />
+    <text x="392" y="46" class="tl-asof" text-anchor="middle">as of</text>
+
+    <!-- lane 1: the live question stops at the retraction -->
+    <text x="30" y="146" class="tl-pred">FactLiveAtCommit</text>
+    <path
+      d="M388 170 H322"
+      stroke="var(--k-retracted)"
+      stroke-width="2"
+      stroke-linecap="round"
+      marker-end="url(#tl-head-out)"
+    />
+    <path d="M310 158 V182" stroke="var(--k-retracted)" stroke-width="2.5" stroke-linecap="round" />
+    <text x="298" y="175" class="tl-ans tl-ans--out" text-anchor="end">gone</text>
+
+    <!-- lane 2: the navigable question steps over it -->
+    <text x="30" y="228" class="tl-pred">FactExistsAt</text>
+    <path
+      d="M388 252 H330 C318 252 318 234 306 234 C294 234 294 252 282 252 H208"
+      stroke="var(--k-brand)"
+      stroke-width="2"
+      stroke-linecap="round"
+      fill="none"
+      marker-end="url(#tl-head-in)"
+    />
+    <text x="184" y="257" class="tl-ans tl-ans--in" text-anchor="end">b2c3d4e</text>
+
+    <defs>
+      <marker id="tl-head-out" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+        <path d="M0 0 L7 3.5 L0 7 Z" fill="var(--k-retracted)" />
+      </marker>
+      <marker id="tl-head-in" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+        <path d="M0 0 L7 3.5 L0 7 Z" fill="var(--k-brand)" />
+      </marker>
+    </defs>
+  </svg>
+  <figcaption>
+    The same fact, asked about at the same commit: one predicate reports the
+    retraction, the other steps over it and returns the last version before it.
+  </figcaption>
+</figure>
+
+<style>
+  .retract-tl {
+    margin: 2rem 0;
+    padding: 1.25rem 1rem 0.9rem;
+    border: 1px solid var(--k-hairline-soft);
+    border-radius: var(--k-radius);
+    background: var(--k-surface-1);
+  }
+  .retract-tl svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+  /* --k-text-muted is AA-safe on --k-surface-1, and nothing here is dimmed
+     with opacity — it composites against the surface and drops below AA. */
+  .tl-hash {
+    font-family: var(--k-font-mono);
+    font-size: 15px;
+    fill: var(--k-text-2);
+  }
+  .tl-cap {
+    font-family: var(--k-font-body);
+    font-size: 15px;
+    fill: var(--k-text-2);
+  }
+  .tl-cap--out {
+    fill: var(--k-retracted);
+  }
+  .tl-asof {
+    font-family: var(--k-font-mono);
+    font-size: 14px;
+    fill: var(--k-temporal);
+  }
+  .tl-pred {
+    font-family: var(--k-font-mono);
+    font-size: 17px;
+    fill: var(--k-text);
+  }
+  .tl-ans {
+    font-family: var(--k-font-mono);
+    font-size: 16px;
+  }
+  .tl-ans--out {
+    fill: var(--k-retracted);
+  }
+  .tl-ans--in {
+    fill: var(--k-brand);
+  }
+  .retract-tl figcaption {
+    margin-top: 0.9rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--k-text-2);
+  }
+</style>

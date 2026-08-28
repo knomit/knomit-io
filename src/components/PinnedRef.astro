@@ -1,0 +1,150 @@
+---
+/**
+ * What a citing fact holds after its source is retracted.
+ *
+ * The reference pins the version it was written against, so it keeps
+ * resolving; the cited fact's current state is a separate read, and it
+ * reports the retraction. Both ends are available at once, which is what
+ * makes staleness a detectable condition rather than silent decay.
+ * Paths and hashes are placeholders.
+ */
+interface Props {
+  class?: string;
+}
+const { class: className = '' } = Astro.props;
+
+const versions = [
+  { y: 176, hash: 'a1b2c3d', label: 'written', state: 'live' },
+  { y: 212, hash: 'b2c3d4e', label: 'revised', state: 'live' },
+  { y: 248, hash: 'c3d4e5f', label: 'retracted', state: 'out' },
+];
+---
+
+<figure class={`k-reveal pinned-ref ${className}`}>
+  <svg
+    viewBox="0 0 360 290"
+    role="img"
+    aria-label="A citing fact pins the version of its source that it cited, so the reference still resolves after that source is retracted, while a live read of the source reports the retraction."
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <!-- the citing fact -->
+    <rect
+      x="8"
+      y="12"
+      width="344"
+      height="64"
+      rx="10"
+      fill="var(--k-surface-2)"
+      stroke="var(--k-hairline)"
+    />
+    <text x="26" y="40" class="pr-path">kb/synthesis/retry-behavior</text>
+    <text x="26" y="62" class="pr-sub">written at e5f6a7b</text>
+
+    <!-- the reference, pinned to the commit it was written against -->
+    <path
+      d="M24 76 V212 H76"
+      stroke="var(--k-ref)"
+      stroke-width="2"
+      stroke-linecap="round"
+      fill="none"
+      marker-end="url(#pr-head)"
+    />
+    <text x="36" y="102" class="pr-ref">cites @b2c3d4e</text>
+
+    <!-- the cited fact, and every version of it -->
+    <rect
+      x="84"
+      y="116"
+      width="268"
+      height="158"
+      rx="10"
+      fill="var(--k-surface-2)"
+      stroke="var(--k-hairline)"
+    />
+    <text x="102" y="142" class="pr-sub">kb/decisions/retry-policy</text>
+
+    {
+      versions.map((v) => (
+        <>
+          {v.state === 'out' ? (
+            <circle cx="110" cy={v.y - 5} r="4.5" fill="var(--k-bg)" stroke="var(--k-retracted)" stroke-width="2" />
+          ) : (
+            <circle cx="110" cy={v.y - 5} r="4.5" fill="var(--k-brand)" />
+          )}
+          <text x="126" y={v.y} class={`pr-ver ${v.state === 'out' ? 'pr-ver--out' : ''}`}>
+            {v.hash} · {v.label}
+          </text>
+        </>
+      ))
+    }
+
+    <text x="340" y="212" class="pr-tag pr-tag--then" text-anchor="end">then</text>
+    <text x="340" y="248" class="pr-tag pr-tag--now" text-anchor="end">now</text>
+
+    <defs>
+      <marker id="pr-head" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+        <path d="M0 0 L7 3.5 L0 7 Z" fill="var(--k-ref)" />
+      </marker>
+    </defs>
+  </svg>
+  <figcaption>
+    The citing fact holds both ends: the version it was written against, which
+    still resolves, and what the corpus says about that fact now.
+  </figcaption>
+</figure>
+
+<style>
+  .pinned-ref {
+    margin: 2rem 0;
+    padding: 1.25rem 1rem 0.9rem;
+    border: 1px solid var(--k-hairline-soft);
+    border-radius: var(--k-radius);
+    background: var(--k-surface-1);
+  }
+  .pinned-ref svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+  .pr-path {
+    font-family: var(--k-font-mono);
+    font-size: 15px;
+    fill: var(--k-text);
+  }
+  /* Both boxes are --k-surface-2, where --k-text-muted falls below AA; the
+     raised-surface text uses --k-text-2 throughout. */
+  .pr-sub {
+    font-family: var(--k-font-mono);
+    font-size: 13px;
+    fill: var(--k-text-2);
+  }
+  .pr-ref {
+    font-family: var(--k-font-mono);
+    font-size: 14px;
+    fill: var(--k-ref);
+  }
+  .pr-ver {
+    font-family: var(--k-font-mono);
+    font-size: 14px;
+    fill: var(--k-text-2);
+  }
+  .pr-ver--out {
+    fill: var(--k-retracted);
+  }
+  .pr-tag {
+    font-family: var(--k-font-mono);
+    font-size: 13px;
+  }
+  .pr-tag--then {
+    fill: var(--k-brand);
+  }
+  .pr-tag--now {
+    fill: var(--k-retracted);
+  }
+  .pinned-ref figcaption {
+    margin-top: 0.9rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--k-text-2);
+  }
+</style>

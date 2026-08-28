@@ -69,14 +69,17 @@ export const FAQ_ITEMS: FaqItem[] = [
   {
     q: 'How does knomit handle multiple agents writing at once?',
     a: 'Each peer — human or agent — works on its own git branch and never merges another peer\'s branch directly. Facts are reviewed, approved, and merged into main, which is the consensus. Every peer then pulls main and merges it locally, so what one peer learns, every peer inherits.',
+    more: { href: '/blog/consensus-by-merge/', label: 'Why parallel writers never conflict' },
   },
   {
     q: 'How does provenance work?',
     a: 'Every write is one atomic, Ed25519-signed git commit pinned to the exact moment and state of the world in which it was learned. Because the whole graph is versioned by commit, you can trace where a claim came from, who asserted it, how its confidence moved over time, and read the graph as-of any past commit.',
+    more: { href: '/blog/retraction-is-not-deletion/', label: 'What a retraction does to what cited it' },
   },
   {
     q: 'What is synthesis in knomit?',
     a: 'Synthesis is knomit\'s pipeline that maintains and grows the corpus: it prunes duplicates, distills higher-order facts from what you already know (RAPTOR-style multi-depth distillation), and reflects on methodology. Hypotheses extend distilled facts forward into falsifiable predictions — knowledge that generates new knowledge.',
+    more: { href: '/blog/unattended-llm-judges/', label: 'The judges that run the review passes' },
   },
   {
     q: 'What is a discovered (emergent) fact?',
