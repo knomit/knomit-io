@@ -1,0 +1,344 @@
+---
+title: "Consensus by merge: a second road past \"Don't Build Multi-Agents\""
+description: "The multi-agent discourse converged on two safe roads — share full context between agents, or keep writes single-threaded — and for the artifacts it studied, mostly code, both roads are right. knomit's agents take a third: full writers running concurrently on different machines with no shared session context at all, not conflicting because each writes its own git branch and consensus is a merge. When can agents write in parallel without sharing context? When the artifact they write has a semantic merge operation."
+seoTitle: "Multi-agent writes without shared context"
+seoDescription: "Cognition says don't build multi-agents. knomit's agents never share context and never conflict — because consensus is a git merge. Here's the boundary."
+pubDate: 2026-08-28
+author: The knomit team
+tags: [multi-agent, agents, git, knowledge, architecture]
+faq:
+  - q: >-
+      Does this solve two agents coding one program together?
+    a: >-
+      No. Code mid-edit has no semantic merge operator, so Cognition's guidance
+      stands there: share full context or single-thread the writes. knomit's
+      claim covers beliefs — facts, decisions, invariants — where a merge
+      operator is definable and implemented.
+  - q: >-
+      Who merges agent branches into main?
+    a: >-
+      Today, a human, via ordinary GitHub pull requests. An automated Librarian
+      agent or a CI merge policy could take over that role in the future.
+  - q: >-
+      Does this contradict "Don't Build Multi-Agents"?
+    a: >-
+      We say build — what changes is what the agents share. Cognition's
+      principles cover agents sharing the effects of actions on one artifact:
+      co-writers of a program whose implicit decisions must stay mutually
+      consistent, with no way to reconcile them after the fact. knomit's agents
+      share knowledge instead, an artifact class with a real reconciliation
+      operator, so the failure Cognition documents doesn't arise. And their own
+      hedge — multi-agent writes work "best today" single-threaded — is advice
+      with a date on it, not a prohibition.
+  - q: >-
+      What happens when two agents write conflicting knowledge?
+    a: >-
+      Path-level git conflicts resolve local-wins at sync. Near-duplicate
+      beliefs are folded together by dedup at learn time or on a later review
+      pass. Genuine contradictions are surfaced for review rather than
+      auto-resolved; a judge or a human decides.
+draft: false
+---
+
+import AgentBranches from '../../components/AgentBranches.astro';
+import FactMerge from '../../components/FactMerge.astro';
+
+When can multiple AI agents write in parallel without sharing context? When the
+artifact they write has a semantic merge operation. The multi-agent discourse
+converged on two safe roads
+— share full context between agents, or keep writes single-threaded — and for
+the artifacts it studied, mostly code, both roads are right. knomit's agents
+take a third one: they are full writers, running concurrently on different
+machines with no shared session context at all, and they don't conflict,
+because each agent writes its own git branch and consensus is a merge. We call
+this **consensus by merge**: the substrate the writers share can reconcile
+divergence, so the writers need neither shared context nor turn-taking.
+
+## Why do parallel agents produce incompatible work?
+
+Cognition — the company behind the Devin coding agent — puts the problem in
+two principles in [*Don't Build Multi-Agents*](https://cognition.com/blog/dont-build-multi-agents)
+(Walden Yan, June 2025): "Share context,
+and share full agent traces, not just individual
+messages," and "Actions carry implicit decisions, and conflicting decisions
+carry bad results." His illustration is a Flappy Bird clone split between two
+subagents: "Subagent 1 actually mistook your subtask and started building a
+background that looks like Super Mario Bros. Subagent 2 built you a bird, but
+it doesn't look like a game asset and it moves nothing like the one in Flappy
+Bird." Nothing errored and each agent was locally fine; the failure existed
+only at integration, where two sets of implicit decisions met for the first
+time.
+
+Yan's recommendation: "you should by default rule out any agent
+architectures that don't abide by them," and "The simplest way to follow the
+principles is to just use a single-threaded linear agent." He named OpenAI's
+Swarm and Microsoft's AutoGen as libraries that "actively push concepts which
+I believe to be the wrong way of building agents." And: "While
+I'm optimistic about the long-term possibilities of agents
+collaborating with one another, it is evident that in 2025, running multiple
+agents in collaboration only results in fragile systems."
+
+Anthropic's engineering team reached a compatible boundary from the other side
+in [*How we built our multi-agent research system*](https://www.anthropic.com/engineering/multi-agent-research-system)
+(June 2025), a system built from Claude agents: "multi-agent research systems
+excel especially for breadth-first queries that involve pursuing multiple
+independent directions simultaneously" — but
+"some domains that require all agents to share the same context or involve
+many dependencies between agents are not a good fit for multi-agent systems
+today. For instance, most coding tasks involve fewer truly parallelizable
+tasks than research..." Fan-out works where the workers' outputs combine by
+simple aggregation, as research findings do. It fails where they must be
+mutually consistent, as code does.
+
+## What did Cognition's 2026 update actually say?
+
+Ten months later, Yan published
+[*Multi-Agents: What's Actually Working*](https://cognition.com/blog/multi-agents-working)
+(April 2026). The revised position: "multi-agent systems work best
+today when writes stay single-threaded and the additional agents contribute
+intelligence rather than actions." "Best today" is a preference with a date
+on it, not a prohibition.
+
+Yan did not walk back the mechanism: "Agents assume they share state with
+their children when they don't," and cross-agent communication
+"doesn't happen by default, because models haven't been trained in
+environments where it needed to." And for the architectures this article
+cares about: "Our original observations still hold today for parallel-writer
+swarms: most of the sexy ideas in that space still don't see meaningful
+adoption." His observation of the field: "most multi-agent setups in the
+world are limited to 'readonly' subagents, like web search subagents and code
+search subagents."
+
+So the discourse offers two boxes: writers that share full
+context, and readers that don't need to. Parallel writers without shared
+context sit outside both boxes and are presumed fragile. The presumption is
+right for the artifacts the discourse studied, and wrong for one artifact
+class.
+
+## Which artifacts can take parallel writers?
+
+Cognition's own test for when not to parallelize is to ask whether two workers
+can make different reasonable assumptions and both be locally correct. For
+code mid-edit, that condition is fatal: git's line-level merge is textual, not
+semantic, so two locally-correct edits to one program can merge cleanly into a
+broken whole. No operator exists that reconciles their meaning.
+
+But apply the same test to knowledge. Two agents asserting different things,
+both locally correct, is the normal condition for beliefs. And unlike code,
+the resolution operator is definable: deduplicate, subsume, pool confidence,
+or surface the conflict for review. The failure
+mechanism the discourse documented — divergence invisible until integration,
+in a substrate with no reconcile operator — dissolves when the substrate gets
+one.
+
+| Artifact class | Merge operator | Verdict |
+|---|---|---|
+| Code mid-edit, one program | textual only (git line merge); semantic conflicts invisible | Cognition is right: single-thread the writes or share full context |
+| Prose or design, one artifact | none | Cognition is right |
+| Research findings | aggregation — parallel findings condense into one report | fan-out already works, but the workers are read-only |
+| Beliefs / knowledge | subsume, dedup, confidence-pool, conflict-at-merge | parallel writers, zero shared context, no single-threading |
+
+Software already solved this shape once, for humans. Nobody asks two
+contributors to share full traces of each other's thought; we ask them to
+write mergeable artifacts on separate branches, and we resolve divergence at
+merge time, with review gates. "Actions carry implicit decisions" is the
+version-control problem statement. knomit applies the version-control answer
+to agent knowledge.
+
+## How knomit's agents write without coordinating
+
+[knomit](https://knomit.io) ([github.com/knomit/knomit](https://github.com/knomit/knomit))
+is a git-backed knowledge base for AI agents. Its concurrency design is
+stated in one designer principle:
+
+> Every agent operates on a long-lived personal branch — `agent/<id>`, derived
+> from machine hostname plus a short hash. All learn/update/retract/subsume
+> operations land on that branch and push to origin. No agent writes `main`
+> directly. Consensus into `main` is reached externally — by a Librarian
+> agent, CI policy, or manual human merge — and flows back into agent branches
+> via fetch+merge on the next tool call.
+>
+> …there is no central writer to coordinate against, and no global lock to
+> acquire. Agents on different machines, offline or online, can write
+> concurrently without conflict — each one is committing to its own branch.
+> Conflicts surface only at merge time, where they belong: at the moment two
+> beliefs meet. This is what makes knomit safe for a swarm of agents rather
+> than just a single-process KB.
+
+The mechanism has two properties. First, single-writer-per-partition: each
+agent is the only writer of its branch, so there is no write contention to
+coordinate away. Second, divergence between branches is the normal input to a
+defined reconciliation, not an error state.
+
+<AgentBranches />
+
+The sync code is small. In steady state the store's sync layer has exactly
+one reconciliation call site: merge the upstream consensus `main` into the
+agent branch, local-wins on conflict. The merge path's own doc comment:
+"Produces a fast-forward when agent is an ancestor of main, a no-op when main
+is an ancestor of agent (or hashes match), or a single merge commit when
+histories diverged. Hash rewriting NEVER happens here." A real git merge, not
+commit replay; rebase exists only as a fallback for the case where consensus
+main was rewound. And the push path's doc comment: "Push does NOT push main —
+main is consensus, written by the remote-side merge-to-main mechanism, never
+directly by an agent." Force-pushing the agent branch is safe because only
+this machine writes it.
+
+## What gives knowledge merge semantics?
+
+The table above claims beliefs have a merge operator. In knomit that operator
+is code, in two places.
+
+At write time, when `learn` detects a near-duplicate, `mergeFacts` folds the
+incoming fact into the existing one.
+Identity is asymmetric: the winner — higher confidence, then more sources
+— contributes the title, body, kind, and
+origin. The metadata is always pooled: confidence takes the max, sources add
+(the doc comment: "two independent observations of one fact are worth more
+than either alone"), domains and entities union, evidence weight takes the
+max, references union with self-references filtered. Learning the same thing
+twice subsumes; it never duplicates. That is an idempotent absorption
+operator, which is what a semantic merge is.
+
+<FactMerge />
+
+At review time, `dedupCluster` enforces
+the same property after the fact: embedding search over a cluster, greedy
+selection of the highest-similarity pairs — each fact in at most one merge
+per pass — with merges committed to git
+and the index.
+
+Two more rails make merged knowledge auditable rather than just consistent.
+Every write is a signed commit authored `<agent-id>+<operation>@agents.knomit.io`,
+so attribution survives the merge. And references resolve at commit time, so
+merging or updating a fact never silently rewrites the evidence chains of
+facts that cited it.
+
+Why go to this trouble? Another of knomit's principles answers:
+"a fleet of agents that each re-learn the same truths in isolation is just N
+disconnected notebooks… every merge into consensus makes the next agent's
+recall cheaper, because the answer is already there."
+
+The mechanism is in use. The knomit knowledge base's own checkout shows
+long-lived agent branches from two machines alongside `main`,
+with consensus visible in fact histories as ordinary GitHub pull-request
+merges of agent branches. A second corpus carries branches from three
+machines. Two or three machines per corpus is the scale today — multiple
+uncoordinated writers, not a swarm of dozens.
+
+## What this does not solve
+
+1. **This is knowledge cooperation, not task cooperation.** knomit does not
+   let two agents co-build one program or co-edit one artifact mid-flight.
+   Cognition's Flappy Bird failure would recur unchanged for two knomit-using
+   agents writing one codebase. The claim is strictly: for the artifact class
+   *beliefs*, parallel writes are safe.
+2. **The merge into main is still external.** In the observed history it is
+   a human merging GitHub pull requests, so today "consensus is a merge"
+   concretely means a person merges the belief branches. An automated
+   Librarian agent or a CI merge policy could take over that step in the
+   future.
+3. **The partition is per-machine, not per-session.** Concurrent sessions on
+   one machine share one agent branch through one MCP server, and their
+   writes are serialized by an in-process lock. The zero-coordination claim
+   holds across machines; within a machine it is ordinary locking.
+4. **Two layers, two merges.** The git-level merge is deliberately dumb: on
+   overlapping paths, local wins wholesale. The semantic merge (`mergeFacts`,
+   `dedupCluster`) runs at learn time and review time, not as a git merge
+   driver. When two machines independently learn the same truth and both land
+   in main, convergence happens on a later dedup pass — eventual convergence,
+   not merge-time dedup. "Conflicts surface at merge time" is literally true
+   for path-level conflicts; near-duplicate beliefs converge asynchronously.
+5. **Local-wins is a policy, not intelligence.** No belief revision happens
+   when consensus disagrees with an agent; the agent's edit wins, and the
+   system's answer to disagreement lives downstream in dedup, review, and
+   confidence.
+6. **Same-session orchestration is out of scope.** knomit does not address
+   the coordination problem Cognition and Anthropic solve day to day. It is a
+   complement to their guidance — give the fleet a mergeable memory — not a
+   replacement for it.
+7. **Contradiction is surfaced, not auto-resolved.** When two agents assert
+   incompatible things, a review pass or a human decides — the same deal
+   human version control offers. How merges are gated by a judge, and what
+   merge semantics imply for taking knowledge *back*, are their own articles:
+   [the judge that gates merges](/blog/unattended-llm-judges/) and
+   [retraction is not deletion](/blog/retraction-is-not-deletion/).
+
+## The corpus stated the thesis before we did
+
+One fact in a knomit corpus about agentic engineering is stamped
+`origin: discovered` — proposed
+by the synthesis engine, not written by a person or prompted for. Its claim:
+"Your durability substrate decides your multi-agent topology — an event log
+doubles as the shareable trace, a VM snapshot does not." Type synthesis,
+confidence 0.7, evidence weight 0.86.
+
+Its provenance walk shows it was derived from five facts, each pinned at the
+exact commit the synthesis reasoned over — one of them the corpus's own
+distillation of Cognition's posts. In its words: "if you build the event-log
+session for durability, you have already built the trace-sharing substrate
+that collaborating writer agents require. Multi-agent collaboration on writes
+becomes an access-control decision over an artifact you already have, not a
+new mechanism to design."
+
+The engine read facts about the multi-agent discourse and emitted, unprompted,
+this article's claim-shape: a substrate property, not a context-sharing
+policy, decides which multi-agent topologies are available to you. The
+discovered fact is about traces, and knomit shares
+distilled knowledge, not traces — the principle generalizes to our case; it
+isn't the same case. All five of its source facts have since evolved and show
+as superseded at their pinned versions, and the versioned graph still resolves
+the derivation exactly as it stood — the commit-time reference rule, doing its
+job on the very fact we're citing.
+
+And the knowledge base that surfaced the principle is itself written
+concurrently by agents on multiple machines that never share context,
+cooperating through
+exactly the kind of substrate the principle says decides the topology.
+
+The discourse asked how much context agents must share. Version control
+answered a harder version of that question for human writers decades ago:
+none, if the artifact merges.
+
+## FAQ
+
+**Does this solve two agents coding one program together?**
+No. Code mid-edit has no semantic merge operator, so Cognition's guidance
+stands there: share full context or single-thread the writes. knomit's claim
+covers beliefs — facts, decisions, invariants — where a merge operator is
+definable and implemented.
+
+**Who merges agent branches into main?**
+Today, a human, via ordinary GitHub pull requests. An automated Librarian
+agent or a CI merge policy could take over that role in the future.
+
+**Does this contradict "Don't Build Multi-Agents"?**
+We say build — what changes is what the agents share. Cognition's principles
+cover agents sharing the effects of actions on one artifact: co-writers of a
+program whose implicit decisions must stay mutually consistent, with no way
+to reconcile them after the fact. knomit's agents share knowledge instead, an
+artifact class with a real reconciliation operator, so the failure Cognition
+documents doesn't arise. And their own hedge — multi-agent writes work "best
+today" single-threaded — is advice with a date on it, not a prohibition.
+
+**What happens when two agents write conflicting knowledge?**
+Path-level git conflicts resolve local-wins at sync. Near-duplicate beliefs
+are folded together by dedup at learn time or on a later review pass. Genuine
+contradictions are surfaced for review rather than auto-resolved; a judge or
+a human decides.
+
+## References
+
+- Walden Yan (Cognition) — *Don't Build Multi-Agents* — June 2025 —
+  https://cognition.com/blog/dont-build-multi-agents
+- Walden Yan (Cognition) — *Multi-Agents: What's Actually Working* — April
+  2026 — https://cognition.com/blog/multi-agents-working
+- Jeremy Hadfield, Barry Zhang, Kenneth Lien, Florian Scholz, Jeremy Fox, and
+  Daniel Ford (Anthropic Engineering) — *How we built our multi-agent research
+  system* — June 2025 —
+  https://www.anthropic.com/engineering/multi-agent-research-system
+- OpenAI — *Swarm* — https://github.com/openai/swarm (named in Yan's 2025
+  post)
+- Microsoft — *AutoGen* — https://github.com/microsoft/autogen (named in
+  Yan's 2025 post)
+- knomit — https://knomit.io — https://github.com/knomit/knomit

@@ -1,0 +1,122 @@
+---
+/**
+ * What a semantic merge on knowledge does: two near-duplicate facts fold into
+ * one. Metadata pools — confidence takes the max, source counts add, domains
+ * union — while identity comes from the winner alone. Learning the same thing
+ * twice absorbs; it does not duplicate. Values are illustrative.
+ */
+interface Props {
+  class?: string;
+}
+const { class: className = '' } = Astro.props;
+---
+
+<figure class={`k-reveal fact-merge ${className}`}>
+  <svg
+    viewBox="0 0 440 360"
+    role="img"
+    aria-label="Two near-duplicate facts fold into one: confidence takes the maximum of the two, source counts add together, domains union, and the higher-confidence fact supplies the title and body."
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <!-- the fact already in the corpus -->
+    <rect x="24" y="28" width="184" height="110" rx="8" fill="var(--k-surface-2)" stroke="var(--k-hairline)" />
+    <text x="40" y="52" class="fm-label">existing</text>
+    <text x="40" y="80" class="fm-field">confidence: 0.72</text>
+    <text x="40" y="104" class="fm-field">sources: 3</text>
+    <text x="40" y="128" class="fm-field">domain: [git]</text>
+
+    <!-- the fact being learned -->
+    <rect x="232" y="28" width="184" height="110" rx="8" fill="var(--k-surface-2)" stroke="var(--k-hairline)" />
+    <text x="248" y="52" class="fm-label">incoming</text>
+    <text x="248" y="80" class="fm-field">confidence: 0.88</text>
+    <text x="248" y="104" class="fm-field">sources: 1</text>
+    <text x="248" y="128" class="fm-field">domain: [agents]</text>
+
+    <!-- both fold into one -->
+    <path
+      d="M116 138 V152 C116 166 130 172 148 172 H220"
+      stroke="var(--k-hairline)"
+      stroke-width="2"
+      fill="none"
+    />
+    <path
+      d="M324 138 V152 C324 166 310 172 292 172 H220"
+      stroke="var(--k-hairline)"
+      stroke-width="2"
+      fill="none"
+    />
+    <path d="M220 172 V202" stroke="var(--k-brand)" stroke-width="2" marker-end="url(#fm-head)" />
+    <text x="24" y="178" class="fm-op">mergeFacts</text>
+
+    <!-- the one fact that remains -->
+    <rect x="64" y="206" width="312" height="138" rx="8" fill="var(--k-surface-2)" stroke="var(--k-brand)" stroke-width="1.5" />
+    <text x="80" y="232" class="fm-label fm-label--out">merged</text>
+    <text x="80" y="260" class="fm-field">confidence: 0.88</text>
+    <text x="360" y="260" class="fm-rule" text-anchor="end">max</text>
+    <text x="80" y="284" class="fm-field">sources: 4</text>
+    <text x="360" y="284" class="fm-rule" text-anchor="end">added</text>
+    <text x="80" y="308" class="fm-field">domain: [git, agents]</text>
+    <text x="360" y="308" class="fm-rule" text-anchor="end">union</text>
+    <text x="80" y="332" class="fm-field fm-field--soft">title, body: from the winner</text>
+
+    <defs>
+      <marker id="fm-head" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+        <path d="M0 0 L7 3.5 L0 7 Z" fill="var(--k-brand)" />
+      </marker>
+    </defs>
+  </svg>
+  <figcaption>
+    Learning the same thing twice folds the incoming fact into the existing
+    one. The metadata pools; the identity comes from whichever fact wins on
+    confidence. The corpus gains no duplicate.
+  </figcaption>
+</figure>
+
+<style>
+  .fact-merge {
+    margin: 2rem 0;
+    padding: 1.25rem 1rem 0.9rem;
+    border: 1px solid var(--k-hairline-soft);
+    border-radius: var(--k-radius);
+    background: var(--k-surface-1);
+  }
+  .fact-merge svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+  /* --k-text-2 is AA-safe on --k-surface-2; nothing here is dimmed with
+     opacity, which would composite against the surface and drop below AA. */
+  .fm-label {
+    font-family: var(--k-font-mono);
+    font-size: 13px;
+    fill: var(--k-text-2);
+  }
+  .fm-label--out {
+    fill: var(--k-brand);
+  }
+  .fm-field {
+    font-family: var(--k-font-mono);
+    font-size: 15px;
+    fill: var(--k-text);
+  }
+  .fm-field--soft {
+    fill: var(--k-text-2);
+  }
+  .fm-rule {
+    font-family: var(--k-font-body);
+    font-size: 13px;
+    fill: var(--k-text-2);
+  }
+  .fm-op {
+    font-family: var(--k-font-mono);
+    font-size: 15px;
+    fill: var(--k-brand);
+  }
+  .fact-merge figcaption {
+    margin-top: 0.9rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--k-text-2);
+  }
+</style>

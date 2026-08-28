@@ -15,7 +15,7 @@ faq:
     a: "No. Machine unlearning removes a training example's influence from a model's weights. Retraction governs explicit stored knowledge — the fact, its citations, and the derived state resting on it."
   - q: "What happens to derived summaries when a RAG index deletes a source document?"
     a: "In most stacks, nothing: the summaries keep serving the deleted document's claims. That is the general form of the problem this article describes, and the reason a delete-shaped API is the wrong contract for any memory that derives."
-draft: true
+draft: false
 ---
 
 import RetractionTimeline from '../../components/RetractionTimeline.astro';
@@ -166,7 +166,7 @@ resting on a fact before acting.
 
 And a retracted source stops corroborating, without anyone rewriting its
 citers. Three separate mechanisms produce this. Consolidation merges — the
-operation *consensus by merge* describes —
+operation [consensus by merge](/blog/consensus-by-merge/) describes —
 compute their pooled evidence weight before deleting their sources (the
 code's own doc line: "Must be called before the source facts are
 deleted"), so a synthesis keeps the evidence it absorbed. The recursive
@@ -181,7 +181,7 @@ sees the history — but it stops counting.
 Depends on what the retraction asserts. knomit runs LLM judges over its
 corpora in review sessions — they merge duplicates, distill clusters,
 adjust confidence, and retract
-(the judge that gates merges is its own
+([the judge that gates merges](/blog/unattended-llm-judges/) is its own
 article). The review prompt instructs the judge: "If the BODY is wrong,
 correct the body or retract — do not quietly lower confidence and leave
 the wrong words standing." A falsified hypothesis is retracted the same
