@@ -1,0 +1,171 @@
+---
+/**
+ * The outcome-funded throttle's latch, and the probe that escapes it. Two
+ * chains of the same four steps: without a probe the defunded state starves
+ * the rule written to end it, because that rule reads verdicts and a defunded
+ * pass produces none. With a probe there is always one verdict to read.
+ *
+ * Text rather than a picture of text — it reflows to a single column on a
+ * phone and stays readable at every width, and screen readers get the whole
+ * chain instead of a summary label.
+ */
+interface Props {
+  class?: string;
+}
+const { class: className = '' } = Astro.props;
+
+const chains = [
+  {
+    variant: 'latch',
+    head: 'without a probe',
+    steps: [
+      { edge: null, node: 'defunded', mono: true },
+      { edge: 'offers', node: '0 pairs', mono: false },
+      { edge: 'produces', node: '0 verdicts', mono: false },
+      { edge: 'read by', node: 'the restore rule', mono: false },
+    ],
+    verdict: '✗ never fires',
+  },
+  {
+    variant: 'probe',
+    head: 'with the probe',
+    steps: [
+      { edge: null, node: 'defunded', mono: true },
+      { edge: 'offers 1 pair, fixed interval', node: '1 pair', mono: false, probe: true },
+      { edge: 'produces', node: '1 verdict', mono: false },
+      { edge: 'read by', node: 'the restore rule', mono: false },
+    ],
+    verdict: '✓ can fire',
+  },
+] as const;
+---
+
+<figure class={`throttle ${className}`}>
+  <div class="throttle__cols">
+    {
+      chains.map((c) => (
+        <div class={`throttle__col throttle__col--${c.variant}`}>
+          <p class="throttle__head">{c.head}</p>
+          <ol class="throttle__chain">
+            {c.steps.map((s) => (
+              <li class="throttle__step">
+                {s.edge && (
+                  <span class={`throttle__edge${'probe' in s && s.probe ? ' throttle__edge--probe' : ''}`}>
+                    <span class="throttle__arrow" aria-hidden="true">
+                      ↓
+                    </span>
+                    {s.edge}
+                  </span>
+                )}
+                <span class={`throttle__node${s.mono ? ' throttle__node--state' : ''}`}>{s.node}</span>
+              </li>
+            ))}
+          </ol>
+          <p class="throttle__verdict">{c.verdict}</p>
+        </div>
+      ))
+    }
+  </div>
+  <figcaption class="throttle__caption">
+    The defunded state starves the rule written to end it: a pass that offers
+    nothing gets no verdicts, and a resolution is what restores funding. The
+    probe is the one thing that keeps producing evidence while defunded.
+  </figcaption>
+</figure>
+
+<style>
+  .throttle {
+    margin: 1.75rem 0;
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius);
+    background: var(--k-surface-1);
+    box-shadow: var(--k-shadow);
+    overflow: hidden;
+  }
+  .throttle__cols {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1px;
+    background: var(--k-hairline-soft);
+  }
+  @media (min-width: 34rem) {
+    .throttle__cols {
+      grid-template-columns: 1fr 1fr;
+    }
+  }
+  .throttle__col {
+    background: var(--k-surface-1);
+    padding: 1.1rem 1.15rem 1.25rem;
+  }
+  .throttle__head {
+    margin: 0 0 0.9rem;
+    font-family: var(--k-font-mono);
+    font-size: 0.72rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    /* Surface-1 is one of the two darkest surfaces: muted clears AA here. */
+    color: var(--k-text-muted);
+  }
+  .throttle__chain {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .throttle__step {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15rem;
+  }
+  .throttle__edge {
+    display: flex;
+    align-items: baseline;
+    gap: 0.45rem;
+    padding: 0.15rem 0;
+    font-size: 0.78rem;
+    color: var(--k-text-muted);
+  }
+  .throttle__arrow {
+    color: var(--k-hairline);
+    font-size: 0.95rem;
+    line-height: 1;
+  }
+  .throttle__edge--probe {
+    color: var(--k-temporal);
+  }
+  .throttle__edge--probe .throttle__arrow {
+    color: var(--k-temporal);
+  }
+  .throttle__node {
+    font-size: 0.92rem;
+    color: var(--k-text);
+  }
+  .throttle__node--state {
+    display: inline-block;
+    align-self: flex-start;
+    font-family: var(--k-font-mono);
+    font-size: 0.82rem;
+    padding: 0.2rem 0.55rem;
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius-sm);
+    background: var(--k-surface-2);
+    color: var(--k-text-2);
+  }
+  .throttle__verdict {
+    margin: 0.9rem 0 0;
+    font-family: var(--k-font-mono);
+    font-size: 0.82rem;
+  }
+  .throttle__col--latch .throttle__verdict {
+    color: var(--k-retracted);
+  }
+  .throttle__col--probe .throttle__verdict {
+    color: var(--k-brand);
+  }
+  .throttle__caption {
+    padding: 0.95rem 1.15rem 1.05rem;
+    border-top: 1px solid var(--k-hairline-soft);
+    font-size: 0.78rem;
+    line-height: 1.5;
+    color: var(--k-text-muted);
+  }
+</style>

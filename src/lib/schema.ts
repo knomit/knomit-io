@@ -84,6 +84,34 @@ export function blogPostingSchema(args: {
   };
 }
 
+/** The blog index as one named collection rather than nine unrelated cards.
+ *  `blogPost` carries only headline/url/date: the full BlogPosting lives on
+ *  each post's own page, and repeating it here would give a crawler two nodes
+ *  describing the same article with this one always the staler of the two. */
+export function blogSchema(args: {
+  site: URL;
+  url: URL;
+  name: string;
+  description: string;
+  posts: { title: string; url: URL; datePublished: string }[];
+}) {
+  return {
+    '@context': ctx,
+    '@type': 'Blog',
+    name: args.name,
+    description: args.description,
+    url: args.url.href,
+    publisher: { '@type': 'Organization', name: SITE_NAME, url: args.site.origin + '/' },
+    blogPost: args.posts.map((p) => ({
+      '@type': 'BlogPosting',
+      headline: p.title,
+      url: p.url.href,
+      datePublished: p.datePublished,
+      mainEntityOfPage: { '@type': 'WebPage', '@id': p.url.href },
+    })),
+  };
+}
+
 export function breadcrumbSchema(site: URL, crumbs: { name: string; url: string }[]) {
   return {
     '@context': ctx,

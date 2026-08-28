@@ -3,15 +3,39 @@ import BaseLayout from '../../layouts/BaseLayout.astro';
 import BlogCard from '../../components/BlogCard.astro';
 import SectionHeading from '../../components/SectionHeading.astro';
 import { getPublishedPosts, postHref } from '../../lib/blog';
+import { blogSchema, breadcrumbSchema } from '../../lib/schema';
 
 const posts = await getPublishedPosts();
 const [featured, ...rest] = posts;
+
+const site = Astro.site!;
+const title = 'Blog — knomit';
+const description =
+  'Real-world use cases for a git-native, fact-based knowledge base: durable facts, provenance, multi-agent consensus, and time-travel.';
+
+// Two nodes: the index as a Blog whose posts are named, so a crawler reads the
+// nine cards as one series, and the crumb that places /blog/ under the root the
+// way the docs half is already placed.
+const jsonLd = [
+  blogSchema({
+    site,
+    url: new URL('/blog/', site),
+    name: 'knomit blog',
+    description,
+    posts: posts.map((p) => ({
+      title: p.data.title,
+      url: new URL(postHref(p), site),
+      datePublished: p.data.pubDate.toISOString(),
+    })),
+  }),
+  breadcrumbSchema(site, [
+    { name: 'knomit', url: '/' },
+    { name: 'Blog', url: '/blog/' },
+  ]),
+];
 ---
 
-<BaseLayout
-  title="Blog — knomit"
-  description="Real-world use cases for a git-native, fact-based knowledge base: durable facts, provenance, multi-agent consensus, and time-travel."
->
+<BaseLayout title={title} description={description} jsonLd={jsonLd}>
   <section class="k-section blog-index">
     <div class="k-container">
       <SectionHeading

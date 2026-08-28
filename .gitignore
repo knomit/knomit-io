@@ -4,6 +4,7 @@ local/
 # src/content/docs (an unanchored `docs/` would swallow those too).
 /docs/
 .claude/plans/
+.claude/article-authoring/
 .superpowers/
 
 # dependencies

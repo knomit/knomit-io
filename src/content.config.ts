@@ -24,6 +24,14 @@ const blog = defineCollection({
        */
       seoTitle: z.string().max(46).optional(),
       seoDescription: z.string().max(160).optional(),
+      /**
+       * The post's FAQ section, repeated as data so the page can also ship it
+       * as FAQPage JSON-LD. Answers here are the article's own answers with
+       * the markdown stripped: the visible section stays the source of truth,
+       * and a parser reading the structured data gets the same words a reader
+       * gets. Omit it and the post renders exactly as before.
+       */
+      faq: z.array(z.object({ q: z.string(), a: z.string() })).optional(),
       pubDate: z.coerce.date(),
       updatedDate: z.coerce.date().optional(),
       author: z.string().default('The knomit team'),

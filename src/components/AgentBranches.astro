@@ -1,0 +1,120 @@
+---
+/**
+ * Branch-per-agent, drawn with both merge directions.
+ *
+ * Two agents on two machines each own one long-lived branch and are its only
+ * writer. Consensus lives on `main`: branches merge up into it by review, and
+ * it merges back down into each branch, local edits winning any overlap.
+ * Branch names and hosts are placeholders.
+ *
+ * Layout note: lane names are right-aligned so the whole left half stays a
+ * clear corridor for the arrows; `main` is the heaviest stroke because its
+ * hue sits close to branch B's.
+ */
+interface Props {
+  class?: string;
+}
+const { class: className = '' } = Astro.props;
+---
+
+<figure class={`k-reveal agent-branches ${className}`}>
+  <svg
+    viewBox="0 0 440 272"
+    role="img"
+    aria-label="Two agents on different machines each commit only to their own git branch; both branches merge up into the shared main branch, and main merges back down into each branch with local edits winning."
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <!-- main: the consensus trunk -->
+    <text x="416" y="30" class="ab-branch ab-branch--main" text-anchor="end">main</text>
+    <path d="M24 44 H416" stroke="var(--k-brand)" stroke-width="3.5" stroke-linecap="round" />
+    {[160, 200, 300, 380].map((cx) => <circle cx={cx} cy="44" r="6" fill="var(--k-brand)" />)}
+
+    <!-- agent branch A -->
+    <text x="416" y="100" class="ab-branch ab-branch--a" text-anchor="end">agent/host-a-1f2e3d4c</text>
+    <!-- drawn in segments so branch B's arrows pass through, git-graph style -->
+    <path
+      d="M24 116 H88 M104 116 H192 M208 116 H416"
+      stroke="var(--k-ref)"
+      stroke-width="2"
+      stroke-linecap="round"
+    />
+    {[56, 160, 260, 340].map((cx) => <circle cx={cx} cy="116" r="4.5" fill="var(--k-ref)" />)}
+
+    <!-- agent branch B -->
+    <text x="416" y="172" class="ab-branch ab-branch--b" text-anchor="end">agent/host-b-9c8b7a6d</text>
+    <path d="M24 188 H416" stroke="var(--k-brand-2)" stroke-width="2" stroke-linecap="round" />
+    {[96, 200, 300, 370].map((cx) => <circle cx={cx} cy="188" r="4.5" fill="var(--k-brand-2)" />)}
+
+    <!-- main flows back down into each branch -->
+    <path d="M56 52 V108" stroke="var(--k-brand)" stroke-width="2" marker-end="url(#ab-down)" />
+    <path d="M96 52 V180" stroke="var(--k-brand)" stroke-width="2" marker-end="url(#ab-down)" />
+
+    <!-- each branch merges up into main -->
+    <path d="M160 108 V50" stroke="var(--k-ref)" stroke-width="2" marker-end="url(#ab-up-a)" />
+    <path d="M200 180 V50" stroke="var(--k-brand-2)" stroke-width="2" marker-end="url(#ab-up-b)" />
+
+    <!-- what the two directions are -->
+    <path d="M32 218 V232" stroke="var(--k-brand)" stroke-width="2" marker-end="url(#ab-down)" />
+    <text x="52" y="234" class="ab-key">main → agent: fetch + merge, local wins</text>
+    <path d="M32 264 V248" stroke="var(--k-ref)" stroke-width="2" marker-end="url(#ab-up-a)" />
+    <text x="52" y="262" class="ab-key">agent → main: pull-request merge</text>
+
+    <defs>
+      <marker id="ab-down" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+        <path d="M0 0 L7 3.5 L0 7 Z" fill="var(--k-brand)" />
+      </marker>
+      <marker id="ab-up-a" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+        <path d="M0 0 L7 3.5 L0 7 Z" fill="var(--k-ref)" />
+      </marker>
+      <marker id="ab-up-b" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">
+        <path d="M0 0 L7 3.5 L0 7 Z" fill="var(--k-brand-2)" />
+      </marker>
+    </defs>
+  </svg>
+  <figcaption>
+    Each agent is the only writer of its own branch, so there is nothing to
+    coordinate away. Divergence between branches is reconciled at merge time,
+    in both directions.
+  </figcaption>
+</figure>
+
+<style>
+  .agent-branches {
+    margin: 2rem 0;
+    padding: 1.25rem 1rem 0.9rem;
+    border: 1px solid var(--k-hairline-soft);
+    border-radius: var(--k-radius);
+    background: var(--k-surface-1);
+  }
+  .agent-branches svg {
+    width: 100%;
+    height: auto;
+    display: block;
+  }
+  /* --k-text-2 is AA-safe on --k-surface-1; nothing here is dimmed with
+     opacity, which would composite against the surface and drop below AA. */
+  .ab-branch {
+    font-family: var(--k-font-mono);
+    font-size: 15px;
+  }
+  .ab-branch--main {
+    fill: var(--k-brand);
+  }
+  .ab-branch--a {
+    fill: var(--k-ref);
+  }
+  .ab-branch--b {
+    fill: var(--k-brand-2);
+  }
+  .ab-key {
+    font-family: var(--k-font-body);
+    font-size: 15px;
+    fill: var(--k-text-2);
+  }
+  .agent-branches figcaption {
+    margin-top: 0.9rem;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--k-text-2);
+  }
+</style>
