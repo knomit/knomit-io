@@ -3,7 +3,7 @@ import type { CollectionEntry } from 'astro:content';
 import { Image } from 'astro:assets';
 import BaseLayout from './BaseLayout.astro';
 import { formatDate } from '../lib/format';
-import { blogPostingSchema } from '../lib/schema';
+import { blogPostingSchema, faqPageSchema } from '../lib/schema';
 import '../styles/prose.css';
 
 interface Props {
@@ -12,7 +12,7 @@ interface Props {
   next?: { href: string; title: string };
 }
 const { post, prev, next } = Astro.props;
-const { title, description, seoTitle, seoDescription, pubDate, updatedDate, author, tags, heroImage } =
+const { title, description, seoTitle, seoDescription, pubDate, updatedDate, author, tags, heroImage, faq } =
   post.data;
 
 // The head gets the short forms when a post supplies them; the page keeps the
@@ -26,7 +26,7 @@ const headDescription = seoDescription ?? description;
 const site = Astro.site!;
 const url = new URL(Astro.url.pathname, site);
 const ogImage = new URL('/og.png', site);
-const jsonLd = blogPostingSchema({
+const posting = blogPostingSchema({
   site,
   url,
   title,
@@ -36,6 +36,10 @@ const jsonLd = blogPostingSchema({
   author,
   image: ogImage,
 });
+// A post that declares an FAQ ships FAQPage alongside BlogPosting. Both go out
+// as one ld+json array — JsonLd.astro stringifies whatever it is handed, and
+// an array of nodes each carrying its own @context is valid JSON-LD.
+const jsonLd = faq?.length ? [posting, faqPageSchema(faq)] : posting;
 ---
 
 <BaseLayout title={`${headTitle} — knomit blog`} description={headDescription} article={true} jsonLd={jsonLd}>

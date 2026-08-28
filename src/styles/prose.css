@@ -23,6 +23,10 @@
   text-decoration: underline;
   text-underline-offset: 3px;
   text-decoration-color: rgba(136, 170, 255, 0.4);
+  /* A References section links bare URLs, and one long enough to exceed the
+     prose column scrolls the whole page sideways on a phone. Breaking is
+     confined to links so ordinary prose keeps normal wrapping. */
+  overflow-wrap: anywhere;
 }
 .k-prose-content strong {
   color: var(--k-text);
