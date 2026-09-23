@@ -19,7 +19,7 @@ const f = (over: Partial<BundleFact>): BundleFact => ({
  * it first — only directories-first logic gets the order right.
  */
 export const FIXTURE: Bundle = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   repo: 'knomit/fixture-kb',
   ref: 'main',
   head: 'c3',

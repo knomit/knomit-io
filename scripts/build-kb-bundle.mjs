@@ -30,7 +30,7 @@ const GEN_DIR = path.join(ROOT, 'src', 'generated');
 const REPO = process.env.KB_REPO_SLUG || 'knomit/agentic-engineering-kb';
 const REF = process.env.KB_REF || 'agent/mindev.local-8ef0cd32';
 const SRC = process.env.KB_SRC || '';
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;   // keep in step with src/lib/bundleTypes.ts
 
 async function git(cwd, ...args) {
   const { stdout } = await exec('git', args, { cwd, maxBuffer: 64 * 1024 * 1024 });
@@ -156,6 +156,25 @@ export async function buildBundle(repoDir, ref) {
 }
 
 /**
+ * Replace `bundle.trees` with `treeDeltas` for the file on disk — see
+ * WireBundle in src/lib/bundleTypes.ts. Full trees are commits x facts and
+ * outgrew Cloudflare Pages' 25 MiB per-file cap; deltas are ~one entry per
+ * blob version. src/lib/bundleWire.ts decodes.
+ */
+export function encodeBundle(bundle) {
+  const { trees, ...rest } = bundle;
+  const treeDeltas = bundle.commits.map((c, i) => {
+    const here = trees[c.sha] ?? {};
+    const older = i + 1 < bundle.commits.length ? (trees[bundle.commits[i + 1].sha] ?? {}) : {};
+    const delta = {};
+    for (const [p, sha] of Object.entries(here)) if (older[p] !== sha) delta[p] = sha;
+    for (const p of Object.keys(older)) if (!(p in here)) delta[p] = null;
+    return delta;
+  });
+  return { ...rest, treeDeltas };
+}
+
+/**
  * Pick the guided tour's spine from the corpus.
  *
  * The tour needs a synthesis fact that (a) carries at least one entity, so the
@@ -272,7 +291,7 @@ export async function buildAndWrite({ outDir = OUT_DIR, genDir = GEN_DIR, src = 
     const bundle = await buildBundle(repo.dir, remoteRef);
     bundle.ref = ref;
 
-    const json = JSON.stringify(bundle);
+    const json = JSON.stringify(encodeBundle(bundle));
     const hash = createHash('sha256').update(json).digest('hex').slice(0, 8);
     const name = `bundle-${hash}.json`;
 
@@ -289,6 +308,10 @@ export async function buildAndWrite({ outDir = OUT_DIR, genDir = GEN_DIR, src = 
     console.log(`  ✓ ${name}  (${bundle.commits.length} commits, ` +
       `${Object.keys(bundle.trees[bundle.head]).length} facts, ` +
       `${Object.keys(bundle.blobs).length} versions, ${json.length} bytes raw)`);
+    // Cloudflare Pages rejects the whole deploy over one file this size.
+    if (json.length > 20 * 1024 * 1024) {
+      console.warn(`  ! bundle is ${(json.length / 1048576).toFixed(1)} MiB — Pages caps files at 25 MiB`);
+    }
   } catch (err) {
     console.warn(`  ! ${err.message}`);
     if (await reuseVendored(outDir, genDir)) return;
