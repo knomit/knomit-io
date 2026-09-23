@@ -2,7 +2,8 @@ import { useReducer, useEffect, useLayoutEffect, useMemo, useState, useRef, useC
 import type { ReactNode } from 'react';
 import { BUNDLE_URL } from '../generated/kb-bundle-url';
 import { setBundle, assertSchema } from '../lib/bundleApi';
-import type { Bundle } from '../lib/bundleTypes';
+import type { Bundle, WireBundle } from '../lib/bundleTypes';
+import { decodeBundle } from '../lib/bundleWire';
 import {
   reducer, init, isLive, selectTrail,
 } from '../generated/kb-ui/state';
@@ -105,9 +106,10 @@ export default function ExploreBrowser() {
     let cancelled = false;
     fetch(BUNDLE_URL, { signal: AbortSignal.timeout(15_000) })
       .then(r => { if (!r.ok) throw new Error(`${BUNDLE_URL} -> ${r.status}`); return r.json(); })
-      .then((b: Bundle) => {
-        assertSchema(b);
+      .then((w: WireBundle) => {
+        assertSchema(w);
         if (cancelled) return;
+        const b = decodeBundle(w);
         setBundle(b);
         setLoad({ phase: 'ready', bundle: b });
       })

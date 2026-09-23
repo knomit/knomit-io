@@ -1,5 +1,5 @@
 /** Bump when the shape below changes; the loader validates it. */
-export const BUNDLE_SCHEMA_VERSION = 1;
+export const BUNDLE_SCHEMA_VERSION = 2;
 
 /** One parsed fact version. Mirrors the `Fact` shape the vendored UI expects. */
 export interface BundleFact {
@@ -59,4 +59,19 @@ export interface Bundle {
   blobs: Record<string, BundleFact>;
   /** Guided-tour spine; absent when the corpus has no qualifying pair. */
   tour?: BundleTour;
+}
+
+/**
+ * What `/kb/bundle-*.json` actually holds: `trees` delta-encoded.
+ *
+ * Full per-commit trees grow as commits x facts (672 x 298 hit 25 MiB, the
+ * Cloudflare Pages per-file cap) while only the changed paths carry
+ * information. `treeDeltas[i]` is `commits[i]`'s tree minus that of
+ * `commits[i + 1]` (the next-older entry; the oldest diffs against empty):
+ * changed or added paths map to their blob, removed paths map to null.
+ * `decodeBundle` expands it back into `Bundle.trees` on load.
+ */
+export interface WireBundle extends Omit<Bundle, 'trees'> {
+  /** Aligned with `commits` (newest-first). */
+  treeDeltas: Record<string, string | null>[];
 }

@@ -19,7 +19,7 @@ export function setBundle(b: Bundle): void {
   index = b ? buildIndex(b) : null;
 }
 
-export function assertSchema(b: Bundle): void {
+export function assertSchema(b: Pick<Bundle, 'schemaVersion'>): void {
   if (b?.schemaVersion !== BUNDLE_SCHEMA_VERSION) {
     throw new Error(`bundle schemaVersion ${b?.schemaVersion} != ${BUNDLE_SCHEMA_VERSION}`);
   }

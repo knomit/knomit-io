@@ -49,7 +49,7 @@ afterAll(async () => { await rm(repoDir, { recursive: true, force: true }); });
 describe('buildBundle', () => {
   it('emits a schema-versioned bundle with newest-first commits', async () => {
     const b = await buildBundle(repoDir, 'main');
-    expect(b.schemaVersion).toBe(1);
+    expect(b.schemaVersion).toBe(2);
     expect(b.commits).toHaveLength(2);
     expect(b.commits[0].subject).toBe('revise and add');
     expect(b.head).toBe(b.commits[0].sha);
