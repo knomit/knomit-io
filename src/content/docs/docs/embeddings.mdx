@@ -87,9 +87,17 @@ passes the command context. `EmbedQuery` and `EmbedDocument` also take a context
 but only as a pre-flight checkpoint — the ONNX `Run` call cannot be interrupted,
 so cancelling after that check does not stop an inference already underway.
 
-The ONNX Runtime shared library is located at runtime via
-`ONNXRUNTIME_SHARED_LIBRARY` (or `onnx_lib_path`); it is fetched into
+The ONNX Runtime shared library is located at runtime from `ORT_LIB_PATH` when
+it is set; otherwise knomit looks in the `lib/` directory next to its own
+executable, then in the platform's usual library locations. It is fetched into
 `dist/<platform>/lib/` at build time by `fetchlibs`.
+
+How much text one inference call embeds at once is bounded by
+`[embeddings] max_batch_tokens` (`KNOMIT_EMBED_MAX_BATCH_TOKENS`), counted as
+padded tokens, rows times the longest row, because that product is what memory
+scales with. The default, `0`, derives a budget from the machine's memory
+ceiling (a cgroup limit when one exists, otherwise physical RAM) and never
+exceeds the built-in default; an explicit value is used as given.
 
 ## Per-model calibrated thresholds
 

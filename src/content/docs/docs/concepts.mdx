@@ -1,107 +1,201 @@
 ---
 title: Concepts
-description: Facts, kinds and types, the ontology and inheritance, clustering, consensus, provenance and signing, and the temporal graph.
+description: Facts, kinds and types, the three roots of a knowledge base, the ontology, consensus across agent branches, identity and signing, and the temporal graph.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-knomit is a distributed, decentralized knowledge base built from **facts, not
-documents** on git. A handful of ideas explain the whole system — each one falls
-out of a single decision: make git the only source of truth, and represent
-knowledge as facts. This page is the reference companion to the visual
+knomit stitches many agents and many knowledge bases into one fabric that
+accumulates knowledge, distills it, and puts it to use. Each agent writes to a
+branch of its own; each knowledge base is a git repository of facts; merges
+carry what one agent learned to every other agent that shares the base. The
+ideas below explain that system, and most of them follow from two decisions:
+git is the only source of truth, and knowledge is stored as facts, not
+documents. This page is the reference companion to the visual
 [Concepts overview](/concepts/).
 
 ## A fact is a markdown file
 
-Knowledge in knomit is a **fact**: one concise, atomic claim — not a chunk of an
-ingested document. Each is a plain markdown file: YAML frontmatter for structured
-metadata, a markdown body for the claim. The file **is** the fact — no database
-rows, no binary blobs, no opaque embeddings.
+Knowledge in knomit is a **fact**: one concise claim, not a chunk of an ingested
+document. Each is a plain markdown file: YAML frontmatter for structured
+metadata, then a `# Title` line and a markdown body. The file **is** the fact.
+There are no database rows behind it, no binary blobs, no opaque embeddings.
 
 ```markdown
 ---
 type: observation
-origin: authored
+domain: [support, billing]
 confidence: 0.8
-domain: [music]
-entities: [alice]
-sources: 1
-refs:
-  - src://knomit/src/preferences.ts@a1b2c3d
+sources: 2
+entities: [acme-corp, refunds]
+motifs: [policy-lags-practice]
+refs: [kb/policy/refunds/3c9e1a20.md, 'https://example.com/acme/refund-policy']
+expires: 2026-12-31T00:00:00Z
+context: {region: eu, ticket: t-4127}
 ---
-Alice prefers rock music over jazz.
+# EU refunds over 500 EUR need a second approver since the October policy change
+
+Agents approving EU refunds alone were overruled twice in October; the
+written policy still says one approver.
 ```
 
-Confidence, domains, entities, and provenance refs travel in the frontmatter.
-`confidence` is a degree of belief that can rise and fall; `refs` relate the fact
-to others, forming a graph. Because it's just a file, humans edit it with any text
-editor and agents write it over MCP — both paths land at the same file, through
-the same operations.
+| Field | What it carries |
+|---|---|
+| `kind`, `type` | How to apply the fact (see [below](#epistemic-vs-pragmatic)). `kind` is written only for pragmatic facts; epistemic is the default. |
+| `confidence` | A degree of belief between 0 and 1 that can rise and fall. |
+| `sources` | How many independent corroborations the claim has. |
+| `domain`, `entities` | What the fact is about: cross-cutting tags and named things. |
+| `motifs` | Up to three names for the general pattern the fact is an instance of, independent of its subject. Two facts about unrelated subjects that share a motif can be found together with `knomit_query`'s `motifs` filter. |
+| `refs` | The evidence and related facts; refs turn the corpus into a graph (see [Ref forms](#ref-forms)). |
+| `origin` | How the fact came to exist (see [Origin](#origin)). Omitted when the type implies it, as for an authored observation. |
+| `expires` | Optional. An RFC 3339 time, stored in UTC. Past it, query results mark the fact `"expired": true` and `knomit_query` can filter on it. knomit never deletes, hides or retracts a fact because it expired; you or a human decide what to do with it. |
+| `context` | Optional. Short typed labels (`string`, `number`, `bool`, `enum`, `time`) that let a fact be found by a property that is not its subject, such as the task it belongs to or a verdict. Only keys the [ontology declares](/docs/ontologies/#context-declarations) for the fact's topic are accepted, and `knomit_query` matches them exactly. |
+
+Because a fact is just a file, a human edits it with any text editor and git
+client, and an agent writes it through MCP. Both land at the same file, on the
+same branches, through the same commit operations.
 
 ## Epistemic vs pragmatic
 
 Every fact carries a **kind** that tells the consumer how to apply it.
-**Epistemic** facts describe what *is* — knowledge to weigh as evidence, with a
-confidence that can move. **Pragmatic** facts prescribe what to *do* — rules to
-follow or lean on. The leaf `type` refines this further:
+**Epistemic** facts describe what *is*: knowledge to weigh as evidence, with a
+confidence that can move. **Pragmatic** facts prescribe what to *do*: rules to
+follow or lean on, and coordination messages to act on. The leaf `type` refines
+this further:
 
 | Kind | Types |
 |------|-------|
-| **Epistemic** — what *is* | `observation` (default), `concept`, `process`, `principle`, `pattern`, `reference`, `synthesis`, `insight`, `hypothesis`, `methodology` |
-| **Pragmatic** — what to *do* | `policy`, `heuristic` |
+| **Epistemic**: what *is* | `observation` (default), `concept`, `process`, `principle`, `pattern`, `reference`, `synthesis`, `insight`, `hypothesis`, `methodology` |
+| **Pragmatic**: what to *do* | `policy`, `heuristic`, `signal` |
 
 The epistemic/pragmatic split is the load-bearing one: it is the difference
 between *knowing* and *acting*. Only epistemic facts seed
-[synthesis](/docs/synthesis/).
+[synthesis](/docs/synthesis/), so a policy is never rewritten into a claim.
+
+A **`signal`** is coordination content that travels between agents as a fact: a
+task, a message, an acknowledgement, a membership claim. It is consumed once,
+never believed, so its confidence is never weighed as evidence. By convention the
+verb is the topic (`tasks`, `inbox`, `acks`), the addressee is the path, the
+sender is the commit author, and a task id is an entity. Signals are how agents
+sharing a knowledge base hand work to each other without any channel besides the
+knowledge base itself.
+
+One `knomit_learn` call may not mix observed types with inferred ones
+(`hypothesis`, `methodology`): a commit records one act, either something seen or
+something reasoned to, so a later reader knows which.
 
 ## Origin
 
 Independent of *what* a fact is (`type`) and *how to apply* it (`kind`), every
-fact records **how it came to exist** — its `origin`:
+fact records **how it came to exist**, its `origin`:
 
 | Origin | Meaning |
 |--------|---------|
 | `authored` | Written by a human or asserted by an agent via `knomit_learn`. |
-| `distilled` | Emitted by the synthesis pipeline — a `synthesis` fact clustered up from sources. |
-| `discovered` | **Emergent** — surfaced by the discovery engine from structural bridges nobody declared (see [Emergent discovery](/docs/discovery/)). |
+| `distilled` | Emitted by the synthesis pipeline: a `synthesis` fact clustered up from sources. |
+| `discovered` | **Emergent**: surfaced by the discovery engine from structural bridges nobody declared (see [Emergent discovery](/docs/discovery/)). |
 
 `origin` is **orthogonal** to `type` and `kind`: a `discovered` fact is still a
 normal `synthesis` (a forward *consequence*) or `hypothesis` (a backward
-*keystone*) — `origin` only records that knomit *inferred* it rather than being
+*keystone*). `origin` only records that knomit *inferred* it rather than being
 told. Query the emergent set with `origin: discovered` on `knomit_query`.
 
 ## Ontology & inheritance
 
 Facts live in a directory tree under the ontology root (`kb/` by default). That
-tree is not just organization — it carries meaning. **A fact placed at a higher
-level applies to everything beneath it**: a fact at `kb/invariants/` is inherited
-by `kb/invariants/concurrency/branch-lock/`.
+tree carries meaning, not only organization. **A fact placed at a higher level
+applies to everything beneath it**: a fact at `kb/invariants/` is inherited by
+`kb/invariants/concurrency/branch-lock/`.
 
-Each fact also declares its subject along three independent axes — its ontology
-path, cross-cutting `domain` tags, and named `entities` — which together make the
-corpus introspectable. The ontology is configurable; knomit ships with two:
-**General Knowledge** (a broad taxonomy derived from Wikipedia's main topics) and
-**Source Code Knowledge** (a codebase taxonomy with topics like `invariants`,
-`conventions`, `decisions`, and `gotchas`).
+Each fact also declares its subject along three independent axes: its ontology
+path, cross-cutting `domain` tags, and named `entities`. Together they make the
+corpus introspectable, so an agent can ask not only "what do I know about X?" but
+"what is the shape of everything I know?".
 
-The tree is not only a taxonomy: an ontology also declares validation rules that
-run against every fact on write, so it decides what counts as a well-formed fact
-in this knowledge base. See [Ontologies](/docs/ontologies/) for the file format,
-the rules, and how to write your own.
+The ontology is one YAML file per knowledge base, `.knomit/ontology.yaml`, and it
+does more than name topics:
+
+- **Validation rules** run against every fact on write, so the ontology decides
+  what counts as a well-formed fact in this knowledge base.
+- **Node `attributes`** switch store behaviour for a topic and everything under
+  it, the nearest declaration winning (`learn_dedup: off` turns off the automatic
+  near-duplicate merge for a topic whose facts must stay separate).
+- **Root `attributes`** set repository-wide policy: whether signatures are
+  verified, whether pushed branches merge automatically, how conflicts are
+  settled, and whether sync runs in real time.
+- **`context` declarations** say which context keys a topic's facts may carry,
+  with their types.
+- **`guidance`** names files that steer the review and hypothesize prompts.
+- **`triggers`** fire on changes to facts under a topic (see
+  [Triggers & recipes](/docs/triggers/)).
+
+knomit ships three presets: **General Knowledge** (`default`, a broad taxonomy
+derived from Wikipedia's main topics), **Source Code Knowledge** (`code`, topics
+organised by epistemic role such as `invariants`, `conventions`, `decisions` and
+`gotchas`), and **Fleet** (`fleet`, the member registry of a fleet of agents).
+Knowledge bases can also be created from
+[templates](/docs/templates/) that other knowledge bases publish. See
+[Ontologies](/docs/ontologies/) for the file format, the rules, and how to write
+your own.
 
 ## What a knowledge base repo contains
 
-A knowledge base is an ordinary git repository, so it holds more than facts.
-Three root-level conventions matter.
+A knowledge base is an ordinary git repository with **three roots**, each with
+one kind of content and one rule for who writes it.
 
-### `README.md` — the repo's description
+| Root | Holds | Written by | Read by |
+|---|---|---|---|
+| `kb/` | Facts, filed by topic and category | The fact tools (`knomit_learn`, `knomit_update`, `knomit_retract`) and humans through git | Every query, listing, export and trigger |
+| `.knomit/` | The system: the ontology, trigger scripts, recipes, skills, guidance files, templates | People through git, and knomit's own code (creating a repo, refreshing a preset, creating from a template) | knomit, by exact path; agents by exact path with `knomit_explain` |
+| `artifacts/<area>/<name>` | Agents' untyped working files: drafts, reports, scratch state | The fact tools, by naming an explicit `path` | Only by exact path |
+
+The ontology root is `kb` unless `ontology_root` in `knomit.toml` says
+otherwise. The repo also carries a `README.md` and usually a `LICENSE` at its
+top level.
+
+### `kb/`: the facts
+
+Everything under the ontology root is knowledge: indexed, searchable, merged,
+exported, and seen by triggers. A fact's path is `kb/<topic>/<category…>/<id>.md`,
+and the topic must be one the ontology declares.
+
+### `.knomit/`: the system
+
+`.knomit/` describes how the knowledge base operates, the way system tables
+describe a database. It is **closed to every fact-tool write**: `knomit_learn`,
+`knomit_update`, `knomit_retract`, the REST fact routes and experiment
+resolutions all refuse a path under it. It changes only through git (a commit, a
+push, a merge), which means a change to the system goes through the same review
+as any other merge into the knowledge base.
+
+It is readable by exact path. `knomit_explain` with
+`file: ".knomit/ontology.yaml"` returns the file's raw content, and a fact may
+cite a system file in its `refs`, for example the trigger that produced it. It is
+never indexed and never appears in a query or a listing.
+
+Every other path segment beginning with `.` (`.github/`, `kb/.drafts/`) is also
+closed to the fact tools and invisible to the indexer, the integrity check and
+the OKF exporter. Such files still commit, diff, push and pull like any others.
+
+### `artifacts/`: agents' working files
+
+An agent that needs to keep a working file that is not knowledge (a draft, a
+run report, a job's bookkeeping) writes it with `knomit_learn` and an explicit
+`path` of the form `artifacts/<area>/<name>`, at least one folder deep. An
+artifact keeps the fact file format but has no ontology placement: no validation
+rules run on it, it may not carry `context`, and it is invisible by location. It
+is never indexed, never returned by `knomit_query` or `knomit_changes`, never
+exported, and fires no trigger. Read it back by its exact path with
+`knomit_explain`, and revise it with `knomit_update`.
+
+### `README.md`: the repo's description
 
 The description you see in the UI *is* `README.md`, read verbatim at HEAD. It is
 not metadata stored beside the repo: editing the description commits the file to
 the agent branch, so it has a history, diffs, and syncs with everything else.
 Capped at 64 KiB.
 
-### `LICENSE` — the terms
+### `LICENSE`: the terms
 
 The terms the KB's content is published under, at the tree root beside the
 README. knomit reports it, and since v0.5.3 can also
@@ -118,82 +212,143 @@ and even `License` are not found, because the lookup is an exact tree-entry
 match rather than a case-insensitive search. A missing licence is not an error;
 "this KB states no terms" is an ordinary state.
 
-### Dot-prefixed paths are private
-
-**Any path segment beginning with `.`** makes a path private — `.github/`,
-`.knomit/`, `kb/.drafts/`. Private paths are excluded from fact **discovery**
-everywhere: the search indexer, `knomit verify`, and the OKF exporter all skip
-them, and no fact is ever *allocated* one.
-
-Discovery exclusion is absolute. Writing is not: a caller may name a path under
-`.knomit/<area>/` explicitly and the fact tools will write it, which is how a
-periodic job keeps [private state](/docs/mcp-tools/#private-state) without
-polluting the corpus. Such a path is still private in every sense that matters
-here — invisible to every walker — it is simply reachable by name.
-
-<Aside type="note" title="Private means “not knowledge”, not “invisible”">
-The rule governs **walking, never opening**. knomit still reads specific known
-paths by name — which is exactly what lets it load its own
-[ontology definition](/docs/ontologies/#where-it-lives-and-when-it-is-read) from
-`.knomit/ontology.yaml`, a private path it depends on at boot.
-
-So a dot-path is not hidden, blocked, or refused by storage. These files commit,
-diff, push and pull like any others. They simply never enter the corpus as
-facts.
-</Aside>
-
 <Aside type="caution" title="Not to be confused with an OKF export repo">
 An [OKF export](/docs/okf/) repository has `README.md` and `LICENSE` at its root
 too, and the rules there are the opposite: both belong to the **publisher**, and
 `knomit-okf` never reads, writes, or stages either of them. The distinction is
-which repository you are looking at — your knowledge base, or the bundle it
+which repository you are looking at: your knowledge base, or the bundle it
 publishes.
 </Aside>
 
 ## How knowledge clusters
 
-Beyond what each fact says about itself, the corpus has emergent structure the
-author never declared. Facts cluster by **meaning** — embedding similarity groups
-facts that talk about the same thing, wherever they were filed — and by
-**classification** — shared ontology paths, domains, and entities. The distill
-pass synthesizes each cluster into a `synthesis` fact, then re-clusters and
-distills again, producing a hierarchy from raw observations at the leaves to
-higher-order insight at the top.
+Beyond what each fact says about itself, the corpus has structure the author
+never declared. Facts cluster by **meaning**, because embedding similarity groups
+facts that talk about the same thing wherever they were filed, and by
+**classification**, because shared ontology paths, domains, and entities group
+facts by how they were declared. The distill pass synthesizes each cluster into a
+`synthesis` fact, then re-clusters and distills again, producing a hierarchy from
+raw observations at the leaves to higher-order insight at the top. Motifs add a
+third grouping: facts about different subjects that follow the same pattern.
 
 ## Subsumption — never learned twice
 
-When a fact is written via `knomit_learn`, knomit runs a near-duplicate check in
-the same category using embedding similarity **before committing**. If a match is
-found, the incoming fact **subsumes** the existing one — or is absorbed by it —
-producing a single fact that carries refs to both sources. Two chunks that say the
-same thing never pile up.
+A claim is asserted once. When a fact is written via `knomit_learn`, knomit
+searches the same category for a near-duplicate, by embedding similarity,
+**before committing**. If one is found, the two fold into a single fact at the
+existing path:
 
-A special case: a `hypothesis` is subsumed by a newer `observation` when the world
-catches up to the prediction. The fact survives, its type transitions, and git
-history records the exact moment evidence closed the loop.
+- The title, body, kind, type, origin, `expires` and `context` come whole from
+  the winner: the higher confidence, then the higher `sources`, the incoming fact
+  winning a tie.
+- `confidence` takes the higher of the two; `domain`, `entities`, `motifs` and
+  `refs` are unioned.
+- `sources` grows by the incoming count **only when the incoming fact is not a
+  hypothesis and cites a ref the existing fact does not already carry.**
+  Re-reading the same evidence is not corroboration, so it leaves the count
+  unchanged, and the response says why.
+
+A separate check refuses a fact that shares a subject with an existing one
+(similar text and a shared entity), listing the candidates so the agent can
+update the existing fact instead, or resubmit naming the paths it judged
+different in `distinct_from`.
+
+A special case: when an incoming observation matches a `hypothesis`, the
+observation is written at its own path, cites the hypothesis, and the hypothesis
+is retracted in the same commit. Git history records the moment evidence
+settled the prediction.
+
+Because peers share a knowledge base by merging, the same rule is what keeps the
+cost of learning paid once across the fabric: what one agent learned, another
+inherits through a merge instead of re-deriving it.
 
 ## Peers, branches & consensus
 
-knomit is distributed and decentralized by construction. Every peer — human or
-agent — operates on a long-lived personal branch (`agent/<id>`, derived from
-machine hostname plus a short hash of its Ed25519 key). All learn, update, and
-retract operations land on that branch. **No peer writes `main` directly.**
+knomit is distributed and decentralized by construction. Every instance owns one
+long-lived **agent branch** per knowledge base, and is the only writer of it.
+All learn, update and retract operations land there. **No agent writes the
+consensus branch directly.**
 
-Consensus is reached deliberately: a peer's facts are reviewed and merged into
-`main` — by a Librarian agent, a CI policy, or a human merge. Each peer then pulls
-`main` and merges it locally, inheriting the agreed truth instead of re-deriving
-it. **Learning effort is shared, not re-paid.** (Merge, never squash — see
-[Remote sync](/docs/remote-sync/#the-consensus-model).)
+Knowledge moves up a ladder of three rungs:
 
-## Provenance & signing
+1. **Experiment**, `exp/<name>`: a local branch forked from the agent branch for
+   work that may not survive, such as facts about a change still under review.
+   It is never pushed and never visible to a peer. Committing it merges it into
+   the agent branch; rolling it back discards it. See
+   [Experiments](/docs/experiments/).
+2. **Agent branch**, `agent/<id>`: this instance's own line of work, pushed to
+   the knowledge base's origin or to a knomit host.
+3. **Consensus branch**: the branch every peer agrees on. It is configured per
+   knowledge base and recorded when the repo is created or cloned: the branch
+   you name, otherwise the remote's default branch (its `HEAD`), unless that is
+   itself an agent branch. Nothing assumes it is called `main`, though it usually
+   is.
 
-Every write — learn, update, retract, subsume, sync — is an atomic commit authored
+The consensus branch advances by merge. Depending on where the knowledge base
+lives, that merge is made by a human or a CI job reviewing a pushed agent branch,
+by an operator merging a pushed branch from the web UI, or automatically: with
+the root attribute `consensus: auto`, a knomit host that owns the knowledge base
+merges every branch a peer pushes to it as soon as it lands. A knowledge base
+with no origin advances its consensus branch from its own agent branch. Each peer
+then merges the consensus branch back into its agent branch on every sync,
+inheriting the agreed knowledge instead of re-deriving it. **Learning effort is
+shared, not re-paid.**
+
+### When both sides changed a fact
+
+Because each branch has one writer, the only conflicts are two branches changing
+the same file. What a merge does then is repository policy, set in the root
+attribute `conflicts`:
+
+- **`facts: merge`** merges the two versions of a fact **field by field**
+  against their common ancestor. A field only one side changed takes that side;
+  a field both changed takes the version with the higher confidence, then more
+  sources, then the one that is not a hypothesis (the dedup winner rule, made
+  symmetric so both peers compute the same bytes). Lists such as `refs` and
+  `domain` merge as sets, `context` merges key by key, and title and body are
+  taken whole from one side, never spliced.
+- **`facts: merge:consensus`** does the same, but a field both changed takes the
+  consensus side's value; **`facts: consensus`** takes the consensus side's whole
+  version.
+- **Delete wins.** Under `merge` and `merge:consensus`, when one side retracted a
+  fact and the other edited it, the retraction lands; the edit stays readable at
+  the merge commit's other parent.
+- **`state`** settles everything that is not a fact (the ontology, other system
+  files) and any fact that cannot be merged without losing something.
+
+Under `consensus: auto` an unset `conflicts` reads `facts: merge` and
+`state: consensus`; otherwise an unset key is `off`, which keeps the behaviour
+each merge site has always had: a peer's sync keeps its own version, and a host
+refuses and leaves the conflict for a human. Whatever the setting, every
+conflict a merge settles is recorded on the merge commit as a `Knomit-Merge:` or
+`Knomit-Conflict:` trailer naming the path, the strategy, the versions involved
+and what was dropped. Merge, never squash: the merge commit and its parents are
+the record. See [Sync & consensus](/docs/sync-and-consensus/).
+
+## Identity, provenance & signing
+
+Every write (learn, update, retract, subsume, sync) is an atomic commit authored
 under an identity-carrying address. Agents use
-`<agent-id>+<operation>@agents.knomit.io`; humans use their own email with
-`+operation` subaddressing. Commits are signed with the agent's Ed25519 key, which
-makes the **(who, what, when, why)** tuple cryptographic rather than hand-waved.
-The same key signs commits, names the branch, and authenticates remote sync — one
-identity, end to end.
+`<agent-id>+<operation>@agents.knomit.io` as the author; humans use their own
+email with `+operation` subaddressing.
+
+The **agent id** is opaque. On its first boot an instance computes
+`agent/<host>-<fp8>` from its hostname and the first eight hex digits of a hash
+of its Ed25519 public key, stores it in its control database, and uses that
+stored value from then on. Renaming the host or rotating the key does not rename
+the branch, and nothing parses the key out of the id.
+
+Every commit an instance authors is **signed** with its Ed25519 key; knomit never
+writes an unsigned commit of its own (the first commit of a new repository is
+the one exception). Signatures are **checked once, where commits are accepted**:
+when a peer pushes its agent branch to a knomit host, and in the CI job that
+merges a branch into the consensus branch (`knomit verify ci`). Each commit must
+be signed by the current key on its author's record in the
+[fleet repository](/docs/fleet/), and that record must be active. The root
+attribute `verify_signatures` sets the mode: `off` (the default), `log`, or
+`enforce`. History already accepted is not re-checked on fetch or merge. That
+makes the **(who, what, when, why)** tuple of every fact cryptographic, across
+every agent that contributes to a knowledge base.
 
 ## The temporal graph
 
@@ -201,7 +356,7 @@ knomit treats git history as a first-class temporal axis, not an implementation
 detail. Each commit is a moment of belief. Refs resolve **at commit-time, not at
 HEAD**: reading a fact as-of commit `C` follows its refs to whatever those targets
 were at `C`, even if they have since been updated or retracted. The graph is a
-record of what was believed and when — never silently overwritten with "now".
+record of what was believed and when, never silently overwritten with "now".
 
 <Aside type="note" title="Git is the only source of truth">
 The SQLite search index, embeddings, and commit/graph caches are all
@@ -212,8 +367,9 @@ commits), the temporal model (history), and the distribution model
 
 ## Ref forms
 
-Refs anchor a fact to its source material — the evidence behind the claim. A ref
-points to another fact, to a source file, or to any web resource:
+Refs anchor a fact to its source material, the evidence behind the claim. A ref
+points to another fact, to a system file, to a source file, or to any web
+resource:
 
 {/* A list, not a table. Four forms against three columns left the "Meaning"
     column about 110px wide — every phrase wrapped to two or three words, the
@@ -223,30 +379,39 @@ points to another fact, to a source file, or to any web resource:
 <dl class="ref-forms">
 
 <dt>`kb/technology/debugging/pool-fix.md`</dt>
-<dd>**Local fact path** — a fact in this knowledge base.</dd>
+<dd>**Local fact path**: a fact in this knowledge base.</dd>
 
 <dt>`kb://a1b2c3d4e5f6/kb/technology/debugging/pool-fix.md`</dt>
-<dd>**Repo-qualified** — a fact in another repo mounted in this
-[lens](/docs/lenses/), addressed by that repo's 12-hex id.</dd>
+<dd>**Repo-qualified**: a fact in a repo addressed by its 12-hex id, such as
+another mount of a [lens](/docs/lenses/).</dd>
+
+<dt>`.knomit/triggers/triage.js`</dt>
+<dd>**System file**: a file under `.knomit/` in this repo, by exact path (or
+`kb://<id>/.knomit/…` in another repo). A local one must exist when the fact is
+written.</dd>
 
 <dt>`src://7b4887ce51d9/internal/store/service.go@<commit>:<blob>`</dt>
-<dd>**Source anchor** — a source file, pinned to a 40-hex commit *and* a 40-hex
+<dd>**Source anchor**: a source file, pinned to a 40-hex commit *and* a 40-hex
 blob, optionally with `#L10-L24`. [Why the blob](#why-a-source-ref-carries-a-blob).</dd>
 
 <dt>`https://example.com/doc`</dt>
-<dd>**Plain URL** — any web resource: article, paper, commit.</dd>
+<dd>**Plain URL**: any web resource such as an article, paper or commit.
+`file://` and other schemes are accepted too.</dd>
 
 </dl>
 
-Refs are stored verbatim — never rewritten, resolved, or normalized. A ref is
-classified **local** when it does not start with `kb://` and does end in `.md`;
-everything else is external.
+Refs are stored verbatim, never rewritten, resolved, or normalized. A ref to a
+fact in this repo, whether bare or written `kb://<own-id>/…`, is a local fact
+edge and counts toward the fact's evidence weight. A `kb://` ref to another repo
+is a stable identifier you can pass back as `knomit_explain`'s `file`, but it
+contributes no evidence weight here.
 
 ### Why a source ref carries a blob
 
-The current `src://` form names three things: the source repo's id (its root
-commit, a different namespace from a knomit repo id), a full 40-hex commit, and
-the 40-hex **blob** of the file at that commit — optionally with `#L10-L24`.
+The current `src://` form names three things: the source repo's id (the first 12
+hex digits of its root commit, a different namespace from a knomit repo id), a
+full 40-hex commit, and the 40-hex **blob** of the file at that commit,
+optionally with `#L10-L24`.
 
 The blob is what makes the citation durable. With it, `git cat-file blob <blob>`
 retrieves exactly the bytes that were cited, even if the file was later renamed
@@ -254,16 +419,11 @@ or deleted. The older `src://<source>/<path>@<commit>` form is still accepted,
 but it is weaker on purpose: `git show <commit>:<path>` fails outright if the
 path did not exist at that commit, which is the failure the blob removes.
 
-knomit stores no source objects and cannot verify a `src://` ref for you — the
+knomit stores no source objects and cannot verify a `src://` ref for you; the
 command that resolves it is the check. Get the three parts from the checkout you
 are citing: `git rev-list --max-parents=0 HEAD` for the repo id,
 `git rev-parse HEAD` for the commit, and `git rev-parse <commit>:<path>` for the
 blob.
-
-A `kb://` path is a stable identifier: pass it back as `knomit_explain`'s `file`,
-or store it in a fact's `refs` to cite across repos — the server never rewrites
-it. It is classified as an **external** ref rather than a local fact edge, so it
-contributes no evidence weight and creates no local provenance edge.
 
 ## Synthesis & hypotheses
 
@@ -272,20 +432,41 @@ passes: *prune* (remove redundant or stale facts), *distill* (cluster related
 facts into a `synthesis` fact no individual source makes on its own), and
 *reflect* (record `methodology` facts from resolved hypothesis transitions).
 **Hypothesize** (`knomit_hypothesize`) is a separate, explicit pass that writes
-falsifiable `hypothesis` facts — and skipping is the expected default. Synthesis
-is the only LLM-backed feature. See [Synthesis & hypotheses](/docs/synthesis/) for
-the full pipeline and RAPTOR, and [Emergent discovery](/docs/discovery/) for the
-effort dial and the bridge engine.
+falsifiable `hypothesis` facts, and skipping is the expected default. Both borrow
+the calling model's cycles one work item at a time, and a knowledge base can
+steer both through [guidance files](/docs/ontologies/#guidance) named in its
+ontology. See [Synthesis & hypotheses](/docs/synthesis/) for the full pipeline
+and RAPTOR, and [Emergent discovery](/docs/discovery/) for the effort dial and
+the bridge engine.
 
 ## The MCP operational loop
 
-MCP is the primary interface for humans (via Claude Code and editors) and agents
-alike. Eight tools cover the full fact lifecycle — their descriptions are written
-as prompt engineering for the calling model, so no scaffolding is needed to call
-them correctly (knowing *when* to call them is what
-[Claude Code's skills](/docs/claude-code/) add). Each agent
-connects to a **branch-scoped endpoint**, so reads and writes land on its own
-branch automatically; isolation is structural, not convention. A single MCP
-server instance serves every repo and [lens](/docs/lenses/); each handler
-resolves its binding from the request, and the instructions sent to the model are
-computed per session from that binding. See [MCP tools](/docs/mcp-tools/).
+MCP is the primary interface for humans and agents alike, through any MCP client
+and the web UI. Twelve tools cover the full lifecycle; their descriptions are
+written as prompt engineering for the calling model, so no scaffolding is needed
+to call them correctly. See [MCP tools](/docs/mcp-tools/).
+
+- **Bind.** One server serves every repo and [lens](/docs/lenses/) it mounts. A
+  client either connects to an endpoint scoped by URL to one repo or lens, or to
+  the unscoped endpoint, where `knomit_bind` returns an opaque `binding` handle
+  that every later call carries. The session instructions (the write repo's
+  topics and fact vocabulary, plus the mount table for a lens) come from what
+  the binding names. Writes always land on this
+  instance's agent branch, or on the experiment the session has entered;
+  isolation is structural, not a convention.
+- **Recall and write.** `knomit_query` and `knomit_explain` read; `knomit_learn`,
+  `knomit_update` and `knomit_retract` write. `knomit_learn` can also retract
+  paths in the same commit as the facts it writes, which is how an agent moves a
+  task from `tasks/` to its working copy atomically.
+- **Trace.** Every write tool accepts a `trace` object whose entries are written
+  as trailers at the end of each commit the call makes, so the writes of one task
+  can be found later with
+  `git log --all --grep='^Knomit-Trace: <id>'`. Trigger scripts and recipes stamp
+  `Knomit-Trace`, `Knomit-Cause` and `Knomit-Trigger` themselves.
+- **Watch.** `knomit_changes` returns the net set of files added, modified or
+  deleted under a folder between a bookmark commit and now, comparing two trees
+  rather than reading any clock. An agent keeps the bookmark and asks again, which
+  is how agents sharing a knowledge base notice each other's work.
+- **Maintain.** `knomit_review`, `knomit_hypothesize`, `knomit_experiment` and
+  `knomit_skill` (the knowledge base's own skills, read from `.knomit/skills/`)
+  complete the set, with `knomit_repos` listing what the server serves.

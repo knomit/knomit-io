@@ -28,6 +28,12 @@ similarity clusters (distinct Louvain communities over the embedding graph). Tha
 cross-cluster shared token is the signal similarity missed. Discovery seeds from
 bridges and runs them in two directions.
 
+Discovery also bridges on **motifs**: facts about unrelated subjects that name
+the same mechanism or failure shape. Those bridges are found mechanically,
+without a model call, and the effort dial sets how loosely two motif names must
+match. In a knowledge base written by many agents, such a bridge can link what
+different agents learned in different areas.
+
 The communities come from the cluster cache, whose Louvain parameters are
 `[cluster_cache] resolution` (default `4.0` — higher γ yields more, smaller
 communities) and `min_community_size` (default `2`, below which a community is
@@ -115,8 +121,9 @@ chain:
 - Embedding **dedup** against the corpus rejects a proposal already stated
   elsewhere.
 
-Bridge behaviour is per-repo configurable via `KNOMIT_DISCOVERY_BRIDGE`
-(`domain` · `entity` · `both`, default `both`). It is honoured on **unscoped**
+Bridge behaviour is set server-wide by `[discovery] bridge` in `knomit.toml`, or
+`KNOMIT_DISCOVERY_BRIDGE` (`domain` · `entity` · `both`, default `both`); it is
+not a per-repo setting. It is honoured on **unscoped**
 runs only; a scoped run uses the filtered bridge generator, which always bridges
 on both axes.
 

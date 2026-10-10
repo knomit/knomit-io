@@ -11,6 +11,11 @@ out to every mount and returns a single merged, deduplicated result set; a write
 through a lens lands in exactly one repo. Everything else in knomit — facts,
 branches, provenance, sync — is unchanged underneath.
 
+Lenses are how one agent works across many knowledge bases at once: it reads
+what other teams and other agents have accumulated in their own repos, and
+writes what it learns into the one repo it contributes to, where that repo's
+peers pick it up by merge.
+
 ## What a lens is made of
 
 | Field | Meaning |
@@ -34,12 +39,19 @@ is the *binding order* referred to throughout this page.
 
 There is deliberately no write-branch field. The branch a mount is **read** at
 and the branch writes **land** on are two different things: writes always commit
-to the write repo's own agent branch (`agent/<hostname>-<fingerprint8>`), exactly
-as they would through that repo's own endpoint. A lens changes what you can see,
-never where you write.
+to this instance's agent branch in the write repo (`agent/<host>-<fp8>`, computed
+once on the instance's first boot and kept from then on), exactly as they would
+through that repo's own endpoint. A lens changes what you can see, never where
+you write.
+
+The one exception is an [experiment](#experiments-through-a-lens): while a
+session is inside one, the write repo's mount reads and writes `exp/<name>`
+instead.
 
 `knomit_repos` reports both: the `branch` column is the read branch, and
 `write_branch` — present only on the `read+write` mount — is where writes commit.
+A [subscribed](/docs/ontologies/#choosing-an-ontology) repo, which has no agent
+branch, can be a read mount but never a lens's write repo.
 
 <Aside type="caution" title="Lens definitions are machine-local and unsynced">
 Lenses live in a control-plane SQLite database at `<KNOMIT_HOME>/control.db`
@@ -96,25 +108,32 @@ chars**. In lens results:
 
 These qualified paths are stable identifiers. Pass one back as
 `knomit_explain`'s `file`, or store one in a fact's `refs` to cite across repos —
-the server never rewrites it. A `kb://` ref is classified as **external**, not a
-local fact edge, so it contributes no evidence weight and produces no local
-provenance edge (see [Ref forms](/docs/concepts/#ref-forms)).
+the server never rewrites it. A `kb://` ref to a read mount is a **foreign** ref
+in the write repo: it resolves, but it contributes no evidence weight there (see
+[Ref forms](/docs/concepts/#ref-forms)).
 
-Call `knomit_repos` (no parameters) to get the mount table:
+`knomit_repos` lists every repo and lens the server serves, and under `bound`
+describes what the current endpoint or binding points at, with its mount table:
 
 ```json
 {
-  "binding": "work",
-  "mounts": [
-    { "name": "notes", "id": "a1b2c3d4e5f6", "branch": "agent/box-9f2c",
-      "role": "read", "source": "src://notes" },
-    { "name": "core", "id": "0f1e2d3c4b5a", "branch": "main",
-      "role": "read+write", "write_branch": "agent/box-9f2c" }
-  ]
+  "repos": [ … ],
+  "lenses": [ … ],
+  "bound": {
+    "name": "work",
+    "mounts": [
+      { "name": "notes", "id": "a1b2c3d4e5f6", "branch": "agent/box-9f2c1a7e",
+        "role": "read", "source": "src://notes" },
+      { "name": "core", "id": "0f1e2d3c4b5a", "branch": "main",
+        "role": "read+write", "write_branch": "agent/box-9f2c1a7e" }
+    ]
+  }
 }
 ```
 
-`role` is `read` or `read+write`. `write_branch` appears only on the write mount.
+`role` is `read` or `read+write`. `write_branch` appears only on the write mount,
+and names the experiment branch while the session is inside one. A mount that is
+a subscription reports `mode: "subscribe"`.
 
 ## What a union read actually does
 
@@ -160,21 +179,34 @@ error — the request fails, the process does not.
 
 ## Using a lens
 
-### Bridge
+### Binding: by URL or by handle
 
-```sh
-knomit-bridge --lens work
-```
+There are two ways to reach a lens over MCP:
 
-`--lens` is mutually exclusive with an explicitly-set `--repo`. In lens mode the
-bridge skips agent-branch discovery entirely — each mount resolves its own branch
-server-side — and connects to `<base>/api/v1/lenses/<lens>/mcp`. See the
-[CLI reference](/docs/cli-reference/).
+- **URL-scoped.** The `kb` bridge started with `--lens` connects to
+  `<base>/api/v1/lenses/<lens>/mcp`. The URL fixes the lens for the whole
+  connection; a `binding` argument is refused there, and so is `knomit_bind`.
+
+  ```sh
+  kb --lens work
+  ```
+
+  `--lens` is mutually exclusive with `--repo`. In lens mode the bridge skips
+  agent-branch discovery entirely — each mount resolves its own branch
+  server-side. See the [CLI reference](/docs/cli-reference/).
+
+- **Unscoped.** A bridge started with neither flag connects to `/api/v1/mcp`.
+  The agent calls `knomit_repos` to see what exists, then
+  `knomit_bind {lens: "work"}`, which returns an opaque `binding` handle, the
+  mount table and the knowledge base's instructions. Every later call passes the
+  handle. Binding is per call, not per connection, so two jobs sharing one
+  connection can work in two different lenses without interfering; each
+  `knomit_bind` mints a new handle and the old ones stay valid.
 
 ### Claude Code
 
 ```sh
-knomit-bridge claude init -lens work
+kb claude init -lens work
 ```
 
 The hooks read the binding out of `.mcp.json` and resolve the lens's write repo
@@ -214,7 +246,32 @@ Three behaviours differ from a repo binding:
   of one binding's read set; resuming it through a different binding is rejected,
   as is resuming after the lens's mounts or branch pins changed.
 
+The mounts also share **one motif vocabulary**. Motif names that different
+repos spell differently but group together are merged across the lens, so a
+`motifs` filter on `knomit_query` reaches every spelling any mount groups with
+that term, on every mount. The web UI's motif view and the lens `motifs` REST
+routes read the same merged vocabulary.
+
+Skills are served from the write repo only: a lens serves none of its read
+mounts' `.knomit/skills/`. Bind a repo directly to use its skills.
+
 See [MCP tools](/docs/mcp-tools/).
+
+### Experiments through a lens
+
+An [experiment](/docs/experiments/) forks the **write repo only**. Inside one,
+the write mount reads and writes `exp/<name>`; every read mount is untouched and
+keeps its own branch.
+
+- On a **URL-scoped** lens endpoint, `knomit_experiment {action: "open"}` moves
+  the current MCP session into the experiment without a reconnect, and commit or
+  rollback moves it back.
+- On the **unscoped** endpoint the experiment rides on the binding handle; after
+  a reconnect, `knomit_bind {lens, experiment}` resumes it.
+- A lens experiment also has its own endpoint,
+  `/api/v1/lenses/{lens}/experiments/{name}/mcp`, for a client that should start
+  inside it. It is MCP only: the lens REST reads always federate each member at
+  its own pinned branch.
 
 ## REST surface
 
@@ -230,8 +287,10 @@ All paths are under `/api/v1`.
 | `GET /lenses/{lens}/facts`, `/facts/{path}` | Union fact collection and single-fact read. |
 | `GET /lenses/{lens}/search` | Union relevance search. |
 | `GET /lenses/{lens}/completions`, `/topics`, `/topics/{path}` | Union metadata. |
+| `GET /lenses/{lens}/motifs`, `/motifs/{key}` | The lens's merged motif vocabulary, and the facts in one motif cluster across the mounts. |
 | `GET /lenses/{lens}/stats` | Union stats and activity roll-up, plus a per-mount `repos[]` breakdown. |
 | `GET/POST/PUT/DELETE /lenses/{lens}/mcp` | The lens MCP endpoint. |
+| `/lenses/{lens}/experiments/{name}/mcp` | The lens MCP endpoint inside an experiment of the write repo. |
 
 On `PATCH`, an absent key keeps its current value and a present key replaces
 wholesale: `reads` replaces **as a set**, it never merges. The full create rule
@@ -255,6 +314,9 @@ Points that differ from the repo endpoints:
 - **A bare `kb/…` path on the single-fact endpoint always reads the write repo**,
   with no dedupe scan, even when a read mount shadows the same path. To target a
   mount, use `kb://<id12>/kb/…`, percent-encoded as one path segment.
+- The single-fact endpoint also reads a **system file** by exact path:
+  `.knomit/<path>` for the write repo, `kb://<id12>/.knomit/<path>` for a mount.
+  It returns the raw bytes, never a fact, and only `GET` is served.
 - **Every not-found case on the single-fact endpoint returns a byte-identical
   404** — unknown mount id, malformed `kb://`, missing fact, retracted fact — so
   a caller cannot probe mount topology.
@@ -280,7 +342,7 @@ See the [REST API reference](/docs/api/) for the full parameter set.
 ## Limits and gotchas
 
 - Lens config is **machine-local and unsynced** — not in git, not part of the
-  corpus, keyed by per-machine repo names. See [Remote sync](/docs/remote-sync/)
+  corpus, keyed by per-machine repo names. See [Sync & consensus](/docs/sync-and-consensus/)
   for what *does* travel.
 - A bare path on the single-fact REST endpoint means the **write repo**, always.
   Shadowing does not apply there.
