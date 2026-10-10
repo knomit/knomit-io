@@ -10,6 +10,8 @@ export interface BundleFact {
   origin?: string;
   domain: string[];
   entities: string[];
+  /** Frontmatter `motifs:` — absent on facts that carry none (and on older bundles). */
+  motifs?: string[];
   refs: string[];
   confidence: number;
   sources: number;

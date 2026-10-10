@@ -1,5 +1,6 @@
 import type { Bundle, BundleFact } from './bundleTypes';
 import { BUNDLE_SCHEMA_VERSION } from './bundleTypes';
+import { motifsPage, motifClusterDetail, motifFilter } from './bundleMotifs';
 import { buildIndex, tokenize, type KbIndex } from './kbIndex';
 import {
   parseSearchQuery,
@@ -71,6 +72,7 @@ function toFact(
     path, title: blob.title, kind: blob.kind, type: blob.type, origin: blob.origin,
     body: blob.body, domain: blob.domain, confidence: blob.confidence,
     sources: blob.sources, entities: blob.entities,
+    ...(blob.motifs?.length ? { motifs: blob.motifs } : {}),
     refs: blob.refs.map(r => classifyRef(r, tree)),
     parse_error: blob.parse_error,
     commit_hash: commit,
@@ -575,10 +577,6 @@ export const api = {
              motifs?: string[]; motifMatch?: MotifMatch; sinceFork?: boolean },
   ): Promise<{ results: SearchResult[] }> => {
     const { b } = state();
-    // motifs: BundleFact carries no motif frontmatter, so a motif filter has
-    // nothing to match. Same honest-empty answer as eps. Unreachable in
-    // practice: the motif controls are hidden (see the ABSENT block below).
-    if (opts?.motifs?.length) return { results: [] };
     // sinceFork is accepted and ignored: the reducer only holds it true inside
     // an experiment, and a bundle is one branch with no experiments.
     // eps (operation tags: learn/update/retract/subsume/synthesize/sync) has
@@ -594,9 +592,11 @@ export const api = {
     const wantDomains = [...domains, ...(opts?.domains ?? [])];
     const wantEntities = [...entities, ...(opts?.entities ?? [])];
 
+    const carries = motifFilter(b, opts?.motifs, opts?.motifMatch);
     const results: SearchResult[] = [];
     for (const { path: p, fact } of scopedFacts(b, path)) {
       if (fact.confidence < minConfidence) continue;
+      if (carries && !carries(fact)) continue;
       if (opts?.types?.length && !opts.types.includes(fact.type ?? '')) continue;
       if (opts?.kinds?.length && !opts.kinds.includes(fact.kind ?? '')) continue;
       if (opts?.excludeKinds?.length && opts.excludeKinds.includes(fact.kind ?? '')) continue;
@@ -676,9 +676,8 @@ export const api = {
              motifs?: string[]; motifMatch?: MotifMatch; sinceFork?: boolean },
   ): Promise<RecentResponse> => {
     const { b } = state();
-    // motifs/sinceFork: same decisions as search (no motif data in a bundle;
-    // sinceFork is only ever true inside an experiment, which a bundle lacks).
-    if (opts?.motifs?.length) return { facts: [], total: 0 };
+    // sinceFork: same decision as search (only ever true inside an experiment).
+    const carries = motifFilter(b, opts?.motifs, opts?.motifMatch);
     // Same eps decision as search: the bundle has no episode data, so an
     // eps-filtered query returns nothing rather than silently matching
     // everything. See report Finding 6.
@@ -686,6 +685,7 @@ export const api = {
     const q = query.trim().toLowerCase();
     const all = scopedFacts(b, path)
       .filter(({ fact }) => !q || fact.title.toLowerCase().includes(q))
+      .filter(({ fact }) => !carries || carries(fact))
       // OR-combined, matching the server: `types` is a multi-value facet, so a
       // fact qualifies if it matches ANY of them (unlike domains/entities
       // below, which are AND-combined).
@@ -809,15 +809,21 @@ export const api = {
   lensBrowse: noLens<LensBrowseResponse>('lensBrowse'),
   lensCompletions: noLens<{ values: string[] }>('lensCompletions'),
 
-  // ABSENT ON PURPOSE: the motif vocabulary reads. The vendored motifEndpoint.ts
-  // gates every motif control on `typeof api.motifs === 'function'` (and the
-  // three siblings), so a control that would open onto a permanent error is
-  // never drawn. The bundle holds no motif frontmatter, so there is nothing to
-  // serve; stubbing these as throwers would turn the controls on. The cast
-  // keeps the vendored call sites type-checking while the runtime value stays
-  // undefined. tests/unit/bundleApi.contract.test.ts allow-lists exactly these.
-  motifs: undefined as unknown as (repo: string, branch: string, opts?: MotifsQuery) => Promise<MotifsPage>,
-  lensMotifs: undefined as unknown as (lens: string, opts?: MotifsQuery) => Promise<MotifsPage>,
-  motifCluster: undefined as unknown as (repo: string, branch: string, key: string) => Promise<MotifCluster>,
-  lensMotifCluster: undefined as unknown as (lens: string, key: string) => Promise<MotifCluster>,
+  // The motif vocabulary, derived from the bundle's frontmatter by
+  // bundleMotifs.ts in the posture knomit takes before its alias table is
+  // built (stemmed-token clusters, no judge merges, no written definitions:
+  // definition_state is 'missing'). A lens never exists in /explore.
+  motifs: async (_repo: string, _branch: string, opts?: MotifsQuery): Promise<MotifsPage> =>
+    motifsPage(state().b, opts),
+  motifCluster: async (_repo: string, _branch: string, key: string): Promise<MotifCluster> => {
+    const { b } = state();
+    const c = motifClusterDetail(
+      b, key, p => lastTouched(b, p),
+      p => { const f = b.blobs[treeAt(b)[p]]; return { title: f?.title ?? p, type: f?.type }; },
+    );
+    if (!c) throw Object.assign(new Error(`no motif cluster or spelling "${key}"`), { status: 404 });
+    return c;
+  },
+  lensMotifs: noLens<MotifsPage>('lensMotifs'),
+  lensMotifCluster: noLens<MotifCluster>('lensMotifCluster'),
 };

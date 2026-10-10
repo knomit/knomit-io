@@ -92,6 +92,7 @@ export function parseFact(raw) {
     origin: fm.origin ? String(fm.origin) : undefined,
     domain: arr(fm.domain),
     entities: arr(fm.entities),
+    ...(fm.motifs != null ? { motifs: arr(fm.motifs) } : {}),
     refs: arr(fm.refs),
     confidence: Number(fm.confidence ?? 0),
     sources: Number(fm.sources ?? 0),

@@ -31,14 +31,7 @@ describe('bundleApi covers every api.* call site in the vendored UI', () => {
     }
     expect(called.size).toBeGreaterThan(0);
 
-    // Deliberately absent: vendored motifEndpoint.ts feature-detects these with
-    // `typeof api.X === 'function'` and hides the control, so absence is the
-    // contract, not drift. See the ABSENT block in bundleApi.ts.
-    const ABSENT = new Set(['motifs', 'lensMotifs', 'motifCluster', 'lensMotifCluster']);
-    const missing = [...called]
-      .filter(name => !ABSENT.has(name))
-      .filter(name => typeof (api as never)[name] !== 'function');
-    for (const name of ABSENT) expect((api as never)[name], `${name} must stay absent`).toBeUndefined();
+    const missing = [...called].filter(name => typeof (api as never)[name] !== 'function');
     expect(missing, `bundleApi is missing: ${missing.join(', ')}`).toEqual([]);
   });
 });
