@@ -1,0 +1,203 @@
+---
+title: Experiments
+description: "A knowledge transaction below the agent branch: fork exp/<name>, read and write in isolation, then commit, sync or roll back with per-path resolutions."
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+An **experiment** is a knowledge transaction. It is a local branch,
+`exp/<name>`, forked from this instance's agent branch, and a session that
+opens it reads **and** writes there until it commits or rolls back. Every MCP
+tool works inside it unchanged. Nothing on it reaches the agent branch, and so
+nothing reaches a peer, until the commit.
+
+Experiments exist so that knowledge work can fail without leaving traces on
+the branch everyone else will eventually merge: a task an agent may abandon, a
+synthesis you want to read before keeping, facts about a pull request that may
+not land. In a fleet of agents working one mission, each task typically runs
+inside its own experiment, and the commit is the moment its results join the
+agent branch.
+
+## Where an experiment sits
+
+| Branch | Written by | Seen by |
+|--------|------------|---------|
+| `exp/<name>` | sessions that opened it, on this instance | this instance only; never pushed, never fetched |
+| `agent/<host>-<fp8>` | this instance | peers, once it is synced or pushed |
+| the consensus branch (`main`) | merges | everyone |
+
+The commit moves work one step up this ladder. How work moves from the agent
+branch to `main`, and what happens when two agents changed the same fact, is
+covered in [Sync, consensus & conflicts](/docs/sync-and-consensus/).
+
+## The `knomit_experiment` tool
+
+One tool, five actions:
+
+| Action | Effect |
+|--------|--------|
+| `open` | Fork `exp/<name>` from the agent branch (or resume it if it exists) and **move this session onto it**. Every later learn, update, retract, query and review reads and writes the experiment. |
+| `commit` | Merge the experiment into the agent branch, then delete it. The session returns to the agent branch. |
+| `sync` | Merge the agent branch **into** the experiment, so it catches up. Where both changed a fact, the agent branch wins. The session stays inside. |
+| `rollback` | Delete the experiment and everything on it. There is no archive. |
+| `list` | This repo's experiments (name, description, parent, fork commit, last activity), marking the one the session is in. |
+
+Arguments: `action` (required); `name`, strict kebab-case, at most 64
+characters, unique per repo (required for `open`; for `commit`, `rollback` and
+`sync` it defaults to the experiment you are in); `description`, free text
+stored locally and never committed (only on `open`); `resolutions` (only on
+`commit`, below); and `trace` (below).
+
+`open` refuses on a subscription (it has no agent branch), on a repo with no
+established ontology, and when this instance cannot write its own agent branch.
+
+<Aside type="note" title="No reconnect">
+On the unscoped MCP endpoint the experiment rides on your
+[binding handle](/docs/mcp-tools/); `knomit_bind {experiment}` resumes an
+existing one. On a bridge started with `--repo` or `--lens`, `open` re-points
+that session within the URL's repo on the spot: the very next call writes
+inside the experiment, with no bridge flag and no reconnect.
+</Aside>
+
+### On a lens
+
+An experiment on a [lens](/docs/lenses/) forks the lens's **write repo** only.
+That member is read and written at `exp/<name>`; every read mount stays where
+it was. Lens experiments are reached over MCP only, at
+`/api/v1/lenses/{lens}/experiments/{name}/mcp`.
+
+## Committing
+
+`commit` merges the experiment into its recorded parent, the agent branch. A
+merge that adds nothing writes no commit and says so. When the agent branch
+has moved since the fork and both sides changed the same path, what happens
+next depends on the repo's `conflicts` setting.
+
+- **The setting applies.** It is read at the tip of the repo's consensus
+  branch, never from the experiment's own ontology, and the agent branch is
+  the consensus side. Under `consensus: auto` an absent setting means
+  `facts: merge` / `state: consensus`, so such a repo field-merges experiment
+  commits by default. The result's summary names every settled path: whether
+  it was field-merged, or which side's version was kept and which side's edit,
+  deletion or addition was **dropped**. A dropped version stays readable at
+  the merge commit's other parent.
+- **What the setting does not settle refuses the commit.** With no setting, or
+  with a key set to `off`, a conflict on that kind of path refuses: nothing
+  changes, and the tool returns, for each conflicting path, three full commit
+  hashes: the fork point, the experiment's version and the agent branch's
+  version. Read each with `knomit_explain {file, commit}`. A path both sides
+  added has no base version and says so.
+
+The setting's values and the field-by-field merge are described in
+[Sync, consensus & conflicts](/docs/sync-and-consensus/#conflicts).
+
+### Per-path resolutions
+
+Retry a refused commit with `resolutions`, one entry per path the refusal
+listed:
+
+```json
+{
+  "action": "commit",
+  "resolutions": {
+    "kb/decisions/storage/a1b2c3d4.md": "ours",
+    "kb/gotchas/runtime/9f8e7d6c.md": "theirs",
+    "kb/architecture/flows/0a1b2c3d.md": { "body": "<the full merged fact text>" }
+  }
+}
+```
+
+| Value | Lands |
+|-------|-------|
+| `"ours"` | the **experiment's** version |
+| `"theirs"` | the agent branch's version |
+| `{"body": "…"}` | that text, as a new version |
+
+<Aside type="caution" title="&quot;ours&quot; is the reverse of git">
+`commit` merges the experiment **into** the agent branch, so the experiment is
+the merge source. From inside it, "ours" is the experiment. In git's own merge,
+"ours" is the branch being merged into.
+</Aside>
+
+The resolutions are applied inside the **same** merge; everything else merges
+as it would have. Every listed path needs an entry, and naming a path that did
+not conflict is an error. A `{body}` is a fact write: it goes through the same
+validation as `knomit_update` (ontology, `context`, refs), and an empty body is
+refused (retract the fact instead). With a `conflicts` setting on, your entries
+override it for the paths you name and the setting still settles the rest. A
+side you pick is recorded on the merge commit as
+`Knomit-Conflict: … reason=chosen`.
+
+## Expiry
+
+An experiment with no commits for `[experiments].expiry_days` (default **30**)
+is rolled back automatically. Activity is measured by commits on the
+experiment, and a sweeper checks every hour. `0` means never; a negative value
+refuses to boot. The environment variable is `KNOMIT_EXPERIMENTS_EXPIRY_DAYS`.
+See [Configuration](/docs/configuration/).
+
+## Authorship and trace
+
+Every commit written on an experiment (learn, update, retract, a review's
+batch writes, the sync merge) is authored and signed by the experiment's
+**owning agent**, the agent branch it was forked from, so the commits pass the
+same signature checks as any other write from that instance when they reach a
+knowledge base's `main` (see [Fleet](/docs/fleet/#signing-and-verification)).
+A write is refused when the owner cannot be named, for example an `exp/` ref
+with no record in the repo database.
+
+`knomit_experiment` takes the same optional `trace` object as the write tools
+(see [Triggers & recipes](/docs/triggers/#causal-trace)). It is validated on
+every action and stamped on the one commit an action can write: the merge
+commit of `commit` or `sync`. A fast-forward writes no new commit, and the fact
+commits it lands keep the traces their own writes carried.
+
+## REST and the web UI
+
+The REST routes mirror the tool:
+
+| Route | Action |
+|-------|--------|
+| `GET /api/v1/repos/{repo}/experiments` | list |
+| `POST /api/v1/repos/{repo}/experiments` | open |
+| `POST /api/v1/repos/{repo}/experiments/{name}/commit` | commit; body `{"resolutions": {…}}` on a retry |
+| `POST /api/v1/repos/{repo}/experiments/{name}/sync` | sync |
+| `POST …/{name}/rollback` or `DELETE …/{name}/` | rollback |
+
+The [web UI](/docs/web-ui/) is for browsing and housekeeping:
+
+- A **band** under the top bar while you browse inside an experiment: what it
+  forked from, how much has changed since the fork, when it expires, and
+  **Commit** and **Roll back**.
+- An **Experiments** table on the repo's Manage page (name, description, last
+  commit, expires), with Open, Commit and Roll back.
+- A **refused commit** opens a dialog that lists the conflicting paths, says
+  that nothing changed, and shows how to resolve them through an agent. It
+  offers no repair of its own; rolling back is the one action it completes.
+
+There is no create control, no Sync button and no merge view in the UI. A
+commit from the UI settles conflicts by the repo's `conflicts` setting like the
+tool does, but it does not report a dropped version; the merge commit's
+`Knomit-Conflict:` trailer records it.
+
+## The `/knomit-experiment` skill
+
+[Claude Code](/docs/claude-code/) projects set up with `kb claude init` get
+`/knomit-experiment <open|commit|rollback|sync|list> [name]`, which wraps the
+tool with a workflow. It tells the agent to open an experiment **before** the
+first fact when:
+
+<Steps>
+
+1. the facts describe work that is going out for review (a pull request, named
+   after its branch), so they commit or roll back with that review's outcome;
+2. the knowledge may not survive review: a proposed convention, a synthesis to
+   try, a hypothesis sweep;
+3. `/knomit-review` or `/knomit-hypothesize` output should be read before it is
+   kept.
+
+</Steps>
+
+It is not for a single obvious fact or for a subscription. If
+`knomit_experiment` is missing from the tool list, the skill stops rather than
+writing to the agent branch.

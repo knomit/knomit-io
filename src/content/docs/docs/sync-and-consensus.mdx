@@ -1,0 +1,257 @@
+---
+title: Sync, consensus & conflicts
+description: "How work climbs from experiment to agent branch to main, how a host merges its peers, how conflicting facts are merged and recorded, and real-time sync."
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Many agents on many machines write one knowledge base. Each machine writes only
+its own branch, and the knowledge base's `main` is what they agree on. This
+page covers how work moves up to `main`, who merges it, what happens when two
+agents changed the same fact, and how to make the whole loop run in seconds.
+The origin itself (auth methods, credentials, the reconcile loop) is covered in
+[Remote sync](/docs/remote-sync/).
+
+## The ladder
+
+| Rung | Branch | Who writes it |
+|------|--------|---------------|
+| Experiment | `exp/<name>` | sessions on this instance; local only ([Experiments](/docs/experiments/)) |
+| Agent branch | `agent/<host>-<fp8>` | this instance only, every commit signed |
+| Consensus | `main` | merges of agent branches |
+
+"`main`" on these pages means the repo's **configured consensus branch**,
+whatever it is called. It is recorded per repo. A new clone or subscription
+takes the branch you name, else the branch the remote's `HEAD` points to
+(unless that is an agent branch), else the one branch with no other role; it
+never picks a branch because it is called `main`. Every setting below is read
+at the tip of that branch.
+
+There are three ways an agent branch reaches `main`:
+
+- **A forge merges it.** The repo has an origin on GitHub or another forge.
+  Each instance pushes its agent branch, and a pull request (or a CI job)
+  merges it into `main`. Each instance then syncs `main` back into its agent
+  branch.
+- **An operator merges it.** The repo is hosted by a knomit instance. Peers
+  push their own agent branches to the host, and its operator merges each one
+  from the web UI. See [Fleet](/docs/fleet/#hosting-a-repo-for-peers).
+- **The host merges it automatically**, with `consensus: auto`, below.
+
+A repo with **no origin** advances `main` from its own agent branch: every
+`[git].local_reconcile_interval` (default 30 s; `0` disables it) the instance
+fast-forwards `main` to its agent branch. It never resets `main`; a diverged
+history is logged and skipped. This is what lets peers clone a knomit-hosted
+repo and read an up-to-date `main`.
+
+## `consensus: auto`
+
+`consensus` is a root attribute of the ontology:
+
+```yaml
+# .knomit/ontology.yaml
+attributes:
+  consensus: auto     # off (default) | auto
+```
+
+With `auto`, on the instance that hosts the repo (one with **no origin**),
+every branch a peer pushes is merged into the **host's own agent branch** with
+a host-signed merge commit, shortly after the push lands. `main` then follows
+through the local reconcile. The merge never runs inside the push request, and
+it never writes `main` directly. Turning `auto` on also merges branches that
+were pushed earlier.
+
+On a repo with an origin, `auto` does nothing and logs one warning naming the
+origin: the origin owns `main` there. A merge that cannot be settled (a
+conflict the `conflicts` setting leaves open, unrelated histories) is skipped
+with one warning until that branch moves, and the branch stays in the host's
+Pushed branches panel for a person to merge. The host's
+[triggers](/docs/triggers/) fire on the facts that arrive this way, with
+`change.source = "merged"`.
+
+## Conflicts
+
+A conflict is a path both sides changed since their common ancestor. knomit
+settles it the same way at every merge site (a peer syncing `main`, a rebase of
+an agent's commits onto `main`, a host merging a pushed branch, an experiment
+commit) according to one root attribute:
+
+```yaml
+attributes:
+  conflicts:
+    facts: merge        # off | merge | merge:consensus | consensus
+    state: consensus    # off | consensus
+```
+
+The sides are named by role. The **consensus side** is the side that speaks
+for `main`: the incoming `main` when a peer syncs, the host's agent branch when
+a host merges a peer, the agent branch when an experiment commits. "Consensus"
+means `main` decides.
+
+**`facts`** settles a fact both sides changed:
+
+| Value | Result |
+|-------|--------|
+| `off` | No merge: the site's own rule. A peer syncing `main` keeps its own version; a host refuses the merge. |
+| `merge` | Field-by-field merge. A field both sides changed differently goes to the version with the higher confidence, then more sources, then the one that is not a hypothesis. |
+| `merge:consensus` | The same merge, but a field both changed goes to the consensus side. |
+| `consensus` | No field merge: the consensus side's whole version wins, including its edit or its deletion. |
+
+**`state`** settles every other path (`.knomit/` files, skills, recipes,
+anything outside `kb/`) and any fact that cannot be merged without loss (an
+unparsable version, two different kinds, an unknown frontmatter key):
+
+| Value | Result |
+|-------|--------|
+| `off` | The site's own rule, as for `facts: off`. |
+| `consensus` | The consensus side's version. |
+
+**Defaults.** Under `consensus: auto`, an absent `conflicts`, or an absent key,
+reads `facts: merge` and `state: consensus`. Without `auto`, an absent key is
+`off`, and an explicit `off` always stays `off`. A malformed value warns when
+the repo opens, reads as `off` for both keys, and is refused outright in a new
+ontology.
+
+### What the field merge does
+
+The merge is the rule knomit's deduplication already uses to fold two near
+copies of a fact, made symmetric so neither side is privileged. Against the
+common ancestor, field by field:
+
+- a field only one side changed takes that side's value;
+- a field both changed to the same value takes it;
+- a field both changed differently takes the winner by the rule above;
+- title and body are each taken whole from one side, never spliced;
+- lists (`domain`, `entities`, `motifs`, `refs`) merge as sets, so additions
+  and removals from both sides survive;
+- `context` merges key by key.
+
+**Delete wins.** Under `merge` and `merge:consensus`, when one side retracted
+a fact and the other edited it, the retraction lands. The edit is not lost: it
+stays readable in the merge commit's other parent.
+
+### The record
+
+Every settled conflict is written into the merge commit's trailer paragraph,
+so the history says what happened and why:
+
+```text
+Knomit-Merge: kb/decisions/storage/a1b2c3d4.md strategy=merge base=… src=… dst=… out=… decided=confidence,entities
+Knomit-Conflict: kb/gotchas/runtime/9f8e7d6c.md kept=dst dropped=src-modify strategy=consensus base=… src=… dst=…
+```
+
+`Knomit-Merge:` records a field merge and the fields it had to decide.
+`Knomit-Conflict:` records a whole-version choice: which side was kept, which
+side's edit, deletion or addition was dropped, the strategy, and a reason when
+there is one (`reason=chosen` for a side a person or an agent picked). Every
+version named is readable with `knomit_explain {file, commit}` or plain git.
+
+<Aside type="tip" title="Set it once and forget it">
+`consensus`, `conflicts` and `sync` are meant to be set when a repo is created
+and left alone. Nothing re-merges past history when they change, and an
+instance that has not synced yet reads the old value for one more round. The
+`mission` template writes all three out explicitly
+([Templates & playbooks](/docs/templates/)).
+</Aside>
+
+## Real-time sync
+
+By default a repo with an origin syncs every 300 seconds. The `sync` root
+attribute makes it real-time, per direction:
+
+```yaml
+attributes:
+  sync:
+    push: realtime      # realtime | interval (default)
+    pull: realtime      # realtime | interval (default)
+```
+
+- **`push: realtime`**: every commit on this instance's own agent branch wakes
+  the sync loop through a one-second countdown that batches a burst into one
+  round. Commits on experiments, pushed peer branches and `main` do not wake it.
+- **`pull: realtime`**: the loop runs a round every
+  `[git].realtime_pull_interval` (default **3 s**, minimum **1 s**; a lower
+  value refuses to boot). On a host with no origin it sets the cadence of the
+  local round instead, which moves `main` forward and runs the trigger `due`
+  sweep.
+
+Subscriptions ignore `sync`. With a forge as origin, 3 s is a third of a fetch
+per second per instance; check the forge's rate limits before turning it on
+for many instances.
+
+### When the origin fails
+
+Every origin loop has two **circuit breakers**, one for fetch and one for
+push, whether or not the repo is real-time. The third consecutive failure opens
+a breaker for twice the loop's interval; each failed probe after that doubles
+the wait, up to **30 minutes**; one success closes it. While a breaker is open
+its step makes no request. The repo's origin resource reports both as
+`fetch_breaker` and `push_breaker` (`state`, `consecutive_failures`,
+`open_until`).
+
+Pushes are **snapshot pushes**: the instance reads its branch tip under the
+write lock, releases the lock, and pushes that commit by hash, so writes never
+wait on the network. Commits made during the push go out on the next round.
+Every network operation is bounded by `[git].network_timeout` (default 120 s).
+
+## Reading what changed
+
+`knomit_changes` gives an agent an incremental view of one folder: the net
+difference between the tree at a bookmark commit and the tree now, each path
+`added`, `modified` or `deleted`. It reads no clock, so the answer depends only
+on the two commits.
+
+```json
+{ "binding": "<handle>", "consensus": true, "prefix": "tasks/", "since": "<bookmark>" }
+```
+
+`consensus: true` reads the repo's consensus branch whatever it is called;
+`branch` names another (pass one or the other). The response carries a
+`bookmark` to pass as the next `since`, and the agent keeps it: knomit writes
+nothing. A `since` that is not behind the current head is refused rather than
+answered with false deletions; omit `since` to list the folder as it is now.
+The REST twin is `GET /api/v1/repos/{repo}/branches/{branch}/changes`. See
+[MCP tools](/docs/mcp-tools/).
+
+## Setting it up
+
+<Tabs>
+<TabItem label="Hosted by a knomit instance">
+
+```yaml
+attributes:
+  consensus: auto
+  conflicts:
+    facts: merge
+    state: consensus
+  sync:
+    push: realtime
+    pull: realtime
+```
+
+The hosting instance has no origin for the repo; peers clone it over
+`knomit+https` and push their own agent branches. Keep
+`[git].local_reconcile_interval` above 0 on the host. A fact learned on one
+peer reaches the other peers' view of `main` within a few seconds.
+
+</TabItem>
+<TabItem label="Hosted on a forge">
+
+```yaml
+attributes:
+  conflicts:
+    facts: merge
+    state: consensus
+  sync:
+    push: realtime
+    pull: realtime
+```
+
+Drop `consensus` (an origin owns `main`) and keep `conflicts`: the merge runs
+in each instance's own sync, before its push, so a forge-hosted repo gets the
+same settlement with no workflow change. Merging agent branches into `main` is
+the forge's job: a pull request, or a CI job that runs
+[`knomit verify ci`](/docs/fleet/#signing-and-verification) first.
+
+</TabItem>
+</Tabs>

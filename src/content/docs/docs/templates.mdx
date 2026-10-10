@@ -1,0 +1,189 @@
+---
+title: Templates & playbooks
+description: "Start a knowledge base, a fleet repository or a mission repo from a template: an ontology, triggers, skills and a README read from any mounted repo."
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+A **template** is the skeleton of a repo: its `.knomit/ontology.yaml`, and
+whatever else the repo should start with (triggers, recipes, skills, guidance)
+plus a `README.md`. A template lives in a folder `.knomit/templates/<name>/` of
+any mounted repo, and creating a repo from it copies those files into the new
+repo's first commit. That is how a new knowledge base, a fleet repository or a
+mission repo starts with the rules its agents are meant to follow, instead of
+being assembled by hand.
+
+## Playbook repos
+
+A **playbook repo** is an ordinary knowledge base that holds templates and the
+knowledge about how to use them. The official one is
+[`knomit/knomit-playbooks`](https://github.com/knomit/knomit-playbooks). It
+holds:
+
+- the templates, under `.knomit/templates/`;
+- facts under `kb/`: how-tos, patterns, reference, gotchas, and under
+  `kb/templates/<name>/` one fact per template, one fact per file it carries,
+  and one per edit you are expected to make. Each file fact refs the file by
+  its exact `.knomit/templates/…` path, so an agent can walk from a template's
+  description to its files and read each one with `knomit_explain`, with no
+  clone;
+- the skill `program-knomit` (below).
+
+Nothing is mounted automatically. Add a playbook repo like any other: subscribe
+to `https://github.com/knomit/knomit-playbooks.git` from the web UI's create
+wizard or `POST /api/v1/repos` with `mode: subscribe`. Any number of playbook
+repos can be mounted side by side, your own included; every mounted, open repo
+that holds templates is a template source.
+
+## Creating a repo from a template
+
+Name the source repo and the template:
+
+```sh
+curl -X POST http://localhost:19278/api/v1/repos \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"research","mode":"template",
+       "template":{"repo":"knomit-playbooks","name":"general"}}'
+```
+
+`template.repo` is the name the source is mounted under, and it is required:
+there is no default source. Mode `template` creates a local repo. Mode
+`initialize` also accepts `template`, in place of `ontology_preset` or
+`ontology_yaml`, to turn an existing remote branch into a knowledge base. The
+other modes refuse it. The request answers 202 with the create job's location,
+like every repo create.
+
+The same create is available as:
+
+- **`kb repo create <new-repo> --template <repo>/<name> [server]`** in the
+  `kb` bridge, which waits for the job to finish;
+- **From a template** on the ontology step of the web UI's create wizard, one
+  list grouped by source repo with the commit each template is read at.
+
+**What is copied.** The template folder's root `README.md` and everything under
+its `.knomit/`, byte for byte, read at the tip of the source repo's consensus
+branch (never an agent branch or an experiment). They land as **one commit** on
+the new repo's agent branch, signed by this instance, after the usual root
+commit. The commit records where it came from:
+
+```text
+Knomit-Template: general
+Knomit-Template-Source: kb://<source repo id>@<commit>
+```
+
+The source is recorded by repository id, not by name.
+
+**What is refused**, before anything is written: a template folder holding
+anything other than `README.md` and `.knomit/**`; symlinks, submodules or
+executable files; more than 256 files or 4 MiB; an ontology that does not
+parse as a new ontology; a built-in preset's id on an ontology that is not that
+preset. A refused create leaves no repo behind.
+
+**Listing.** `GET /api/v1/templates` lists every template of every mounted,
+open repo; `GET /api/v1/repos/{repo}/templates` lists one repo's. Each row has
+`repo`, `name`, `description`, `commit` and `fact`: the description is the
+title of the template's describing fact (one with `context` `part: template`),
+and a template is listed only when that fact and the folder exist at the same
+commit.
+
+<Aside type="note" title="Edit before you create">
+After the create, `.knomit/` changes only through git
+([Authentication & permissions](/docs/auth/#knomit-changes-through-git-only)).
+To start from an edited template, write its files with your edits to a new git
+repository and create the knomit repo by cloning it. The playbooks' facts
+under `kb/templates/<name>/use/` list what each template expects you to edit.
+</Aside>
+
+## The templates
+
+`knomit-playbooks` ships four.
+
+### `general`
+
+A broad knowledge base organised by subject, after Wikipedia's main topic
+classifications: people, technology, science, society, culture, geography,
+history, health, philosophy, religion, business, reference, and `meta` for
+reasoning notes. No triggers, no settings: a starting point for research and
+reference knowledge.
+
+### `coding`
+
+A knowledge base for one codebase (ontology id `source-code`): invariants,
+architecture, conventions, decisions, gotchas, incidents, meta and principles.
+Facts under `principles/` must be `pragmatic` `policy` facts carrying the
+entity `designer`, enforced by validations.
+
+### `fleet`
+
+The [fleet repository](/docs/fleet/#the-fleet-repository): knomit's built-in
+`fleet` preset, one topic `members`, one member record per instance. It is
+created in mode `initialize` on a git repository every instance can reach,
+never as a local repo, and only on an instance that has no fleet yet.
+
+### `mission`
+
+A **mission repo** is where the agents of one mission coordinate. It is a repo
+of its own, separate from any knowledge base: the knowledge the agents produce
+goes to a **target knowledge base** the mission names, created from any
+template, which exists before the mission and stays after it. The mission
+repo holds only coordination and annotations, and the template is built only
+from knomit's generic primitives:
+
+| File | Declares |
+|------|----------|
+| `.knomit/ontology.yaml` | The coordination topics, the repo settings and every trigger. |
+| `.knomit/triggers/claims.js`, `awards.js` | Two ways for agents to take a task (below). |
+| `.knomit/recipes/work-task.js` | A recipe that starts one headless Claude Code session to work through this machine's queue. |
+| `.knomit/skills/post-task/`, `work-task/` | How a session posts a task, and how it works one. |
+| `README.md` | Hosting, timing, and the protocol in full. |
+
+**Settings.** The ontology writes out
+`consensus: auto`, `conflicts: {facts: merge, state: consensus}` and
+`sync: {push: realtime, pull: realtime}` ([Sync, consensus & conflicts](/docs/sync-and-consensus/)).
+A knomit instance hosts the repo by default; for a forge-hosted mission repo,
+drop the `consensus` line.
+
+**Coordination topics.** Tasks, claims, per-agent inboxes and
+acknowledgements, plus offers, bids and awards. Every one holds **signals**
+(`pragmatic` facts of type `signal`: consumed once, never believed) with dedup
+off, and most carry `expires`. Two ways to take a task ship side by side and
+the operator picks one: *claim, wait, take*, where each interested instance
+writes a claim and the winner takes the task in one atomic move, with a
+duplicate check as backstop; and *host-awarded*, where one instance awards
+each offer exactly once. Triggers expire stale signals, run the claim protocol
+and, through `do: run`, wake a session on the machine a task landed on.
+
+**Annotations.** One more topic, `annotations/<task-id>/`, holds facts **about**
+the target knowledge base's facts. Each refs the fact it is about as
+`kb://<knowledge base id>/<path>` and is typed with `context`: `kind` (required;
+`verdict`), `verdict` (`corroborate` or `contradict`) and `confidence` (0 to
+1). A cross-check task writes one verdict per fact it checks and never edits
+what it checks; a single **fold** task is the only writer that updates, merges
+or retracts the knowledge base's hypotheses from those verdicts.
+
+**Trace.** A task's post and the session that works it pass the same
+`trace`: `Knomit-Trace` set to the mission, `Mission-Task` (an entry of the
+template's own) set to the task id, and, in the session, `Knomit-Run` set to
+the recipe run. knomit copies `Knomit-Trace` forward onto the trigger scripts'
+writes, so `git log --grep` reassembles a mission's story across machines
+([Triggers & recipes](/docs/triggers/#causal-trace)).
+
+## The `program-knomit` skill
+
+`knomit-playbooks` carries a [repo skill](/docs/mcp-tools/),
+`program-knomit`, for requests like "set up a mission repo", "add a trigger"
+or "how do I make knomit do X". It binds the playbooks repo, queries its
+how-tos, patterns, reference and gotchas, picks a template, reads its files by
+path, and creates the new repo from it; every write goes to the repo being set
+up, not to the playbooks. Agents reach it through `knomit_skill` on a binding
+of the playbooks repo, or as an MCP prompt on that repo's own endpoint.
+
+<Steps>
+
+1. Mount `knomit-playbooks` (a subscription is enough).
+2. Ask your agent to set up what you need, or call
+   `knomit_skill {"name": "program-knomit"}` on a binding of the playbooks
+   repo.
+3. Review the files the template brings, then create the repo.
+
+</Steps>

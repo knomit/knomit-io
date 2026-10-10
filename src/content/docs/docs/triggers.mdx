@@ -1,0 +1,252 @@
+---
+title: Triggers & recipes
+description: "Declare in the ontology what happens when a fact is learned, updated, retracted or due: emit, run a sandboxed script, push, or launch a recipe session."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+A **trigger** is a rule in a repo's ontology: when a fact matching a path is
+learned, updated, retracted, or reaches its `expires` time, do something.
+Triggers are how a knowledge base starts work by itself. A task written to a
+mission repo can wake an agent session on the machine that should do it; an
+expired claim can be withdrawn; a burst of writes can be pushed to peers within
+a second. Because the rules live in the repo, every instance that mounts it
+runs the same rules on its own writes and on what it merges from others.
+
+## Declaring a trigger
+
+Triggers are a list under `triggers:` on any topic (or child node) of
+`.knomit/ontology.yaml`, inherited down the topic tree:
+
+```yaml
+topics:
+  tasks:
+    description: Work to be picked up, tasks/<lane>/
+    context:
+      priority: {type: enum, values: [low, high]}
+    triggers:
+      - name: expire
+        on: due
+        match: "tasks/**"
+        do: script
+        js: "knomit.retract(change.path)"
+      - name: offer
+        on: learn
+        match: "tasks/**"
+        if: "fact.context.priority === 'high'"
+        do: script
+        script: claims
+```
+
+| Key | Meaning |
+|-----|---------|
+| `name` | Unique in the ontology, kebab-case. The trigger's bookmark is keyed by it, so renaming starts it fresh. |
+| `match` | Path glob relative to the ontology root, starting with the topic's path: `*` one segment, `**` any depth, `?` one character. `{agent}`, `{host}` and `{fp8}` are this instance's own values. Absent means everything under the topic. |
+| `on` | `learn`, `update`, `retract`, `due`, or a list of them. |
+| `if` | Optional JavaScript condition; empty means always. |
+| `do` | `emit`, `script`, `push` or `run`. |
+| `script` / `js` | For `do: script`: a file name, or the code inline. Exactly one. |
+| `recipe` | For `do: run`: the recipe name. |
+
+Any other key makes the trigger invalid. An invalid trigger (a typo, an unknown
+value, code that does not compile) is skipped, logged at ERROR once, and shown
+as a warning in the ontology editor; its bookmark is frozen, so no change is
+lost while you fix it.
+
+<Aside type="note" title="Only facts fire triggers">
+Triggers see fact paths under the ontology root (`kb/`) and nothing else.
+`.knomit/` and `artifacts/` are never trigger-visible, and a `match` naming a
+dot path is refused when the ontology loads.
+</Aside>
+
+### Episodes
+
+Triggers run on each instance, off its own agent branch. Each time the branch
+advances, a dispatcher compares the old head with the new one and fires one
+episode per changed path: added is `learn`, modified is `update`, deleted is
+`retract`. This includes facts that arrived by a merge from a peer. The
+dispatcher runs beside the write path: a write never waits for a trigger.
+
+`due` fires once per trigger per fact when the fact's
+[`expires`](/docs/concepts/) has passed. Only facts still live at the head
+fire, changing `expires` re-arms the trigger, and facts already overdue when a
+trigger first becomes active fire once. The check runs on every dispatcher
+pass: each sync round starts one, and so does every write. All times are UTC.
+
+### The condition
+
+`if` is JavaScript with a 100 ms budget, evaluated with three objects:
+
+| Object | Holds |
+|--------|-------|
+| `fact` | The fact as validation rules see it: path, type, kind, entities, `expires`, `context` (so `fact.context.<key>` is available), and the rest. `null` when the fact is gone or unparseable. |
+| `agent` | This instance: `id`, `host`, `fp8`, `branch`. |
+| `change` | `episode`, `source` (`local` for this instance's own commits, `merged` for what came in by merge), `commit`, `trace`, `path`, `author` (`kind`, `id`, `fp`, `verified`), and `before` (the previous version, for update and retract). |
+
+`change.author.verified` is true only when signature verification is on for
+the repo and the commit has already passed the acceptance gate into `main`
+(see [Fleet](/docs/fleet/#signing-and-verification)).
+
+## Actions
+
+### `do: emit`
+
+Logs a line and publishes a server-sent event. Nothing else.
+
+### `do: script`
+
+Runs JavaScript in a sandbox with no I/O: no network, no files, no `process`,
+no `require`, a pinned clock and frozen globals. The budget is 5 seconds per
+fire. The code is either a file, `.knomit/triggers/<script>.js`, read at the
+agent branch's head, or inline under `js:` (a YAML block scalar for several
+lines).
+
+A script talks to knomit through one host object:
+
+| Call | Does |
+|------|------|
+| `knomit.query(args)`, `knomit.explain(path, opts)` | Read the knowledge base, with the arguments of `knomit_query` and `knomit_explain`. |
+| `knomit.learn(facts, opts)` | Write facts. `opts.retract: [paths]` makes it an atomic move: the writes and the deletions land in one commit. `opts.moment_name` labels the commit (default `trigger:<name>`). |
+| `knomit.update(path, args)`, `knomit.retract(path)` | Edit or retract one fact; `args` takes `knomit_update`'s arguments (`updates`, `ops`). |
+| `knomit.emit(payload)` | Same as `do: emit`. |
+| `knomit.push()` | Same as `do: push`. |
+| `knomit.run(name, payload)` | Same as `do: run`, with a payload the recipe receives. |
+
+Writes go through the same handlers as the MCP tools, with their dedup,
+validation and ref checks, and are committed and signed **as this instance**.
+A script may write facts and agents' working files under
+`artifacts/<area>/<name>`; it may not write under `.knomit/` or any other dot
+path.
+
+**Rate cap.** Each trigger may run its script at most
+`[triggers].script_rate_per_minute` times per minute on one machine (default
+**60**, must be at least 1). Fires beyond the cap are dropped and logged
+`rate-limited`, except `due` fires, which are retried at the next sweep. The
+environment variable is `KNOMIT_TRIGGERS_SCRIPT_RATE_PER_MINUTE`.
+
+**Loop guard.** A script's commits carry `Knomit-Trigger: <name>`. A fire
+whose triggering commit carries this trigger's own name is skipped as
+`self-caused`. Chains through different triggers are allowed.
+
+### `do: push`
+
+Asks this machine's sync loop for a round now instead of at its interval. A
+fixed one-second countdown starts at the first fire and batches everything that
+follows into one fetch, merge and push. On a repo with no origin it wakes the
+local round instead. The outcome is recorded as `kicked`; whether the round
+succeeded is in the repo's sync status. A repo that wants this for every commit
+sets `sync: {push: realtime}` instead (see
+[Sync, consensus & conflicts](/docs/sync-and-consensus/#real-time-sync)).
+
+### `do: run` and recipes
+
+`do: run` with `recipe: <name>` starts a **recipe** on this machine and does
+not wait for it. The fire is recorded `started` with a run id
+(`run-` and 32 hex characters); the recipe's result is a second row with the
+same id.
+
+A recipe is trusted JavaScript with one more function than a script:
+`exec(argv, {stdin, env, cwd, timeout_ms})`, which runs a program (argv only,
+no shell) and returns `{exit, stdout, stderr}`. This is how a knowledge base
+launches an agent: the recipe in the mission template starts one headless
+Claude Code session that works through this machine's queue. A recipe sees
+`fact`, `agent` and `change` like a script, plus `payload` (from
+`knomit.run`) and `run.id`.
+
+**Where recipes come from.** Per fire, in this order:
+
+1. `.knomit/recipes/<name>.js` at the tip of the repo's **consensus branch**,
+   whoever wrote it;
+2. `<KNOMIT_HOME>/recipes/<name>.js` on this machine;
+3. otherwise the fire is unbound and only counted.
+
+A recipe edited on an agent branch therefore takes effect once it is merged
+into `main`. A repo recipe that does not compile is an error, with no fallback
+to the machine's copy.
+
+**Limits.** An optional first line sets them:
+
+```js
+// knomit: {"concurrent": 1, "jitter_ms": 0, "timeout_ms": 1800000}
+```
+
+Defaults: one concurrent run per recipe, no jitter, 30 minutes. A start at the
+`concurrent` limit is dropped as `busy`. At the timeout the program's process
+group (job object on Windows) is killed. `stdout` and `stderr` are each capped
+at 1 MiB. A recipe finishes with `{status, message?, id?}`, status one of
+`done`, `spawned`, `delivered`, `unreachable` or `error`.
+
+**The program's environment.** Every `exec` child gets knomit's environment
+plus:
+
+| Variable | Value |
+|----------|-------|
+| `KNOMIT_SERVER` | This server's own address: its local socket when bound, else its TCP address. `kb`, the MCP bridge, uses it, so the session it starts talks to this instance and no other. |
+| `KNOMIT_HOME` | This server's data root. |
+| `KNOMIT_TRACE`, `KNOMIT_CAUSE`, `KNOMIT_RUN` | The fire's trace, its triggering commit, and the run id. |
+
+The recipe's own `env` option overrides them. If the server has not recorded
+its address yet (a fire during boot), `exec` waits up to two minutes and then
+fails the run rather than start a program without `KNOMIT_SERVER`.
+
+<Aside type="caution" title="A recipe can run any program">
+Recipes are read from the consensus branch with no signer check: whoever can
+merge into a repo's `main` decides what its recipes run on every instance that
+mounts it. Mount repos whose `main` you trust, and see
+[Authentication & permissions](/docs/auth/#the-trust-model).
+</Aside>
+
+## Causal trace
+
+Commits made by a trigger script or a recipe end with git trailers that tie a
+chain of work together:
+
+| Trailer | Meaning |
+|---------|---------|
+| `Knomit-Trace` | The story this commit belongs to: the triggering commit's own trace, else the task id when the fact is a task signal with one entity, else the triggering commit's hash. |
+| `Knomit-Cause` | The one commit that led to this one. |
+| `Knomit-Trigger` | The trigger that made the hop (also the loop guard). |
+| `Knomit-Run` | The recipe run, on a recipe's own writes. |
+
+Agents add trace to their own writes: `knomit_learn`, `knomit_update`,
+`knomit_retract`, `knomit_review`, `knomit_hypothesize` and
+`knomit_experiment` take an optional `trace` object, written as the last
+paragraph of every commit the call makes. Of the `Knomit-` keys an agent may
+pass only `Knomit-Trace` (one line, at most 256 bytes), `Knomit-Cause` (a full
+commit hash) and `Knomit-Run`; every other `Knomit-*` name is reserved. Its own
+keys are git trailer tokens of at most 32 characters with one-line values of at
+most 128 bytes, at most 8 of them. A bad entry refuses the whole call. knomit
+keeps nothing between calls, so pass the same object on every write of one
+task. The `mission` template's recipe hands the trace to the session it starts
+in the session's prompt, so that session's writes join the task's story.
+
+Read a story back with plain git:
+
+```sh
+git log --all --grep='^Knomit-Trace: <id>'
+git log --all --grep='^Knomit-Run: <run id>'
+```
+
+## Observing triggers
+
+`GET /api/v1/repos/{repo}/branches/{branch}/triggers` is the statistics
+surface: whether the dispatcher is enabled, each trigger's state (`active`,
+`invalid` with its error, or `unsupported`), its fire counts and min/max/p95
+time, and recent fires with their outcomes. `?log=N` (0 to 500) sets how many
+recent rows are returned; `?run=<run id>` returns only that run's rows.
+
+A trigger whose own work (condition plus action) takes longer than
+`[log].slow_trigger_ms` (default 50) logs a slow-trigger warning. The fire log
+keeps the newest 10,000 rows per repo.
+
+## Changing `.knomit/`
+
+Trigger declarations, scripts and recipes are repository content under
+`.knomit/`, which every fact tool refuses to write: they change through git.
+Declarations and scripts are read from the agent branch's head, recipes from
+the consensus branch's tip, and both are cached by content, so a change takes
+effect at the next fire without a restart. A repo that declares triggers no
+longer receives automatic upgrades of its preset ontology.
+
+Ready-made triggers, scripts and a recipe ship in the `mission` template; see
+[Templates & playbooks](/docs/templates/).
