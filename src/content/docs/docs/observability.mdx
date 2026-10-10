@@ -75,7 +75,7 @@ The viewer filters by level (a floor: *Warn and above* includes errors), searche
 the text, and follows the tail until you scroll away from it. The stream is the
 process's log, not a file, so it shows a *running* server and nothing from before
 it started; for a failed start, read the log file or `crashes/`. The desktop app
-uses the same tab, and no longer has a separate Logs window. A read-only
+uses the same tab. A read-only
 instance answers the stream with 403, because its log is not part of what it puts
 on show.
 
@@ -215,9 +215,7 @@ Anthropic, Bedrock, Ollama, and the CLI adapters alike.
 
 Those eight series are the whole registration surface: the four gauges above are
 registered by the runtime collector, and the four application metrics are the
-only other `Counter` / `CounterVec` / `Histogram` call sites in the tree. (An
-earlier release also exported a `knomit_cypher_retry_total` counter for the
-GraphQLite graph engine; that engine is gone and so is the series.) There is no
+only other `Counter` / `CounterVec` / `Histogram` call sites in the tree. There is no
 SQLite-contention metric.
 
 ### Trigger statistics

@@ -14,7 +14,7 @@ Configuration is layered, lowest to highest precedence:
 `KNOMIT_HOME` is resolved *first* (it decides which `knomit.toml` is read) and
 therefore cannot be overridden from inside the TOML file.
 
-`knomit serve` also loads a `.env` file from the process's working directory into
+Every `knomit` command (not only `serve`) also loads a `.env` file from the process's working directory into
 the environment before config resolution, so its entries participate as ordinary
 environment variables at layer 3. It is optional; a missing or unreadable `.env`
 is ignored. Variables already present in the environment win — `.env` does not
@@ -33,11 +33,13 @@ stops the server, it doesn't fall back to the default. Unknown keys in
 `KNOMIT_REPO` is a backward-compatible alias. Everything else derives from it.
 The default depends on the platform:
 
-| Platform | Default data root | State directory (lockfile, desktop logs) |
+| Platform | Default data root | State directory (lockfile; desktop logs on Linux and Windows) |
 |----------|-------------------|------------------------------------------|
 | macOS | `~/.knomit` | `~/Library/Application Support/knomit` |
 | Linux | `~/.knomit` | `$XDG_STATE_HOME/knomit` (fallback `~/.local/state/knomit`) |
 | Windows | `%LOCALAPPDATA%\knomit\home` | `%LOCALAPPDATA%\knomit` |
+
+On macOS the desktop's log file is in `~/Library/Logs/knomit` instead.
 
 On Windows the data root sits one level below the state directory, so it does not
 share a folder with `server.json` and the logs. There is no `~/.knomit` fallback
@@ -202,9 +204,7 @@ instances on one machine, name the one you mean (see `KNOMIT_SERVER` below).
 
 Put a `knomit.toml` at `KNOMIT_HOME/knomit.toml`. It is read from the data root
 **only**: a copy next to the `knomit` binary is not read, and `knomit serve` logs
-one warning naming it so the file is not silently ignored. (The server and `kb`
-are different binaries, and a file beside one of them used to be read by that
-binary alone.) A file that cannot be parsed is an error, not a fall-through to
+one warning naming it so the file is not silently ignored. A file that cannot be parsed is an error, not a fall-through to
 defaults.
 
 Top-level keys are bare (not under a table); the rest are `[tables]`. Defaults
@@ -236,7 +236,7 @@ token       = ""                # GitHub/PAT token
 user        = ""
 password    = ""
 ssh_key     = ""                # path to an SSH private key; "" = <KNOMIT_HOME>/id_ed25519
-auth_method = ""                # "token" | "basic" | "ssh" | "none" (inferred if empty)
+auth_method = ""                # "token" | "basic" | "ssh" | "cert" | "none" (inferred if empty)
 known_hosts = ""                # SSH host-key pins; "" = <KNOMIT_HOME>/known_hosts
 
 [auth]
@@ -544,10 +544,12 @@ Provider names are matched exactly: `gemini`, `anthropic`, `bedrock`,
 `claudecli`, `geminicli`, `ollama`. Anything else fails with
 `unknown provider "…"`. Note there is no hyphen in the CLI names.
 
-Inference from the model name happens **only** when the provider is explicitly
-empty (`KNOMIT_LLM_PROVIDER=` or `provider = ""` in `knomit.toml`). In that case
-`claude-*` → `anthropic`, `gemini-*` → `gemini`, `anthropic.*` / `us.*` / `eu.*`
-→ `bedrock`, and the bare names `claude` / `gemini` → `claudecli` / `geminicli`.
+Inference from the model name happens **only** when the provider is empty, and
+the only way to empty it is `provider = ""` in `knomit.toml`. An empty
+`KNOMIT_LLM_PROVIDER=` is ignored like every other empty variable, so the
+default `gemini` stays. With an empty provider, `claude-*` → `anthropic`,
+`gemini-*` → `gemini`, `anthropic.*` / `us.*` / `eu.*` → `bedrock`, and the bare
+names `claude` / `gemini` → `claudecli` / `geminicli`.
 
 `llm.cache` and `llm.batch` apply to the Gemini adapter (context caching and
 batch mode). A missing key is not a fault: the server logs one line and carries

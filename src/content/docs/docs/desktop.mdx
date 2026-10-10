@@ -92,11 +92,10 @@ reload. A failed boot shows its error on the same screen.
 
 ### Logs
 
-The desktop no longer has its own Logs window or a tray item for one. The server
-log is in the main window, at **Manage → Logs**, streamed live from the in-process
+The server log is in the main window, at **Manage → Logs**, streamed live from the in-process
 server like any other API data; see [Observability](/docs/observability/). The
-desktop still writes a log file (rotating, 10 MB by 3 backups, 14 days by
-default unless `knomit.toml` says otherwise), which is the record to look at after
+desktop still writes a log file (rotating at 10 MB, 3 backups, 7 days, the
+`[log]` defaults, unless `knomit.toml` says otherwise), which is the record to look at after
 a crash or a failed start. Its path is in Settings.
 
 ## Install

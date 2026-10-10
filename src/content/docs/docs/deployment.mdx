@@ -5,8 +5,8 @@ description: "Run knomit as a Docker server: the GHCR image, building it, volume
 
 import { Aside, Steps } from '@astrojs/starlight/components';
 
-knomit's first goal is to be *a plain HTTP server deployable anywhere*. The
-Docker image is **fully self-contained**: every dependency — the native
+A knomit instance is one node of the fabric, and it serves HTTP so agents, peers
+and people can reach it. The server runs anywhere Docker does. The Docker image is **fully self-contained**: every dependency — the native
 libraries (ONNX Runtime and tokenizers) **and** the embedding model — is fetched
 at **build** time and baked in. The running container performs **no network
 downloads at startup**.
@@ -18,13 +18,14 @@ say which listener each of those uses.
 ## Getting the image
 
 The rolling dev release publishes the image to GitHub's container registry for
-`linux/amd64`, tagged `dev` (moving) and `<semver>.<sha>` (fixed):
+`linux/amd64`, tagged `dev` (moving) and `<version>.<sha>` (fixed), where a dev build's version reads like
+`0.5.3-dev.<timestamp>`:
 
 ```sh
 docker pull ghcr.io/knomit/knomit:dev
 ```
 
-{/* UNVERIFIED: that ghcr.io/knomit/knomit is publicly pullable without `docker login`; release.yml pushes it but package visibility is a registry setting. */}
+The image is publicly pullable without `docker login`.
 
 Stable tagged releases publish the macOS and Linux tarballs and the desktop
 artifacts; the image comes from the rolling release. There is no Windows
@@ -42,7 +43,7 @@ stage builds the binary + fetches the native libs + bakes the model with
 
    ```sh
    make docker
-   # → knomit:<semver>.<sha>  and  knomit:latest
+   # → knomit:<version>.<sha>  and  knomit:latest
    ```
 
 2. Or cross-build for `linux/amd64` from a non-amd64 host (Apple Silicon, etc.).
@@ -50,17 +51,17 @@ stage builds the binary + fetches the native libs + bakes the model with
 
    ```sh
    make docker-amd64
-   # → knomit:<semver>.<sha>-amd64  and  knomit:latest-amd64
+   # → knomit:<version>.<sha>-amd64  and  knomit:latest-amd64
    ```
 
 </Steps>
 
-Both targets tag the image with the full **`<semver>.<sha>`** version string **and**
+Both targets tag the image with the full **`<version>.<sha>`** version string **and**
 a moving `latest`. The Dockerfile itself is architecture-agnostic — `fetchlibs`
-pulls the per-platform native libraries and the runtime stage globs
-`dist/linux-*/lib`. The binary inside is built without the Makefile's version
-flags, so rely on the image tag for the version, not on `knomit version` run in
-the container.
+pulls the per-platform native libraries, the build stage copies them out of
+`dist/linux-*/lib` to a fixed path, and the runtime stage takes them from there.
+The binary inside is built without the Makefile's version flags, so
+`knomit version` in the container prints `dev`; the image tag is the version.
 
 ## Running the container
 
@@ -71,7 +72,9 @@ docker run -d --name knomit \
   ghcr.io/knomit/knomit:dev
 ```
 
-Open **http://localhost:19278/**. The container starts with **no repositories**.
+Open **http://localhost:19278/**. The container starts with **no repositories**,
+and a browser reaching it through `-p` cannot create one yet; see
+[Who may write](#who-may-write).
 
 <Aside type="caution" title="Use a named volume, not a bind mount">
 The embedding model is baked into the image at **`/data/models`**. A **named
@@ -115,18 +118,32 @@ request's origin and decides what it may do:
   `[auth] loopback_default`: by default read, write, `push:own`, operator and
   admin. So does a process using the local socket, which the kernel identifies by
   user id. A caller from anywhere else has **no principal**: it can read, and
-  every mutation is refused with 403 "Authentication required".
-- `[auth] require = true` removes the anonymous path entirely. It refuses to
-  boot if the local socket cannot be bound.
+  every mutation is refused with 403 "Permission denied" (the write permission is
+  missing).
+- `[auth] require = true` removes the anonymous path entirely. The refusal then
+  comes earlier, as 403 "Authentication required", and covers reads too. It
+  refuses to boot if the local socket cannot be bound.
 - A caller can instead prove who it is: an **enrolled instance** by client
   certificate on the mTLS listener, or a **bearer token** on the OAuth listener.
   Both are covered on [Authentication & permissions](/docs/auth/).
 
-{/* UNVERIFIED: that a request through `docker run -p` shows up to knomit as a non-loopback peer (Docker's bridge gateway address) on the default bridge network; derived from the peer-address check in internal/web/auth_middleware.go, not from running a container. */}
+For a container this means the published port serves reads to everyone,
+**including your own browser on the same host**. A connection through
+`docker run -p` reaches knomit from Docker's network, not from loopback, so
+creating a repository from the UI is refused with 403. Writes need one of the
+identities above. A grant cannot fix this for a browser, because grants attach
+to certificate identities (`knomit grants add instance:<64-hex>@cert write`,
+run with `docker exec knomit knomit grants add …`) and the anonymous user comes
+from `[auth] loopback_default`. The paths that work:
 
-For a container this means the published port serves reads to the network, and
-writes need one of the identities above. Decide that before you publish the port
-beyond your own machine, not after.
+- On Linux, start the container with `--network host` instead of `-p`, which
+  makes a same-host browser a loopback caller again. That is Docker's
+  networking, not a knomit setting.
+- Enroll the instance that will write, grant it `write`, and have it create the
+  repository over the mTLS listener (see [Authentication &
+  permissions](/docs/auth/)).
+
+Decide this before you publish the port beyond your own machine, not after.
 
 ## Running a read-only / demo instance
 
