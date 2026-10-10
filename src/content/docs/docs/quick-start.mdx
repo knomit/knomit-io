@@ -1,6 +1,6 @@
 ---
 title: Quick start
-description: Clone, build, and run knomit, then connect your first agent over MCP.
+description: Install knomit, create a first knowledge base, and connect an agent over MCP with the kb bridge.
 # The H1 comes from `title`, so it stays short and scannable — readers scan a
 # docs sidebar for "Quick start", not for a sentence. The document title is
 # overridden separately because "Quick start — knomit" spends 20 of the ~60
@@ -14,9 +14,11 @@ head:
 
 import { Steps, Tabs, TabItem, Aside, Card, CardGrid } from '@astrojs/starlight/components';
 
-knomit is a distributed, decentralized knowledge base built from facts —
-knowledge + commit. This page gets you from zero to a running server with a peer
-connected.
+knomit is a distributed, decentralized knowledge distillation factory: a fabric
+of many agents and many knowledge bases, in which what any one agent learns is
+accumulated, distilled and put to use by all of them. This page gets one server
+running with one knowledge base and one agent connected to it; the
+[Overview](/docs/overview/) shows how the pieces scale from there.
 
 ## Install
 
@@ -24,33 +26,57 @@ The quickest way in is a signed release build — no toolchain, no compile step.
 
 <CardGrid>
   <Card title="Download a release" icon="download">
-    Grab the [desktop app or the server binary](/download/) for macOS or Linux.
-    The macOS app is notarized and keeps itself up to date; both platforms ship
-    a `knomit serve` tarball. **Start here unless you need to modify knomit.**
+    Grab the [desktop app or the server tarball](/download/). Releases ship for
+    **macOS (Apple Silicon)** and **Linux (x86_64)**; a container image is
+    published too (see [Deployment](/docs/deployment/)). The macOS app is
+    notarized and keeps itself up to date. **Start here unless you need to
+    modify knomit.**
   </Card>
   <Card title="Build from source" icon="seti:go">
-    Everything below. Needed if you're changing knomit itself, or running on a
-    platform the releases don't cover.
+    Everything below. Needed if you are changing knomit itself, or running on a
+    platform the releases do not cover — **Windows is supported as a
+    build-from-source target**, not a download.
   </Card>
 </CardGrid>
+
+A build produces four binaries:
+
+| Binary | Role |
+|--------|------|
+| `knomit` | The server: REST API, MCP endpoint, embedded web UI, git endpoint. Also the admin CLI (`verify`, `fleet`, `identity`, `grants`, `oauth`). |
+| `kb` | The bridge: a stdio-to-HTTP adapter that MCP clients launch, plus the `claude init` and `antigravity init` scaffolders and the editor hooks. |
+| `knomit-okf` | Publishes a knowledge base as an [OKF](/docs/okf/) repository. |
+| `knomit-desktop` | The tray app that runs the server in-process. Built by `make desktop`, not `make build`. |
+
+The release server tarball contains `knomit`, `kb` and `knomit-okf`. See the
+[CLI reference](/docs/cli-reference/) for every command and flag.
 
 ## Build from source
 
 ### Requirements
 
-- **Go 1.25+** — the entire backend.
+- **Go 1.26+** — the entire backend.
 - **Node.js + npm** — builds the embedded React frontend.
 - **Git CLI** — knomit shells out to `git`.
-- **A C compiler** — Xcode Command Line Tools on macOS (`xcode-select --install`),
-  or `gcc` / `build-essential` on Linux. The build is CGO-based (SQLite and the
-  ONNX bindings are compiled in).
+- **A C compiler and the SQLite development header.** The build is CGO-based,
+  and the compiler needs `sqlite3.h` on its include path: Xcode Command Line
+  Tools on macOS (`xcode-select --install`, which includes the SDK header),
+  `build-essential` plus `libsqlite3-dev` on Debian and Ubuntu, or
+  `mingw-w64-x86_64-sqlite3` under MSYS2 on Windows. Only the header is needed;
+  nothing links a system SQLite.
+  {/* UNVERIFIED: that Xcode Command Line Tools alone provide sqlite3.h on macOS; the knomit README says only "the SDK on macOS", and this was not run on a clean machine. */}
+- **Windows only:** Rust and cargo with the `x86_64-pc-windows-gnu` target
+  (`rustup target add x86_64-pc-windows-gnu`), because `make setup` builds the
+  tokenizer library from source there. The desktop app also needs the WebView2
+  runtime, which Windows 11 includes.
 
 <Aside type="note">
-Two native shared libraries — **ONNX Runtime** (embeddings) and **graphqlite**
-(graph queries) — are downloaded automatically into `dist/<goos>-<goarch>/lib/`
-by `make setup` / `make build`. You don't install them by hand. The build also
-drops top-level `dist/knomit` and `dist/knomit-bridge` symlinks pointing into
-that platform directory.
+`make setup` and `make build` fetch the native libraries into
+`dist/<goos>-<goarch>/lib/` by themselves: **ONNX Runtime** (embeddings), loaded
+at run time, and the tokenizer library `libtokenizers.a`, linked statically at
+build time. You do not install either by hand. The build writes the binaries to
+`dist/<goos>-<goarch>/` and exposes `dist/knomit`, `dist/kb` and
+`dist/knomit-okf` as symlinks on macOS and Linux and as copies on Windows.
 </Aside>
 
 ### Build and run
@@ -86,69 +112,143 @@ that platform directory.
 
 Open <strong>http://localhost:19278/</strong> for the web UI. A fresh install
 starts with **no repositories** — the UI's "no repos" screen is the ordinary
-first-run state, not an error. Create your first one from **Manage repos**.
-
-Creating a repo runs a short [wizard](/docs/web-ui/#creating-a-repository):
-local or a remote, then — if you gave it a remote — credentials and a branch. It
-probes as it goes and derives the rest, so you are never asked to classify the
-remote yourself.
-
-Where it asks is the [ontology](/docs/ontologies/) — the topics your repo
-accepts, and the rules every fact is validated against. The `code` preset is the
-right answer for a codebase and the `default` preset for everything else. There
-is no setting to change it afterwards — doing so is a migration through git — so
-it is worth a minute of thought now. If you point knomit at a branch that is
-*already* a knowledge base, the question doesn't come up at all: that repo's own
-ontology governs.
+first-run state, not an error.
 
 <Aside type="tip" title="Prefer a native app?">
 The [desktop app](/docs/desktop/) is a system-tray app that runs the server
 in-process and lets MCP clients auto-discover it — no terminal needed to keep
 knomit running. Most people should just [download it](/download/). To build it
 here instead of `make run`, use `make desktop`: on macOS that produces
-`dist/darwin-arm64/Knomit.app`; on Linux it produces the `knomit-desktop`
-binary only — run `make desktop-install` afterwards for the `.desktop` launcher
-and icon.
+`dist/darwin-arm64/Knomit.app`; on other platforms it produces the
+`knomit-desktop` binary (plus `kb` and `knomit-okf`) in `dist/<platform>/`. On
+Linux, run `make desktop-install` afterwards for the `.desktop` launcher and
+icon.
 </Aside>
 
-<Aside type="tip" title="No CLI to create repos">
-Repos are created, archived, restored, and purged at runtime through the web UI
-("Manage repos") or the [REST API](/docs/api/) — there is no CLI command to
-create one, and MCP cannot create repos at all. No repo is privileged: knomit
-starts with none, and archiving your last one is allowed (it stays restorable).
-Because nothing falls back to a default name, commands that act on a repo make
-you name one: `knomit verify` needs `--repo` unless you pass `--all`, and
-`knomit-bridge` needs exactly one of `--repo` or `--lens`.
+## Create your first knowledge base
+
+A repo is one knowledge base, and no repo is privileged: knomit starts with
+none, and nothing falls back to a default name. Create the first one from the
+gear icon in the web UI, which opens a [wizard](/docs/web-ui/#creating-a-repository),
+or over the REST API.
+
+The create call has six modes. Two are local and four involve a remote:
+
+| Mode | What it does |
+|------|--------------|
+| `preset` | A new local repo with one of the built-in [ontologies](/docs/ontologies/). |
+| `custom` | A new local repo with an ontology you supply as YAML. |
+| `template` | A new local repo seeded from a [template](/docs/templates/) held by a repo that is already mounted. |
+| `clone` | Joins a remote branch that is already a knowledge base. |
+| `initialize` | Starts a knowledge base on a remote branch that is not one yet. |
+| `subscribe` | Follows a remote knowledge base read-only. A subscription has no agent branch and refuses writes. |
+
+The ontology is the set of topics a repo accepts and the rules every fact is
+validated against, and it is fixed when the repo is created; changing it later is
+a migration through git. Choose by what the knowledge base will hold. The
+`default` preset is a broad subject taxonomy (people, technology, science,
+society, culture, business and more). The `code` preset is a set of topics for
+knowledge about a codebase: invariants, architecture, conventions, decisions and
+gotchas. The `fleet` preset holds the member records of a [fleet](/docs/fleet/).
+For anything else, write a custom ontology or start from a template. If you point
+knomit at a branch that is *already* a knowledge base, the question does not
+come up at all: that repo's own ontology governs.
+
+<Tabs>
+  <TabItem label="Preset">
+
+  ```sh
+  curl -X POST http://localhost:19278/api/v1/repos \
+    -H 'Content-Type: application/json' \
+    -d '{"name":"work","mode":"preset","ontology_preset":"default"}'
+  ```
+
+  </TabItem>
+  <TabItem label="Template">
+
+  A template lives in a repo that is already mounted and supplies the new repo's
+  ontology and starting files. Name the mounted repo and the template:
+
+  ```sh
+  curl -X POST http://localhost:19278/api/v1/repos \
+    -H 'Content-Type: application/json' \
+    -d '{"name":"ops","mode":"template","template":{"repo":"<mounted-repo>","name":"<template-name>"}}'
+  ```
+
+  The `kb` bridge has a shorthand for the same call:
+
+  ```sh
+  kb repo create ops --template <mounted-repo>/<template-name>
+  ```
+
+  </TabItem>
+</Tabs>
+
+A create runs as a background job: the call returns `202 Accepted` with a
+`Location` header pointing at `/api/v1/repo-creates/{id}`, and the job survives a
+closed browser tab. The web UI shows the repo as a pending row and can cancel it.
+
+<Aside type="tip" title="Where repos can be created">
+Repos are created, archived, restored and purged at runtime through the web UI
+or the [REST API](/docs/api/), with no restart. `kb repo create --template` is
+the only CLI route, and MCP tools cannot create repos at all. Archiving your
+last repo is allowed; it stays restorable.
 </Aside>
 
 ## Connect an agent over MCP
 
-The simplest setup uses `knomit-bridge` over stdio — it auto-discovers your
-agent branch from the running server, so you never look it up by hand.
+An MCP client reaches the server through `kb`, a stdio adapter it launches as a
+subprocess. `kb` runs in one of three modes, chosen by its flags:
 
 <Tabs>
-  <TabItem label="Claude Code (.mcp.json)">
+  <TabItem label="Scoped to a repo (.mcp.json)">
 
   ```json
   {
     "mcpServers": {
-      "knomit": {
-        "command": "dist/knomit-bridge",
+      "knomit-repo-core": {
+        "command": "kb",
         "args": ["--repo", "core"]
       }
     }
   }
   ```
 
+  `kb` must be on the client's `PATH`; otherwise give `command` as the path to
+  the binary, such as `dist/kb`. `kb` finds the repo's agent branch from the
+  running server by itself, so you never look it up by hand.
+
   To read across several repos at once, use a [lens](/docs/lenses/) instead:
   `"args": ["--lens", "<lens-name>"]`. `--lens` and `--repo` are mutually
-  exclusive — passing both is a fatal error.
+  exclusive, and a flag given with an empty value is an error.
+
+  </TabItem>
+  <TabItem label="Unscoped (the agent binds)">
+
+  ```json
+  {
+    "mcpServers": {
+      "knomit": {
+        "command": "kb",
+        "args": []
+      }
+    }
+  }
+  ```
+
+  With neither flag, `kb` connects to the unscoped endpoint `/api/v1/mcp`, where
+  nothing is bound yet. The agent calls `knomit_repos` to see the repos and
+  lenses the server offers, then `knomit_bind` with one name. `knomit_bind`
+  returns an opaque `binding` handle, and the agent passes it as the `binding`
+  argument on every later call. Binding is per call rather than per connection,
+  so several independent jobs can share one `kb` process and each work in a
+  different repo. See [MCP tools](/docs/mcp-tools/#the-endpoints).
 
   </TabItem>
   <TabItem label="Streamable HTTP">
 
-  Connect directly, substituting the branch logged on startup (`/` → `:` in the
-  URL path):
+  A client that speaks streamable HTTP can skip `kb`. Substitute the agent
+  branch logged on startup (`/` becomes `:` in the URL path):
 
   ```json
   {
@@ -161,18 +261,41 @@ agent branch from the running server, so you never look it up by hand.
   }
   ```
 
-  A [lens](/docs/lenses/) has no branch segment — its URL is
-  `http://localhost:19278/api/v1/lenses/<lens-name>/mcp`.
+  A [lens](/docs/lenses/) has no branch segment: its URL is
+  `http://localhost:19278/api/v1/lenses/<lens-name>/mcp`. The unscoped endpoint
+  is `http://localhost:19278/api/v1/mcp`.
 
   </TabItem>
 </Tabs>
 
-<Aside type="tip" title="Let the bridge write this for you">
-`knomit-bridge claude init` scaffolds the Claude Code integration into the
-current directory: the `.mcp.json` above, `.claude/settings.json`, ten
-`/knomit-…` skills, and a block appended to `CLAUDE.md`. Where one of those
-already exists it drops a companion file beside it rather than overwriting your
-version. See [Claude Code](/docs/claude-code/).
+### Which server `kb` talks to
+
+`kb` talks to one server for everything it does. The first match wins:
+
+1. the positional `server` argument (the proxy only; hooks take none),
+2. the `KNOMIT_SERVER` environment variable,
+3. the desktop app's lockfile (`server.json`),
+4. `http://localhost:19278`.
+
+The argument and the variable accept `http://host:port`, `https://host:port`,
+`unix:///path/to/knomit.sock` and, on Windows, `npipe:////./pipe/<name>`. Each
+server logs its own address at startup in exactly this spelling. The
+[CLI reference](/docs/cli-reference/#kb--mcp-proxy-and-agent-integration)
+has the details.
+
+### Scaffold the integration
+
+<Aside type="tip" title="Let kb write this for you">
+`kb claude init` scaffolds the Claude Code integration in the current directory:
+a `.mcp.json` entry, the editor hooks in `.claude/settings.json`, eleven
+`/knomit-…` skills under `.claude/skills/`, and a versioned block in `CLAUDE.md`
+(block v5). Run it with `--repo <name>` or `--lens <name>` to scope the entry, or
+with neither for the unscoped form above. `.mcp.json`, `.claude/settings.json`
+and `CLAUDE.md` are **merged** in place, so your own entries and formatting
+survive a re-run. See [Claude Code](/docs/claude-code/).
+
+`kb antigravity init` (alias `agy`) does the same for Antigravity; see
+[Antigravity](/docs/antigravity/).
 
 The tools are usable without any of it — their descriptions carry the guidance a
 model needs to call them correctly. What the skills and the `CLAUDE.md` block add
@@ -183,7 +306,8 @@ decision once it is made, re-verify a fact before relying on it.
 ## Write your first fact
 
 With an agent connected, ask it to remember something. Under the hood it calls
-`knomit_learn`, which writes a markdown fact and commits it:
+`knomit_learn`, which writes a markdown fact and commits it. A stored fact looks
+like this (frontmatter abbreviated):
 
 ```markdown
 ---
@@ -191,21 +315,21 @@ type: observation
 confidence: 0.8
 domain: [music]
 entities: [alice]
-refs:
-  - src://myrepo/src/preferences.ts@abc1234
 ---
 Alice prefers rock music over jazz.
 ```
 
 That write is one atomic, signed git commit on your agent's branch. Browse it in
-the web UI, or query it back with `knomit_query`.
+the web UI, or query it back with `knomit_query`. Facts can cite what they rest
+on in `refs`; see [Concepts](/docs/concepts/) for the reference forms.
 
 ## Where to next
 
 <CardGrid>
   <Card title="Give your agent a knowledge base" icon="seti:clojure">
-    Wire knomit into [Claude Code](/docs/claude-code/) or
-    [Claude Cowork](/docs/claude-cowork/) — slash commands, hooks, and the bridge.
+    Wire knomit into [Claude Code](/docs/claude-code/),
+    [Claude Cowork](/docs/claude-cowork/) or [Antigravity](/docs/antigravity/) —
+    skills, hooks, and the `kb` bridge.
   </Card>
   <Card title="Understand the model" icon="open-book">
     Read [Concepts](/docs/concepts/) for facts, branches, provenance, and the
@@ -213,14 +337,19 @@ the web UI, or query it back with `knomit_query`.
     will accept.
   </Card>
   <Card title="See how it fits together" icon="document">
-    The [Overview & architecture](/docs/overview/) — the four artifacts and how
-    a request flows.
+    The [Overview & architecture](/docs/overview/) — the shipped artifacts, how
+    a request flows, and how consensus and the fleet fit in.
+  </Card>
+  <Card title="Work in isolation" icon="rocket">
+    [Experiments](/docs/experiments/) stage a batch of facts on a private branch
+    that commits or rolls back as a unit.
+  </Card>
+  <Card title="Connect many machines" icon="seti:git">
+    [Sync & consensus](/docs/sync-and-consensus/), the [Fleet](/docs/fleet/) and
+    [Authentication & permissions](/docs/auth/) cover several instances sharing
+    one body of knowledge.
   </Card>
   <Card title="Wire it into tools" icon="puzzle">
     The [MCP tools reference](/docs/mcp-tools/) and the [REST API](/docs/api/).
-  </Card>
-  <Card title="Publish what you learn" icon="seti:git">
-    [OKF export](/docs/okf/) — turn the knowledge base into a portable Open
-    Knowledge Format repository anyone can read.
   </Card>
 </CardGrid>
