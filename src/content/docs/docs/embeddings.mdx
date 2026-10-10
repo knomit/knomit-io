@@ -107,7 +107,7 @@ fields on the model descriptor**, not global constants:
 
 | Threshold | EmbeddingGemma | Used for |
 |-----------|----------------|----------|
-| Dedup | 0.82 | near-duplicate detection in `review` prune |
+| Dedup | 0.82 | near-duplicates: `knomit_learn`'s automatic merge and same-subject check, review's prune, and the discovery dedup |
 | ReflectNovelty | 0.69 | reject near-duplicate methodologies (`KNOMIT_REFLECT_NOVELTY_THRESHOLD` overrides) |
 | SimilarTo | 0.18 | "related facts" |
 | SearchFloor | 0.05 | recall floor for `min_similarity=0` |

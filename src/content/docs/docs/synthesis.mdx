@@ -51,8 +51,8 @@ per item, so a large cluster arrives as several items rather than one oversized
 prompt. Prune clusters are not chunked.
 
 A single item can still exceed what one tool result should carry, so an
-oversized item is additionally **paged** at roughly 24 KiB of delivered facts
-per page. A result carrying `more_available: true` is a partial view of the
+oversized item is additionally **paged** so that each delivered page, prompt
+included, stays under 32 KiB (about 19.5 KiB of it facts). A result carrying `more_available: true` is a partial view of the
 item: keep calling with `session_id`, `item_id` and the next `page` until it is
 false, then answer once with the `completion_token` from the final page. The
 token is the server's proof you read every page, and a response without it is
@@ -118,12 +118,13 @@ constant in the code, not a setting — there is nothing to tune.
 Walks `synthesis` facts on the agent branch and, per item, lets the model decide
 whether to write a falsifiable `hypothesis` fact (skipping is the expected outcome
 for most). It is a **distinct, user-initiated** operation — never an auto-follow-up
-to `review`. On a later dedup collision with a confirmed observation, the
-hypothesis is retracted and the observation links to it via `refs`.
+to `review`. When a later fact that is not a hypothesis matches it on learn,
+the hypothesis is retracted and the new fact links to it via `refs`.
 
 <Aside type="tip">
-Run `hypothesize` at higher `effort` to surface emergent **keystones** — unstated
-load-bearing premises ranked by blast radius. See [Emergent discovery](/docs/discovery/).
+Run `review` at `high` effort to surface emergent **keystones** as well: unstated
+load-bearing premises, kept only when they reach enough live dependents. See
+[Emergent discovery](/docs/discovery/).
 </Aside>
 
 ## Methodology in the loop
@@ -162,6 +163,8 @@ no `context` value is formatted into prompt text.
 
 ## LLM provider
 
-Synthesis and distillation use an LLM, configured by `[llm]` (default provider
+Through `knomit_review` and `knomit_hypothesize`, the calling model does the
+reasoning. Only the HTTP synthesis-run endpoint, which runs a whole session
+headless, calls an LLM of its own, configured by `[llm]` (default provider
 `gemini`, model `gemini-2.5-flash`). Embeddings are a separate, local model — see
 [Embeddings](/docs/embeddings/) and [Configuration](/docs/configuration/#llm-configuration).

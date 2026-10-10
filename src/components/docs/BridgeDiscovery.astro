@@ -1,8 +1,12 @@
 ---
 // Two-panel diagram for emergent fact discovery.
-// Panel 1 — the bridge: two similarity clusters linked only by a shared token
-//   (domain/entity) the author never declared; the keystone E sits beneath them.
-// Panel 2 — the two directions discovery runs the bridge in.
+// Panel 1 — the bridge: facts about different subjects in two similarity
+//   clusters that name the same motif, with no similarity edge between them
+//   (review's far lane); the keystone E the model may propose sits beneath.
+//   A shared domain or entity does not qualify a bridge (knomit #125); it only
+//   breaks ties in the rank order.
+// Panel 2 — the two directions: near motif lane → consequence, far motif lane
+//   (high effort only) → keystone. Both are served by knomit_review.
 // Built in the RequestFlow.astro vocabulary: inline SVG over theme vars,
 // surface-1 fills, colour-coded hairlines, mono labels.
 //   clusters/known = --k-ref (blue) · the bridge signal = --k-brand (green)
@@ -20,7 +24,7 @@ const { compact = false } = Astro.props;
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
     role="img"
-    aria-label="Two similarity clusters of facts, each densely connected within itself, are linked only by a single shared domain-or-entity token that spans the gap between them — the bridge. Beneath the bridge sits an unstated keystone fact E that both clusters depend on. Embedding similarity only ever draws the dense within-cluster edges, so it cannot see the cross-cluster bridge or the keystone."
+    aria-label="Two similarity clusters of facts, each connected within itself, are linked only by a single shared motif: fact A in one cluster and fact B in the other name the same mechanism, though no similarity edge joins them. That is the bridge. Beneath it sits an unstated keystone E, a premise both facts would rest on, which the model may propose as a hypothesis."
   >
     <defs>
       <marker id="bd-arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
@@ -50,10 +54,10 @@ const { compact = false } = Astro.props;
       <line x1="600" y1="62" x2="484" y2="86" />
     </g>
 
-    <!-- the bridge (cross-cluster shared token) -->
+    <!-- the bridge (a motif shared across clusters) -->
     <line class="bd__bridge" x1="236" y1="86" x2="484" y2="86" marker-start="url(#bd-arrow)" marker-end="url(#bd-arrow)" />
-    <text aria-hidden="true" class="bd__bridge-label" x="360" y="76" text-anchor="middle">shared token</text>
-    <text aria-hidden="true" class="bd__bridge-sub" x="360" y="106" text-anchor="middle">domain / entity · different clusters</text>
+    <text aria-hidden="true" class="bd__bridge-label" x="360" y="76" text-anchor="middle">shared motif</text>
+    <text aria-hidden="true" class="bd__bridge-sub" x="360" y="106" text-anchor="middle">motif · different clusters</text>
 
     <!-- cluster A dots -->
     <circle class="bd__dot" cx="74" cy="72" r="6" />
@@ -82,24 +86,25 @@ const { compact = false } = Astro.props;
   </svg>
 
   <figcaption class="bd__cap">
-    Embedding similarity only ever draws the dense <em>within</em>-cluster edges —
-    it is structurally blind to the cross-cluster token. The <strong>bridge</strong>
-    is that missed link; the <strong>keystone</strong> is the load-bearing fact it
-    implies — the one nobody wrote down precisely because it underwrites things
-    that look unrelated.
+    Similarity joins each fact to its neighbours, and nothing joins fact A to
+    fact B. They are about different subjects, but both name the same
+    <strong>motif</strong>: the same mechanism or failure shape. That shared motif
+    is the <strong>bridge</strong>. The <strong>keystone</strong> is a premise the
+    bridged facts would all rest on, which nobody wrote down because it
+    underwrites things that look unrelated.
   </figcaption>
 
   {!compact && (
     <div class="bd__panel2">
       <div class="bd__dir">
-        <span class="bd__dir-tag k-mono bd__dir-tag--fwd">forward · knomit_review</span>
+        <span class="bd__dir-tag k-mono bd__dir-tag--fwd">forward · knomit_review, near lane</span>
         <span class="bd__dir-flow k-mono">&#123;A, B, C&#125; &rarr; E</span>
         <span class="bd__dir-note">a <strong>consequence</strong> that follows from the bridged facts but none states alone &rarr; new <code>synthesis</code></span>
       </div>
       <div class="bd__dir">
-        <span class="bd__dir-tag k-mono bd__dir-tag--bwd">backward · knomit_hypothesize</span>
+        <span class="bd__dir-tag k-mono bd__dir-tag--bwd">backward · knomit_review at high, far lane</span>
         <span class="bd__dir-flow k-mono">E &rarr; &#123;A, B, C&#125;</span>
-        <span class="bd__dir-note">an unstated <strong>premise</strong> that, if false, breaks them &rarr; new <code>hypothesis</code>, ranked by blast radius</span>
+        <span class="bd__dir-note">an unstated <strong>premise</strong> that, if false, breaks them &rarr; new <code>hypothesis</code>, kept only if it reaches enough live dependents</span>
       </div>
     </div>
   )}

@@ -352,6 +352,7 @@ See the [REST API reference](/docs/api/) for the full parameter set.
   coverage metadata.
 - `PATCH` carries **no name field** — renaming is its own route
   ([above](#rest-surface)) — and `reads` on `PATCH` replaces rather than merges.
-- Two mounts of the same underlying repo (a clone or replica sharing a
-  root-commit ID) are rejected at create time.
+- Two mounts whose repo ids share a 12-hex prefix are rejected at create time.
+  Two mounts of the same knowledge base cannot arise, since only one active repo
+  may hold it.
 - A repo cannot be archived or purged while a lens references it.

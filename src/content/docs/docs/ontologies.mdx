@@ -572,9 +572,9 @@ substructure.
 
 <Aside type="note" title="Copy meta and principles verbatim">
 The full file also carries `meta` and `principles`, lifted unchanged from the
-`code` preset. `meta/reasoning` is a **hardcoded path** that `knomit_review` and
-`knomit_hypothesize` write [methodology facts](/docs/synthesis/) to, and
-`principles` carries the four rules that make designer intent writable only
+`code` preset. `meta/reasoning` is the path the review prompts tell the model to
+write [methodology facts](/docs/synthesis/) to (`knomit_hypothesize` reads them
+back by type, wherever they live), and `principles` carries the four rules that make designer intent writable only
 through a deliberate flow. Copy both blocks into any custom ontology.
 </Aside>
 

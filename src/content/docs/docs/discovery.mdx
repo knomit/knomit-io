@@ -1,6 +1,6 @@
 ---
 title: Emergent discovery
-description: How knomit surfaces facts nobody wrote down — the origin axis, the structural-bridge engine, the effort dial, and blast radius.
+description: How knomit surfaces facts nobody wrote down, through motif bridges, the effort dial, the quality gate, blast radius and the origin axis.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -8,59 +8,90 @@ import BridgeDiscovery from '../../../components/docs/BridgeDiscovery.astro';
 
 The [synthesis pipeline](/docs/synthesis/) maintains and grows the corpus from
 what is already written. **Discovery** goes one step further: it surfaces facts
-nobody wrote down, by inference — both forward (new consequences) and backward
+nobody wrote down, by inference, both forward (new consequences) and backward
 (unstated keystones).
 
 ## Why retrieval can't find them
 
-The most load-bearing facts are the *least* likely to be written down — precisely
-because they are so foundational that everyone assumes them. Retrieval finds what
-is *similar* to your query, but a keystone underwrites facts that are **dissimilar
-to each other**, so similarity can never surface it. That is not a tuning problem;
-it is structural. knomit reads the **shape** of the graph instead: a tag shared
-across two otherwise-unrelated clusters is the seam where an unwritten premise
+The most load-bearing facts are the *least* likely to be written down, because
+they are so foundational that everyone assumes them. Retrieval finds what is
+*similar* to your query, but a keystone underwrites facts that are **dissimilar
+to each other**, so similarity never surfaces it. No tuning of similarity search
+changes that. knomit reads the **shape** of the corpus instead: a mechanism named
+by facts in two otherwise-unrelated clusters is where an unwritten premise
 hides.
 
 <BridgeDiscovery />
 
-A **bridge** is two facts that share a domain or entity yet live in *different*
-similarity clusters (distinct Louvain communities over the embedding graph). That
-cross-cluster shared token is the signal similarity missed. Discovery seeds from
-bridges and runs them in two directions.
+A **bridge** is a group of facts that name the same **motif** (the same
+mechanism or failure shape) while sitting in *different* similarity clusters
+(distinct Louvain communities over the embedding graph) and being about
+different subjects. The shared mechanism is the signal that similarity missed.
+A shared domain or entity name is not enough to make a bridge. Motif bridges are
+found mechanically, without a model call. In a knowledge base written by many
+agents, such a bridge can link what different agents learned in different areas.
 
-Discovery also bridges on **motifs**: facts about unrelated subjects that name
-the same mechanism or failure shape. Those bridges are found mechanically,
-without a model call, and the effort dial sets how loosely two motif names must
-match. In a knowledge base written by many agents, such a bridge can link what
-different agents learned in different areas.
+A motif group becomes a candidate only when it passes three checks, in order:
+
+- **Not generic.** A motif carried by more facts than the larger of 12 and 2% of
+  the corpus has gone generic. It bridges nothing, and review reports it so the
+  motif can be split.
+- **Separated.** The members sit in at least two similarity clusters.
+- **Different subjects.** The members are not about the same thing.
+
+Candidates are then scored (see [the quality gate](#the-bridge-quality-gate))
+and ranked by that score. Where two groups score the same, the one whose members
+share more entities comes first; entity overlap only breaks ties, and domains
+play no part.
+
+Each candidate goes to one of two **lanes**. If at least one similarity edge
+joins its members, it is a **near** bridge and runs forward. If none does, it is
+a **far** bridge and runs backward: facts that look unrelated but share a
+mechanism are where a keystone would sit.
 
 The communities come from the cluster cache, whose Louvain parameters are
-`[cluster_cache] resolution` (default `4.0` — higher γ yields more, smaller
+`[cluster_cache] resolution` (default `4.0`; a higher γ yields more, smaller
 communities) and `min_community_size` (default `2`, below which a community is
 relabelled as noise). Both have `KNOMIT_CLUSTER_CACHE_*` overrides; see
 [Configuration](/docs/configuration/#config-backed-override-knomittoml).
 
 ## The two directions
 
-| Direction | Shape | Operation | Produces |
-|-----------|-------|-----------|----------|
-| Forward | **consequence** — E follows from \{A,B,…\} but no single fact states it | [`knomit_review`](/docs/mcp-tools/#knomit_review--maintain-the-kb) | `synthesis` fact |
-| Backward | **keystone** — unstated premise E that, if false, invalidates \{A,B,…\} | [`knomit_hypothesize`](/docs/mcp-tools/#knomit_hypothesize--generate-predictions) | `hypothesis` fact, ranked by blast radius |
+Both directions are served by [`knomit_review`](/docs/mcp-tools/#knomit_review--maintain-the-kb),
+which enumerates motif bridges over its ordinary seed pool.
 
-Both write `origin: discovered`. The boundary is deliberate: synthesis emits
-`synthesis` facts, hypothesize emits `hypothesis` facts — discovery only adds a
-direction to each, never a new fact type.
+| Direction | Shape | Lane | Produces |
+|-----------|-------|------|----------|
+| Forward | **consequence**: E follows from \{A,B,…\} but no single fact states it | near, at every effort | `synthesis` fact |
+| Backward | **keystone**: an unstated premise E that, if false, invalidates \{A,B,…\} | far, at `high` effort only | `hypothesis` fact, gated by blast radius |
+
+Both write `origin: discovered`. The boundary is deliberate: discovery adds a
+direction to the existing `synthesis` and `hypothesis` types, never a new fact
+type. `knomit_hypothesize` does not produce discovery items; at `medium` or
+`high` it only reports that the entity and domain axis no longer qualifies a
+bridge.
+
+A discover item has a third outcome besides proposing and skipping. When the
+agent finds that the corpus already states what it would have proposed, it
+**reinforces** that fact: the seeds join its refs as an independent derivation,
+with a one-sentence reason why the two claims are the same.
 
 ## The effort dial
 
 `effort` (`normal` · `medium` · `high`) is a dial on the existing `review` /
-`hypothesize` operations rather than a separate tool — and it doubles as a budget.
-`normal` is the default and reproduces pre-discovery behaviour **byte-for-byte** (a
-hard invariant); `medium` / `high` engage the structural-bridge engine. Between
-those two levels `effort` changes exactly one thing: the candidate budget — the
-bridge pool is capped at 12 seed sets at `medium` and 48 at `high`. The cap
-applies to scoped and unscoped runs alike, so a `high` run never attempts the
-whole corpus.
+`hypothesize` operations rather than a separate tool, and it doubles as a budget.
+
+| Effort | Motif matching | Forward (near) bridges | Backward (far) bridges | Motif vocabulary passes |
+|--------|----------------|------------------------|------------------------|-------------------------|
+| `normal` (default) | exact | up to 2 | none | no |
+| `medium` | exact | up to 4 | none | yes |
+| `high` | exact, or two shared stemmed words | up to 8 | up to 8 | yes |
+
+At `normal`, two facts must name exactly the same motif (after alias
+resolution), so on a corpus without motifs discovery adds nothing. `high`
+also groups motif names that share at least two stemmed words, so raising
+effort only ever adds candidates. The caps apply to scoped and unscoped runs
+alike, so a `high` run never attempts the whole corpus.
 
 A call that omits `effort` falls back to
 `KNOMIT_DISCOVERY_EFFORT_DEFAULT` (or `[discovery] effort_default`), default
@@ -68,68 +99,75 @@ A call that omits `effort` falls back to
 of an endpoint rather than a per-call opt-in.
 
 An optional **scope filter** (`domain` / `entities` args) bounds the seed pool;
-empty = whole corpus. A scoped run is **exempt from the synthesis watermark**, so
-you can re-target discovery at one area without disturbing unscoped runs.
-Discovery never feeds on its own output — `origin: discovered` facts are excluded
-as bridge seeds.
+empty means the whole corpus. A scoped run is **exempt from the synthesis
+watermark**, so you can re-target discovery at one area without disturbing
+unscoped runs. Discovery never feeds on its own output: `origin: discovered`
+facts are excluded as bridge seeds.
 
 ## The bridge quality gate
 
-Not every bridge is worth spending a work item on. Before a seed set reaches the
-model, the scorer rejects it outright unless all three hold:
+Not every bridge is worth spending a work item on. Before a candidate reaches
+the model, the scorer applies a gate that depends on its lane.
 
-- **Cohesion** ≥ `coh_floor` (default `0.5`) — the fraction of member pairs
-  joined by a `SIMILAR_TO` edge. A set whose members are unrelated to each other
-  is noise, not a seam.
-- **Separation** ≥ 2 distinct communities — a set inside one cluster is not a
+A **near** bridge is rejected outright unless all three hold:
+
+- **Cohesion** ≥ `coh_floor` (default `0.5`): the fraction of member pairs
+  joined by a `SIMILAR_TO` edge.
+- **Separation** ≥ 2 distinct communities: a set inside one cluster is not a
   bridge. This is fixed in code, not configurable.
-- **Members** ≤ `max_members` (default `5`) — larger sets are gated out rather
+- **Members** ≤ `max_members` (default `5`): larger sets are gated out rather
   than scored.
 
-Sets that pass are scored
+Near bridges that pass are scored
 `Q = w_coh·cohesion + w_gap·derivation_gap + w_spec·specificity` (weights all
 default `1.0`) and kept when `Q ≥ quality_floor` (default `0.0`, which keeps
-every gate-passing set). The three components measure different things:
-**cohesion** is how tightly the members hang together, **derivation gap** is the
-fraction of member pairs *not* already linked by `DERIVED_FROM` (a set whose
-members already derive from one another states nothing new), and
-**specificity** is the rarity of the shared token, `1/df`, so a token appearing
-on half the corpus contributes almost nothing.
+every gate-passing set). **Cohesion** is how tightly the members hang together,
+**derivation gap** is the fraction of member pairs *not* already linked by
+`DERIVED_FROM` (a set whose members already derive from one another states
+nothing new), and **specificity** is the rarity of the shared motif: `1/df`
+summed over every motif all members carry, so a motif on a large share of the
+corpus contributes almost nothing, and a second shared motif adds to the score.
 
-Tune it when discovery is spending its budget on candidates you keep rejecting.
-Raising `quality_floor` above `0` is the blunt lever; the weights let you say
-*why* — raise `w_spec` if the run keeps bridging on generic tags, raise `w_gap`
-if it keeps re-stating things already derived. The scored components are
+On a **far** bridge cohesion is inverted: the members must be dissimilar. The
+cohesion floor does not apply there, while separation and the member cap still
+do, and the score is
+`Q = w_spec·specificity + w_gap·derivation_gap + w_coh·(1 − mean pair cosine)`,
+kept under the same `quality_floor`. Both lanes' scores stay on one scale.
+
+Tune the gate when discovery is spending its budget on candidates you keep
+rejecting. Raising `quality_floor` above `0` is the blunt lever; the weights let
+you say *why*: raise `w_spec` if the run keeps bridging on common motifs, raise
+`w_gap` if it keeps re-stating things already derived. The scored components are
 exposed by the calibrate tool, so a floor can be picked against a real corpus
 rather than guessed.
 
-These six keys are **TOML-only** — they have no `KNOMIT_*` environment
+These six keys are **TOML-only**: they have no `KNOMIT_*` environment
 override, so a purely env-configured deployment cannot reach them. Defaults and
 placement are in [Configuration](/docs/configuration/#knomittoml).
 
 ## Verification is model-less
 
-There is no second adversarial model — the connected MCP agent is the sole
-reasoner. Quality is enforced by a strict default-skip prompt plus an ingest gate
-chain:
+There is no second adversarial model: the connected MCP agent is the sole
+reasoner. Quality is enforced by a strict default-skip prompt plus a chain of
+gates at ingest:
 
-- `KNOMIT_DISCOVERY_CONFIDENCE_THRESHOLD` (default `0.5`) — minimum confidence to
-  write a proposal.
-- `KNOMIT_DISCOVERY_BLAST_RADIUS_THRESHOLD` (default `1`, `0` disables) — a backward
-  keystone's anchor must transitively reach at least this many live dependents
-  (transitive reverse-`DERIVED_FROM` count, live at HEAD).
+- `KNOMIT_DISCOVERY_CONFIDENCE_THRESHOLD` (default `0.5`): the minimum
+  confidence to write a proposal.
+- `KNOMIT_DISCOVERY_BLAST_RADIUS_THRESHOLD` (default `1`, `0` disables): a
+  backward keystone's anchor must transitively reach at least this many live
+  dependents (transitive reverse-`DERIVED_FROM` count, live at HEAD). Forward
+  proposals skip this gate.
 - Embedding **dedup** against the corpus rejects a proposal already stated
   elsewhere.
 
-Bridge behaviour is set server-wide by `[discovery] bridge` in `knomit.toml`, or
-`KNOMIT_DISCOVERY_BRIDGE` (`domain` · `entity` · `both`, default `both`); it is
-not a per-repo setting. It is honoured on **unscoped**
-runs only; a scoped run uses the filtered bridge generator, which always bridges
-on both axes.
+`[discovery] bridge` in `knomit.toml` (`KNOMIT_DISCOVERY_BRIDGE`; `domain` ·
+`entity` · `both`, default `both`) is a server-wide setting. It no longer
+changes what is served, because a shared domain or entity does not qualify a
+bridge; only a shared motif does.
 
 ## The origin axis
 
-Discovery is one value of a fact's **`origin`** — the record of how it came to
+Discovery is one value of a fact's **`origin`**, the record of how it came to
 exist, orthogonal to `type` and `kind`:
 
 <Aside type="tip" title="origin: authored · distilled · discovered">

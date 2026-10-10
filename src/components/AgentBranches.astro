@@ -3,10 +3,12 @@
  * Branch-per-agent, drawn with both merge directions.
  *
  * Two agents on two machines each own one long-lived branch and are its only
- * writer. Consensus lives on `main`: branches merge up into it by review, CI
- * or an automatic merge (`consensus: auto`), and it merges back down into each
- * branch, with the repository's `conflicts` policy settling any overlap (by
- * default the local side wins). Branch names and hosts are placeholders.
+ * writer. Consensus lives on `main`: branches merge up into it by review, CI,
+ * or the host's automatic merge (`consensus: auto`: the host merges a pushed
+ * branch into its own agent branch and `main` fast-forwards to it), and it
+ * merges back down into each branch, with the repository's `conflicts` policy
+ * settling any overlap (when `conflicts` is unset and consensus is not `auto`,
+ * a peer's sync keeps its own side). Branch names and hosts are placeholders.
  *
  * Layout note: lane names are right-aligned so the whole left half stays a
  * clear corridor for the arrows; `main` is the heaviest stroke because its
@@ -22,7 +24,7 @@ const { class: className = '' } = Astro.props;
   <svg
     viewBox="0 0 440 272"
     role="img"
-    aria-label="Two agents on different machines each commit only to their own git branch; both branches merge up into the shared main branch by a reviewed or automatic merge, and main merges back down into each branch, with the repository's conflicts policy settling any overlap."
+    aria-label="Two agents on different machines each commit only to their own git branch; both branches merge up into the shared main branch by a reviewed merge or the host's automatic merge, and main merges back down into each branch, with the repository's conflicts policy settling any overlap."
     xmlns="http://www.w3.org/2000/svg"
   >
     <!-- main: the consensus trunk -->

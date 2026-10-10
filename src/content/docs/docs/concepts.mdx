@@ -93,7 +93,7 @@ fact records **how it came to exist**, its `origin`:
 |--------|---------|
 | `authored` | Written by a human or asserted by an agent via `knomit_learn`. |
 | `distilled` | Emitted by the synthesis pipeline: a `synthesis` fact clustered up from sources. |
-| `discovered` | **Emergent**: surfaced by the discovery engine from structural bridges nobody declared (see [Emergent discovery](/docs/discovery/)). |
+| `discovered` | **Emergent**: surfaced by the discovery engine from facts in different clusters that share a motif (see [Emergent discovery](/docs/discovery/)). |
 
 `origin` is **orthogonal** to `type` and `kind`: a `discovered` fact is still a
 normal `synthesis` (a forward *consequence*) or `hypothesis` (a backward
@@ -186,7 +186,8 @@ artifact keeps the fact file format but has no ontology placement: no validation
 rules run on it, it may not carry `context`, and it is invisible by location. It
 is never indexed, never returned by `knomit_query` or `knomit_changes`, never
 exported, and fires no trigger. Read it back by its exact path with
-`knomit_explain`, and revise it with `knomit_update`.
+`knomit_explain`, and revise it with `knomit_update`. See
+[Private state](/docs/mcp-tools/#private-state).
 
 ### `README.md`: the repo's description
 
@@ -234,15 +235,16 @@ third grouping: facts about different subjects that follow the same pattern.
 ## Subsumption — never learned twice
 
 A claim is asserted once. When a fact is written via `knomit_learn`, knomit
-searches the same category for a near-duplicate, by embedding similarity,
-**before committing**. If one is found, the two fold into a single fact at the
+searches its category for a near-duplicate, by embedding similarity,
+**before committing**. The search is a path prefix, so it also reaches the
+category's subfolders. If one is found, the two fold into a single fact at the
 existing path:
 
 - The title, body, kind, type, origin, `expires` and `context` come whole from
   the winner: the higher confidence, then the higher `sources`, the incoming fact
   winning a tie.
-- `confidence` takes the higher of the two; `domain`, `entities`, `motifs` and
-  `refs` are unioned.
+- `confidence` takes the higher of the two; `domain`, `entities` and `refs` are
+  unioned, and `motifs` are unioned up to the cap of three, the winner's first.
 - `sources` grows by the incoming count **only when the incoming fact is not a
   hypothesis and cites a ref the existing fact does not already carry.**
   Re-reading the same evidence is not corroboration, so it leaves the count
@@ -253,8 +255,8 @@ A separate check refuses a fact that shares a subject with an existing one
 update the existing fact instead, or resubmit naming the paths it judged
 different in `distinct_from`.
 
-A special case: when an incoming observation matches a `hypothesis`, the
-observation is written at its own path, cites the hypothesis, and the hypothesis
+A special case: when an incoming fact that is not itself a hypothesis matches a
+`hypothesis`, the new fact is written at its own path, cites the hypothesis, and the hypothesis
 is retracted in the same commit. Git history records the moment evidence
 settled the prediction.
 
@@ -280,9 +282,10 @@ Knowledge moves up a ladder of three rungs:
    the knowledge base's origin or to a knomit host.
 3. **Consensus branch**: the branch every peer agrees on. It is configured per
    knowledge base and recorded when the repo is created or cloned: the branch
-   you name, otherwise the remote's default branch (its `HEAD`), unless that is
-   itself an agent branch. Nothing assumes it is called `main`, though it usually
-   is.
+   you name; otherwise the remote's default branch (its `HEAD`), unless that is
+   an agent or experiment branch; otherwise the remote's only other branch. When
+   several remain, knomit refuses and asks you to name one. Nothing assumes it is
+   called `main`, though it usually is.
 
 The consensus branch advances by merge. Depending on where the knowledge base
 lives, that merge is made by a human or a CI job reviewing a pushed agent branch,
@@ -339,8 +342,9 @@ stored value from then on. Renaming the host or rotating the key does not rename
 the branch, and nothing parses the key out of the id.
 
 Every commit an instance authors is **signed** with its Ed25519 key; knomit never
-writes an unsigned commit of its own (the first commit of a new repository is
-the one exception). Signatures are **checked once, where commits are accepted**:
+writes an unsigned commit of its own, except the init commits that seed a new
+repository (its README and ontology), which precede any agent work and are never
+verified. Signatures are **checked once, where commits are accepted**:
 when a peer pushes its agent branch to a knomit host, and in the CI job that
 merges a branch into the consensus branch (`knomit verify ci`). Each commit must
 be signed by the current key on its author's record in the
@@ -400,9 +404,11 @@ blob, optionally with `#L10-L24`. [Why the blob](#why-a-source-ref-carries-a-blo
 
 </dl>
 
-Refs are stored verbatim, never rewritten, resolved, or normalized. A ref to a
-fact in this repo, whether bare or written `kb://<own-id>/…`, is a local fact
-edge and counts toward the fact's evidence weight. A `kb://` ref to another repo
+A ref to a fact or system file in this repo may be written bare. On write,
+knomit rewrites it to the canonical `kb://<own-id>/…` form, so it stays
+unambiguous wherever the fact travels. Every other ref is stored exactly as
+written, never resolved or normalized. A ref to a fact in this repo, whether
+bare or canonical, is a local fact edge and counts toward the fact's evidence weight. A `kb://` ref to another repo
 is a stable identifier you can pass back as `knomit_explain`'s `file`, but it
 contributes no evidence weight here.
 
@@ -437,7 +443,7 @@ the calling model's cycles one work item at a time, and a knowledge base can
 steer both through [guidance files](/docs/ontologies/#guidance) named in its
 ontology. See [Synthesis & hypotheses](/docs/synthesis/) for the full pipeline
 and RAPTOR, and [Emergent discovery](/docs/discovery/) for the effort dial and
-the bridge engine.
+motif bridges.
 
 ## The MCP operational loop
 

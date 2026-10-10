@@ -353,18 +353,18 @@ const toc = [
         <h2>Subsumption — never learned twice</h2>
         <p>
           When a fact is written via <code>knomit_learn</code>, knomit runs a
-          near-duplicate check in the same category using embedding similarity
-          before committing. If a match is found, the two fold into one fact at
+          near-duplicate check over its category, by path prefix and embedding
+          similarity, before committing. If a match is found, the two fold into one fact at
           the existing path: the more confident version supplies the claim,
-          confidence takes the higher value, and refs, domains and entities are
-          unioned. Two facts that say the same thing never pile up.
+          confidence takes the higher value, refs, domains and entities are
+          unioned, and motifs are unioned up to three, the winner's first. Two facts that say the same thing never pile up.
         </p>
         <p>
           The <code>sources</code> count grows only when the incoming fact is
           not a hypothesis and cites evidence the existing fact does not
           already carry: re-reading the same source is not corroboration. And
-          when an observation settles a <code>hypothesis</code>, the observation
-          is written at its own path, cites the hypothesis, and retracts it in
+          when a fact that is not itself a hypothesis settles a
+          <code>hypothesis</code>, the new fact is written at its own path, cites the hypothesis, and retracts it in
           the same commit, so git history records the moment evidence closed
           the loop. Because peers share a base by merging, this is what keeps
           learning paid for once across every agent that uses it.
@@ -381,6 +381,7 @@ const toc = [
             <div class="subsume-fact subsume-fact--dup k-mono">
               <span class="subsume-fact__type">◉ observation</span>
               <span class="subsume-fact__title">KPMG survey: employee AI-agent adoption at 68%</span>
+              <span class="subsume-fact__meta">conf 0.78 · ai, workforce</span>
               <span class="subsume-tag">sim 0.94 · near-duplicate</span>
             </div>
           </div>
@@ -388,17 +389,16 @@ const toc = [
           <div class="subsume-merged k-mono">
             <div class="subsume-merged__hd">
               <span class="subsume-merged__type">◉ observation</span>
-              <span class="subsume-merged__conf">conf 0.78 ↑</span>
+              <span class="subsume-merged__conf">conf 0.78 (max)</span>
             </div>
-            <span class="subsume-merged__title">KPMG: 68% of employees are using AI agents daily</span>
+            <span class="subsume-merged__title">KPMG survey: employee AI-agent adoption at 68%</span>
             <div class="subsume-merged__tags">
               <span class="subsume-tag-domain">ai</span>
               <span class="subsume-tag-domain">agents</span>
               <span class="subsume-tag-domain">workforce</span>
             </div>
             <div class="subsume-refs">
-              <span class="subsume-ref">⊃ kb/…/3fa17c8.md</span>
-              <span class="subsume-ref">⊃ kb/…/a9d4bf2.md</span>
+              <span class="subsume-ref">refs: kpmg.com/…/ai-agents.html</span>
             </div>
           </div>
         </div>
@@ -443,11 +443,11 @@ const toc = [
         <div class="branch-diagram">
           <svg
             class="branch-svg"
-            viewBox="0 0 460 340"
+            viewBox="0 0 460 290"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
             role="img"
-            aria-label="A git graph: two agent branches fork off main, each committing learn, update, distill and retract operations on its own, then merge back into main, where a final merge-and-distill commit becomes HEAD."
+            aria-label="A git graph: two agent branches fork off main, each committing learn, update, distill and retract operations on its own, then merge back into main; main's latest merge is HEAD."
           >
             <defs>
               <filter id="bg-glow" x="-60%" y="-60%" width="220%" height="220%">
@@ -456,10 +456,10 @@ const toc = [
               </filter>
             </defs>
             <!-- Trunk: main -->
-            <line x1="230" y1="14" x2="230" y2="326" stroke="var(--k-brand)" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="230" y1="14" x2="230" y2="272" stroke="var(--k-brand)" stroke-width="2.5" stroke-linecap="round"/>
             <!-- Branch A: agent/mindev.local-8ef0cd32 (left) -->
-            <path d="M230 72 C168 92 112 118 112 158 C112 198 168 222 230 240" stroke="var(--k-ref)" stroke-width="2" stroke-linecap="round"/>
-            <!-- Branch B: agent/research-7f3 (right) -->
+            <path d="M230 72 C168 92 112 118 112 158 C112 214 168 252 230 272" stroke="var(--k-ref)" stroke-width="2" stroke-linecap="round"/>
+            <!-- Branch B: agent/research-7f3a91c2 (right) -->
             <path d="M230 100 C288 120 346 144 346 172 C346 202 288 222 230 238" stroke="var(--k-brand-2)" stroke-width="2" stroke-linecap="round"/>
             <!-- Trunk commits -->
             <circle cx="230" cy="22" r="5" fill="var(--k-brand)"/>
@@ -467,7 +467,6 @@ const toc = [
             <circle cx="230" cy="100" r="5" fill="var(--k-brand)"/>
             <circle cx="230" cy="238" r="5" fill="var(--k-brand)"/>
             <circle cx="230" cy="272" r="7" fill="var(--k-brand)" filter="url(#bg-glow)"/>
-            <circle cx="230" cy="318" r="5" fill="var(--k-brand)"/>
             <!-- Branch A commits (left) -->
             <circle cx="112" cy="128" r="5.5" fill="var(--k-ref)"/>
             <circle cx="112" cy="162" r="5.5" fill="var(--k-ref)"/>
@@ -484,16 +483,15 @@ const toc = [
             <text aria-hidden="true" x="6" y="157" font-size="8" fill="var(--k-ref)" font-family="monospace" opacity="0.85">mindev</text>
             <text aria-hidden="true" x="6" y="168" font-size="7.5" fill="var(--k-ref)" font-family="monospace" opacity="0.6">.local-8ef0cd32</text>
             <text aria-hidden="true" x="352" y="148" font-size="8" fill="var(--k-brand-2)" font-family="monospace" opacity="0.85">agent/</text>
-            <text aria-hidden="true" x="352" y="159" font-size="8" fill="var(--k-brand-2)" font-family="monospace" opacity="0.85">research-7f3</text>
+            <text aria-hidden="true" x="352" y="159" font-size="8" fill="var(--k-brand-2)" font-family="monospace" opacity="0.85">research-7f3a91c2</text>
             <!-- Commit op labels -->
             <text aria-hidden="true" x="120" y="132" font-size="7.5" fill="var(--k-text-muted)" font-family="monospace">learn</text>
             <text aria-hidden="true" x="120" y="166" font-size="7.5" fill="var(--k-text-muted)" font-family="monospace">update</text>
             <text aria-hidden="true" x="120" y="196" font-size="7.5" fill="var(--k-temporal)" font-family="monospace">retracted</text>
             <text aria-hidden="true" x="354" y="152" font-size="7.5" fill="var(--k-text-muted)" font-family="monospace">learn</text>
             <text aria-hidden="true" x="354" y="182" font-size="7.5" fill="var(--k-text-muted)" font-family="monospace">distill</text>
-            <text aria-hidden="true" x="236" y="242" font-size="7.5" fill="var(--k-text-muted)" font-family="monospace">← merge research</text>
-            <text aria-hidden="true" x="236" y="276" font-size="7.5" fill="var(--k-brand)" font-family="monospace">← merge + distill</text>
-            <text aria-hidden="true" x="236" y="322" font-size="7.5" fill="var(--k-brand)" font-family="monospace">HEAD</text>
+            <text aria-hidden="true" x="236" y="242" font-size="7.5" fill="var(--k-text-muted)" font-family="monospace">← merge agent/research…</text>
+            <text aria-hidden="true" x="236" y="276" font-size="7.5" fill="var(--k-brand)" font-family="monospace">← merge agent/mindev… · HEAD</text>
           </svg>
         </div>
       </div>
@@ -615,7 +613,8 @@ const toc = [
           Refs anchor a fact to its source material — the evidence behind the
           claim. A ref points to another fact, to a source file at a given
           commit, or to any web resource: an article, a paper, a press release.
-          Refs are stored verbatim — never rewritten or resolved.
+          A ref to this repo is stored in its canonical <code>kb://</code>
+          form; every other ref is stored exactly as written, never resolved.
         </p>
         <table>
           <thead>
@@ -639,7 +638,7 @@ const toc = [
           <div class="uri-divider"></div>
           <div class="uri-row">
             <span class="uri-type">source</span>
-            <div class="uri-text"><span class="uri-scheme">src://</span><span class="uri-host">knomit/internal/store/</span><span class="uri-path">service.go@cfef409</span></div>
+            <div class="uri-text"><span class="uri-scheme">src://</span><span class="uri-host">7b4887ce51d9/internal/store/</span><span class="uri-path">service.go@&lt;commit&gt;:&lt;blob&gt;</span></div>
           </div>
           <div class="uri-divider"></div>
           <div class="uri-row">
@@ -648,8 +647,8 @@ const toc = [
           </div>
           <div class="uri-divider"></div>
           <div class="uri-row">
-            <span class="uri-type">commit</span>
-            <div class="uri-text"><span class="uri-scheme">knomit-kb@</span><span class="uri-host">core/</span><span class="uri-path">124c68ec · 2026-06-26</span></div>
+            <span class="uri-type">system</span>
+            <div class="uri-text"><span class="uri-host">.knomit/triggers/</span><span class="uri-path">triage.js</span></div>
           </div>
         </div>
       </div>
@@ -724,10 +723,12 @@ const toc = [
         <p>
           Most systems <strong>retrieve</strong> what is similar to a query.
           knomit also <strong>discovers</strong>: an effort dial seeds from
-          <em>bridges</em> — facts sharing a domain or entity yet sitting in
-          different similarity clusters — and proposes the keystone those bridges
-          imply. Load-bearing facts hide in exactly the cross-cluster links that
-          similarity-only retrieval is structurally blind to.
+          <em>bridges</em>, which are facts about different subjects that name
+          the same motif yet sit in different similarity clusters, and proposes
+          the consequence or keystone those bridges imply. A shared domain or
+          entity alone does not make a bridge. Keystones come from
+          <code>knomit_review</code> at <code>high</code> effort, and are kept
+          only when enough live facts depend on them.
           <a href="/docs/discovery/">How discovery works &rarr;</a>
         </p>
       </div>
@@ -775,7 +776,7 @@ const toc = [
             <span class="mcp-tool k-mono">knomit_learn</span>
           </div>
           <div class="mcp-row">
-            <span class="mcp-phase k-mono">trace</span>
+            <span class="mcp-phase k-mono">explain</span>
             <span class="mcp-tool k-mono">knomit_explain</span>
           </div>
           <div class="mcp-row">
