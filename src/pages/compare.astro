@@ -245,7 +245,10 @@ const mapAria =
       <p class="cmp-callout k-reveal">
         Provenance, history and synthesis share one mechanism: <strong>every
         refinement is a signed commit, so each can be read, diffed and
-        reverted.</strong>
+        reverted.</strong> Time-travel reads a fact and its provenance graph
+        as of any commit (<code>knomit_explain</code> with a commit, or
+        <code>at:&lt;sha&gt;</code> and <code>vs:&lt;from&gt;..&lt;to&gt;</code> in
+        the web UI), so a reader sees what was believed and when.
       </p>
 
       <p class="cmp-underneath k-text-2">
