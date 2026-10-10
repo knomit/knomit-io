@@ -6,7 +6,8 @@ import {
   type Fact, type FactRef, type DirChild, type BrowseResponse, type HistoryResponse,
   type CommitDetail, type CommitFile, type SearchResult, type RefGroup,
   type RefVersion, type RecentResponse, type Stats, type ActivityStats,
-  type Highlight, type RankAxis,
+  type Highlight, type RankAxis, type Status, type MotifMatch, type RepoCreateStatus,
+  type MotifsPage, type MotifCluster, type MotifsQuery,
   type LensFactEntry, type LensSource, type LensStats, type LensBrowseResponse,
 } from '../generated/kb-ui/upstreamApi';
 
@@ -570,9 +571,16 @@ export const api = {
   search: async (
     _repo: string, _branch: string, q: string, path = '', minConfidence = 0,
     opts?: { types?: string[]; kinds?: string[]; excludeKinds?: string[];
-             origins?: string[]; eps?: string[]; domains?: string[]; entities?: string[] },
+             origins?: string[]; eps?: string[]; domains?: string[]; entities?: string[];
+             motifs?: string[]; motifMatch?: MotifMatch; sinceFork?: boolean },
   ): Promise<{ results: SearchResult[] }> => {
     const { b } = state();
+    // motifs: BundleFact carries no motif frontmatter, so a motif filter has
+    // nothing to match. Same honest-empty answer as eps. Unreachable in
+    // practice: the motif controls are hidden (see the ABSENT block below).
+    if (opts?.motifs?.length) return { results: [] };
+    // sinceFork is accepted and ignored: the reducer only holds it true inside
+    // an experiment, and a bundle is one branch with no experiments.
     // eps (operation tags: learn/update/retract/subsume/synthesize/sync) has
     // no equivalent in the bundle — BundleFact carries only the CURRENT
     // frontmatter, not a per-commit operation tag, and guessing a mapping
@@ -664,9 +672,13 @@ export const api = {
   recent: async (
     _repo: string, _branch: string, path: string, query = '', limit = 50, offset = 0,
     opts?: { types?: string[]; excludeType?: string; kinds?: string[]; excludeKinds?: string[];
-             origins?: string[]; domains?: string[]; entities?: string[]; eps?: string[] },
+             origins?: string[]; domains?: string[]; entities?: string[]; eps?: string[];
+             motifs?: string[]; motifMatch?: MotifMatch; sinceFork?: boolean },
   ): Promise<RecentResponse> => {
     const { b } = state();
+    // motifs/sinceFork: same decisions as search (no motif data in a bundle;
+    // sinceFork is only ever true inside an experiment, which a bundle lacks).
+    if (opts?.motifs?.length) return { facts: [], total: 0 };
     // Same eps decision as search: the bundle has no episode data, so an
     // eps-filtered query returns nothing rather than silently matching
     // everything. See report Finding 6.
@@ -758,6 +770,23 @@ export const api = {
     return { values: [...seen].filter(v => v.toLowerCase().startsWith(p)).sort() };
   },
 
+  // The branch row. Only useFactEdges reads it, to refresh a stale head after
+  // a 404; a bundle's head never moves, so this returns the bundle's own head
+  // (useFactEdges then sees head === anchor and reports the 404 as the answer).
+  // embeddings off, writable false, no `experiment` (a bundle is one branch).
+  status: async (_repo: string, _branch: string): Promise<Status> => {
+    const { b } = state();
+    return {
+      head: b.head, branch: b.ref, index_commit: b.head,
+      embeddings_enabled: false, ontology_root: 'kb', writable: false,
+      experiment: null,
+    };
+  },
+
+  // The repo-create job list polled by StatusFooter. /explore creates nothing,
+  // so the answer is always the empty list (no pending-create rows).
+  listRepoCreates: async (): Promise<RepoCreateStatus[]> => [],
+
   getAgentBranch: async (_repo: string): Promise<string> => state().b.ref,
 
   // Unreachable: the shell hides the write controls in CSS, so isReadOnly() hides every
@@ -779,4 +808,16 @@ export const api = {
   getLensStats: noLens<LensStats>('getLensStats'),
   lensBrowse: noLens<LensBrowseResponse>('lensBrowse'),
   lensCompletions: noLens<{ values: string[] }>('lensCompletions'),
+
+  // ABSENT ON PURPOSE: the motif vocabulary reads. The vendored motifEndpoint.ts
+  // gates every motif control on `typeof api.motifs === 'function'` (and the
+  // three siblings), so a control that would open onto a permanent error is
+  // never drawn. The bundle holds no motif frontmatter, so there is nothing to
+  // serve; stubbing these as throwers would turn the controls on. The cast
+  // keeps the vendored call sites type-checking while the runtime value stays
+  // undefined. tests/unit/bundleApi.contract.test.ts allow-lists exactly these.
+  motifs: undefined as unknown as (repo: string, branch: string, opts?: MotifsQuery) => Promise<MotifsPage>,
+  lensMotifs: undefined as unknown as (lens: string, opts?: MotifsQuery) => Promise<MotifsPage>,
+  motifCluster: undefined as unknown as (repo: string, branch: string, key: string) => Promise<MotifCluster>,
+  lensMotifCluster: undefined as unknown as (lens: string, key: string) => Promise<MotifCluster>,
 };

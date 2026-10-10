@@ -478,7 +478,7 @@ test.describe('/explore guided tour', () => {
     // KB only grows — asserting 147/83 went red overnight at 169/92. What
     // matters is that real numbers are interpolated, not that they are any
     // particular numbers.
-    await expect(launcher).toContainText(/\d+ facts, \d+ commits of history/);
+    await expect(launcher).toContainText(/[\d,]+ facts, [\d,]+ commits of history/);
     // Label and href both derive from bundle.repo, so this catches a
     // retargeted KB_REPO_SLUG leaving the link pointing at the old repo.
     const link = launcher.getByRole('link');

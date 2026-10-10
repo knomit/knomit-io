@@ -24,12 +24,21 @@ describe('bundleApi covers every api.* call site in the vendored UI', () => {
 
     const called = new Set<string>();
     for (const f of files) {
-      const src = await readFile(path.join(UI_DIR, f), 'utf8');
+      const raw = await readFile(path.join(UI_DIR, f), 'utf8');
+      // Comments mention "api.ts" and "api.status" in prose; only code counts.
+      const src = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
       for (const m of src.matchAll(/\bapi\.([a-zA-Z_$][\w$]*)/g)) called.add(m[1]);
     }
     expect(called.size).toBeGreaterThan(0);
 
-    const missing = [...called].filter(name => typeof (api as never)[name] !== 'function');
+    // Deliberately absent: vendored motifEndpoint.ts feature-detects these with
+    // `typeof api.X === 'function'` and hides the control, so absence is the
+    // contract, not drift. See the ABSENT block in bundleApi.ts.
+    const ABSENT = new Set(['motifs', 'lensMotifs', 'motifCluster', 'lensMotifCluster']);
+    const missing = [...called]
+      .filter(name => !ABSENT.has(name))
+      .filter(name => typeof (api as never)[name] !== 'function');
+    for (const name of ABSENT) expect((api as never)[name], `${name} must stay absent`).toBeUndefined();
     expect(missing, `bundleApi is missing: ${missing.join(', ')}`).toEqual([]);
   });
 });
