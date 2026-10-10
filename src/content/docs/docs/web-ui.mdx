@@ -11,7 +11,7 @@ import appFact from '../../../assets/product/app-fact.png';
 The server embeds a React single-page app at `/`. It reads a knowledge base —
 browse facts, search, inspect provenance, time-travel through history — and it
 operates the server around it: it creates and archives repos, shows the
-experiments agents have open, lists the MCP clients currently connected, and
+experiments agents have open, lists the MCP client sessions the server has seen, and
 streams the server's log. It browses either a single repo or a
 [lens](/docs/lenses/): one write repo plus any number of read mounts, federated
 into one virtual knowledge base.
@@ -47,19 +47,19 @@ the [desktop app](/docs/desktop/) is the fastest way to see everything below.
 
 ## Layout
 
-This section is the only place the page describes screen arrangement: tab names,
-where a control sits, what a badge counts. The sections after it name
-capabilities.
-
 ### Top bar
 
-- A **context switcher** lists two groups, Repos and Lenses. It appears when more
+- A **context switcher** lists two groups, Repositories and Lenses. It appears when more
   than one repo exists, when any lens exists, or when you are already browsing a
   lens. A repo or lens whose store is unavailable is marked there.
-- In a lens context the right zone adds a **lens chip**, an **`N mounts`** pill,
-  and a **`writes → <write repo>`** pill naming the write mount.
-- While the window is on an experiment branch, a flask chip names the experiment
-  and an **experiment band** appears under the top bar (see
+- In a lens context the right zone shows a **lens chip** and a **mounts
+  picker**: a count of the mounts being read (`n/N` when narrowed) that opens a
+  checklist of the read mounts. The status footer names the write mount
+  (`✎ <write repo>`).
+- In a repo context the **branch chip** opens a picker listing the agent branch
+  and the repo's experiments; choosing one enters it. Orphaned experiments are
+  listed but disabled. Inside an experiment the chip shows a flask and the
+  experiment's name, and an **experiment band** appears under the top bar (see
   [Experiments](#experiments)).
 - A **gear icon** enters and leaves **Manage**. One control at one anchor: from
   browse it opens Manage, and from inside Manage it returns you to browsing.
@@ -70,12 +70,15 @@ capabilities.
 - The **library** is on the left. It switches between four ways of looking:
   **Path** (the ontology tree), **Recent**, **Relevance** (while a search is
   running) and **Motif** (while a motif pivot is on).
-- A **filter bar** holds the search box and the filter chips: Domain, Entity,
-  Kind, Type, Origin, Motif and Path. The Motif row is not offered in a lens
-  context, where the mounts have no single vocabulary to list.
+- The search and filter field sits in the top bar while you are live; in history
+  it gives way to the trail breadcrumb. A **filter bar** offers the filter chips
+  Domain, Entity, Kind, Type, Origin, Motif and Path. In a lens the Motif
+  vocabulary is every mount's motifs merged into one list.
 - The **right panel** shows the folder overview or the open fact. The fact's
-  header reads left to right: type and origin, confidence, source count, path,
-  then connection counts, the version chip and the retract control.
+  header has three rows: type, origin, confidence and source count (plus the
+  source mount in a lens); the path; then the connection counts and the fact's
+  motifs on the left, with the version's date, the version chip and the retract
+  control pinned right.
 - The **status footer** shows the live/history indicator, the anchored commit,
   the running build version, and a count of repo creates in flight.
 - In a lens context the library shows one ontology tree merged across every
@@ -83,8 +86,8 @@ capabilities.
 
   | Surface | In a lens context |
   |---------|-------------------|
-  | Sources dropdown | narrows the union to a subset of read mounts; selecting every mount collapses back to "all mounts" |
-  | `repo:` filter | recognised as a chip category (a repo context leaves `repo:foo` as free text) |
+  | Mounts picker (top bar) | narrows the union to a subset of read mounts; selecting every mount collapses back to all mounts |
+  | `repo:` filter | not a chip in either context; narrow a lens to some of its mounts with the mounts picker |
   | Fact view | shows a source-mount badge; editing is permitted only for write-repo facts |
   | Colours | each repo gets a deterministic colour, the same wherever it appears |
 
@@ -99,15 +102,15 @@ once at least one repo exists; with none, Manage is the create screen.
 |-----|------|
 | **Knowledge** | The overview of what needs doing and what is wired to what, plus a page per repo and per lens, and the archive. The rail lists repos and lenses |
 | **Fleet** | This instance's [fleet](/docs/fleet/) membership |
-| **Sessions** | The MCP clients currently connected. Its badge counts live sessions, with a `+` when the list is truncated |
+| **Sessions** | The MCP client sessions and whether each is live, idle or dead. Its badge counts live sessions, with a `+` when the list is truncated |
 | **Logs** | The server's log, live. Absent on a read-only server |
 | **Authorizations** | OAuth requests waiting for an operator. Present only where the server runs an OAuth issuer, and absent on a read-only server. Its badge counts pending requests |
 
 The rail is shown beside pages about entities and dropped on the server pages
 (Fleet, Sessions, Logs, Authorizations), which take the full width. A repo's
-own page is a column of blocks: its settings, an Experiments block, a Pushed
-branches block (absent on a subscription), the remote connection, and a
-danger zone for rename and archive. A repo that is still being created shows
+own page is a column of blocks, in order: Description, License, Agent branch,
+Experiments, Pushed branches (absent on a subscription), Remote, Mounted in,
+Agent access, Index and a Danger zone for rename and archive. A repo that is still being created shows
 the same page, gated until the create finishes.
 
 ### Keyboard
@@ -196,8 +199,9 @@ has no distilled layer for impact to separate.
 View the knowledge graph as of any past commit; refs resolve to the versions that
 existed at that point in time. Opening a fact's history lists its versions as a
 timeline you can pick from, along with the other facts changed in the same
-commit, and two versions of a fact can be compared in a **diff view**.
-{/* UNVERIFIED: how a person enters the diff view (the control that sets the diff anchor); FactDiffView and the diff as-of mode exist, but the entry point was not traced. */} While you
+commit. Typing `at:<sha>` in the search field jumps to a commit, and
+`vs:<from>..<to>` (short SHAs or `HEAD`) opens a **diff view** comparing the open
+fact across two commits; in a lens, open a fact first. While you
 are anchored in history the UI is read-only and says so, and one key returns you
 to now.
 
@@ -208,7 +212,7 @@ open through the `knomit_experiment` tool and later commit or roll back as a
 unit. The UI lets a person see and settle them:
 
 - **A table of the repo's experiments**: name, description, last commit and when
-  it expires. Each row can be entered, committed or rolled back. There is no
+  it expires. Every row can be rolled back; a row you are not in can be opened, and the experiment you are in can be committed. There is no
   control to create or sync an experiment; agents open them. The expiry line
   reports the server's `[experiments].expiry_days` policy and is not a control.
 - **The experiment band**, shown while the window is inside an experiment: what
@@ -217,7 +221,9 @@ unit. The UI lets a person see and settle them:
   **since fork** toggle, which narrows the library to the facts the experiment
   touched.
 - **A conflict dialog** when a commit is refused because both sides changed the
-  same facts: it lists the conflicting paths so they can be read before choosing.
+  same facts: it lists the conflicting paths, says nothing was changed, and points to resolving
+  them through `knomit_experiment`; the only action it offers is rolling the
+  experiment back.
 
 A subscription has no agent branch to fork from and cannot hold an experiment.
 
@@ -247,7 +253,7 @@ modes: `preset`, `custom`, `template`, `clone`, `initialize` and `subscribe`
 | Source | Local-only (with the repo name) or a remote URL | always |
 | Access | Credentials, plus the repo name — prefilled from the URL, since `git@host:org/arxiv-kb.git` is going to be called `arxiv-kb`. A `knomit+https` URL uses certificate authentication | remote |
 | Branch | Which branch to build the knowledge base on. If the branch is already a knowledge base, join it or **subscribe** (read-only, pull-only) | remote with branches |
-| Ontology | A preset, custom YAML, or a [template](/docs/templates/) from any mounted repo | only when that branch is not already a KB |
+| Ontology | A preset, custom YAML, or a [template](/docs/templates/) from any mounted repo | local, or a remote branch that is not already a KB |
 | Review | Confirm, then watch progress | when the shape is established |
 
 The step list is **derived**, not stored, so a step is never "skipped" — it is
@@ -256,15 +262,13 @@ never asks you to pick one, because that ontology governs.
 
 <Aside type="note" title="A check that did not complete never guesses">
 The branch question — *does this branch already carry `.knomit/ontology.yaml`?* —
-has three answers, and the third is not a formality. Guessing "yes" would
-discard the ontology you chose; guessing "no" would write one over a knowledge
-base that already had its own. The ontology is fixed at create time, so both are
-unrecoverable.
+has three answers: yes, no, and could not tell. Guessing "yes" would discard the
+ontology you chose; guessing "no" would write one over a knowledge base that
+already had its own.
 
-So when the check cannot be established, the step list simply **ends** at
-Branch. There is nowhere to advance to. It is deliberately not a greyed-out Next
-button on a full-length rail: showing Ontology and Review for a remote knomit
-knows nothing about advertises a shape it has not established.
+So when the check cannot be established, the step list ends at Branch and the
+action reads Try again. Ontology and Review are not shown, because the wizard
+cannot tell yet whether the branch is already a knowledge base.
 </Aside>
 
 The Branch step is separate from the initial probe because the answer is
@@ -273,8 +277,8 @@ The Branch step is separate from the initial probe because the answer is
 with no branches at all is a dead end rather than a mode, and the Access step
 says so: create a `main` first, one commit is enough.
 
-The Ontology step offers the [built-in presets](/docs/ontologies/#the-built-in-presets),
-a YAML editor with live validation, syntax highlighting and completion, or a
+The Ontology step offers the `default` and `code`
+[presets](/docs/ontologies/#the-built-in-presets) (`fleet` is not offered there), a YAML editor with live validation, syntax highlighting and completion, or a
 template. Every diagnostic is reported with its line position, and all of them at
 once rather than only the first. An uploaded file is validated the same way before
 it is accepted.
@@ -282,8 +286,9 @@ it is accepted.
 ### A create runs in the background
 
 Submitting the wizard starts a job on the server, which survives a closed tab. It
-reports progress by phase — validate, transfer (an indeterminate bar showing the
-remote's own progress lines), register and index — and counts as done only once
+reports progress step by step — validating, reading or subscribing to the
+remote (an indeterminate bar showing the remote's own progress lines),
+registering and indexing — and counts as done only once
 the repo is indexed. The new repo appears as a pending row you can open to watch,
 and the UI enters the repo as soon as it exists. A running create can be
 **cancelled**, which removes everything it made and leaves no archive entry. A
@@ -302,7 +307,8 @@ why. Each archived entry shows its **reason** — whether a person or the system
 archived it, and the note — and a system archive happens when a cancelled create
 or a fleet removal could not purge its data, or when a repo's ontology is a
 symlink. Restoring takes an optional new name and is refused when the name or
-origin is already in use. An active repo whose ontology is missing, empty or
+origin is already in use, when another active repo holds the same knowledge
+base, or when a lens holds the name. An active repo whose ontology is missing, empty or
 unparsable stays readable but refuses writes, and the UI says why.
 
 ## Index state
@@ -312,9 +318,9 @@ readable before its index is complete. A repo whose index is being built carries
 a progress chip (done over total), and one whose index failed or was cancelled
 carries an error chip with the reason. Chips appear wherever the repo is listed
 and vanish when the index is ready. Changes are pushed to the UI, so no refresh
-is needed. A person can **rebuild** the index, and **cancel** a build that is
-running; operations that need the index idle, such as attaching or detaching an
-origin, answer that the repo is indexing and offer the same cancel.
+is needed. A person can **rebuild** the index. Operations that need the index idle, such
+as connecting or disconnecting an origin, are refused while it builds; the
+refusal names the reason and offers **Cancel indexing**.
 
 ## Renaming and licensing
 
@@ -327,9 +333,10 @@ origin, answer that the repo is indexing and offer the same cancel.
   rather than the name, so a rename cannot orphan a paging session.
 - **Create or edit the repository `LICENSE`.** A missing one can be created and
   an existing one edited. The read view stays preformatted rather than rendered
-  as markdown, which would reflow away the line breaks a licence depends on. A
-  `LICENSE` over 64 KiB is refused rather than replaced — the server cannot read
-  it back to diff it safely, so it leaves the existing file untouched.
+  as markdown, which would reflow away the line breaks a licence depends on. An
+  existing `LICENSE` over 64 KiB is shown as present but not displayed, and the
+  server refuses to replace it, since it would overwrite a file no one could
+  read first.
 
 ## Connecting a remote
 
@@ -396,8 +403,8 @@ terminal. See [Authentication & permissions](/docs/auth/).
 
 ## Starting up
 
-Until the first repo and branch are known, a boot screen shows a determinate bar
-and a label for what it is waiting on (connecting, the server, the repo, the
+Until the first repo and branch are known, a boot screen shows a progress bar
+(indeterminate during the desktop's server phase) and a label for what it is waiting on (connecting, the server, the repo, the
 branch), an elapsed counter after two seconds, and attempt feedback on retries.
 On the desktop app it continues the splash shown during the first boot.
 

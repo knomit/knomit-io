@@ -63,7 +63,7 @@ read-only-ness here. See [Deployment](/docs/deployment/) for the operator view.
 On a server that is not read-only, the six write tools are still gated per
 caller: `tools/list` hides them from a principal that does not hold the `write`
 permission, and a call from one returns the tool error *permission denied:
-&lt;tool&gt; requires write*. A binding to a subscription — a read-only follower
+&lt;tool&gt; requires write; principal &lt;principal&gt; does not hold it*. A binding to a subscription — a read-only follower
 of a remote branch — refuses writes as well. See
 [Authentication & permissions](/docs/auth/).
 
@@ -82,7 +82,6 @@ also available via `GET /api/v1/repos/{repo}` (the `agent_branch` field). Branch
 names use `:` in place of `/` in URL path segments (for example
 `agent:hostname-abc123`). The same form addresses an experiment:
 `…/branches/exp:<name>/mcp` serves `exp/<name>`.
-{/* UNVERIFIED: the exp:<name> branch-path spelling is taken from router.go comments and MountExperimentMiddleware, not from a request against a running server. */}
 
 **Lens.** A [lens](/docs/lenses/) — one write repo federated with N read
 mounts — has its own endpoint and no branch segment, because each mount
@@ -112,10 +111,10 @@ cannot invent a working one.
   valid. There is no unbind. A handle is stored server-side by the repo's
   identity (so a rename does not strand it) and purged once it has gone unused
   for `session.client_retention` (168 hours by default).
-  {/* UNVERIFIED: the purge of unused binding handles after client_retention is taken from the design notes and the delta inventory (Store.Purge); the purge code was not read. */}
 - Any tool other than `knomit_bind` and `knomit_repos` called without a handle,
-  or with one the server does not recognise, fails with a tool error that names
-  `knomit_bind`. `knomit_repos` works without a handle, and given a stale one it
+  or with one the server never minted, fails with a tool error that names
+  `knomit_bind`; a handle whose repo or lens has since gone fails with the
+  reason it no longer resolves. `knomit_repos` works without a handle, and given a stale one it
   reports `bound.status: "unresolvable"` instead of failing.
 - On a branch-scoped or lens endpoint the base comes from the URL, so a
   `binding` argument is refused on presence (even an empty one), and
@@ -155,7 +154,8 @@ is served only once it has been merged there. A binding serves the skills of its
 write repo only: a lens serves none of its read members' skills.
 
 They reach an agent two ways. As **MCP prompts**, one per skill, with one
-optional argument `args` that replaces `$ARGUMENTS` in the body; prompts are
+optional argument `args` that replaces `$ARGUMENTS` in the body, or is appended
+when the body has none; prompts are
 served on branch-scoped and lens endpoints. And through the **`knomit_skill`**
 tool, which also works on the unscoped endpoint, where a prompt request carries
 no handle.
@@ -228,7 +228,7 @@ takes no `binding` argument of its own, and one is refused.
 |-------|------|-------|
 | `repo` | string | Name of the repo to bind. Mutually exclusive with `lens` |
 | `lens` | string | Name of the lens to bind. Mutually exclusive with `repo` |
-| `experiment` | string | Optional. **Resume** an existing experiment so the new handle starts inside it. It does not create one; use `knomit_experiment` with `action: open` for that. This is how an agent gets back into an experiment after reconnecting, because a handle does not outlive its session |
+| `experiment` | string | Optional. **Resume** an existing experiment so the new handle starts inside it. It does not create one; use `knomit_experiment` with `action: open` for that. This is how an agent that no longer has its old handle, for example after reconnecting, gets back into an experiment |
 
 Exactly one of `repo` and `lens` is required. Writes go to the repo's agent
 branch (or to the experiment, if one is resumed). A subscribed repo binds at the
@@ -370,8 +370,8 @@ Returns lightweight rows (title, type, domain, score, ~400-character snippet) �
 not full bodies. Paginated via an opaque `cursor`. At least one selecting filter
 is required: `text`, `entities`, `domain`, `applies_to`, `path`, `type`,
 `origin`, `motifs`, `min_confidence`, `context`, or any of the expiry filters —
-unless paging with `cursor`, or using `sort=recent`. Unknown argument keys are
-refused. A fact past its `expires` is marked `"expired": true`; nothing is hidden
+unless paging with `cursor`, or using `sort=recent`. Argument keys are not
+checked: a misspelled filter is ignored, not refused. A fact past its `expires` is marked `"expired": true`; nothing is hidden
 by default.
 
 | Param | Type | Notes |
@@ -425,9 +425,9 @@ when the file is gone at the tip, or when no file existed at that path at the
 fact's commit. A symlink is never followed and counts as no file.
 
 `knomit_explain` never fans out across mounts: the fact's own path fixes the
-mount, and the whole provenance walk stays inside it. A `kb://` ref is
-classified as **External**, not a local fact edge — it carries no evidence
-weight and creates no local provenance edge.
+mount, and the whole provenance walk stays inside it. A `kb://` ref to the
+fact's own repo is a local edge and is walked like a bare path; a `kb://` ref to
+another repo is listed under `external` and is not walked.
 
 ### `knomit_changes` — what changed since a bookmark
 
@@ -537,14 +537,18 @@ to one written to the intended repo, so `knomit_learn`, `knomit_update` and
 
 ```json
 {
-  "commits": [{"file": "kb/gotchas/x/1a2b3c4d.md", "hash": "abc1234"}],
+  "commits": [
+    {"file": "kb/gotchas/x/1a2b3c4d.md", "hash": "abc1234"},
+    {"file": "kb/gotchas/x/5e6f7a8b.md", "hash": "abc1234"}
+  ],
   "written_to": {
     "repo": "knomit-kb",
     "repo_id": "3ec012f5b4d2",
-    "branch": "agent/main",
+    "branch": "agent/hostname-abc12345",
     "lens": "knomit-dev"
   },
-  "summary": "wrote 2 facts to repo \"knomit-kb\" (3ec012f5b4d2) on branch \"agent/main\" — the write repo of lens \"knomit-dev\""
+  "summary": "wrote 2 facts to repo \"knomit-kb\" (3ec012f5b4d2) on branch \"agent/hostname-abc12345\" — the write repo of lens \"knomit-dev\"",
+  "operation": "learn"
 }
 ```
 
@@ -558,7 +562,7 @@ to one written to the intended repo, so `knomit_learn`, `knomit_update` and
   `kb://<id>/…` paths and the `knomit_repos` mount table. It is what makes the
   stamp discriminating: a repo *name* is per-machine, mutable, and unique only
   among one server's active repos, so two connected knomit servers each holding
-  a repo called `knomit` on `agent/main` would otherwise render byte-identically
+  a repo called `knomit` on the same agent branch name would otherwise render byte-identically
   and the stamp would detect nothing. It is omitted when the store is
   unavailable and the identity is genuinely unknown.
 - The prose `summary` is not redundant with the struct — a caller reacts to
@@ -621,10 +625,11 @@ rolled back automatically. See [Experiments](/docs/experiments/).
 a fact, the agent branch's version wins, and you stay inside the experiment.
 
 **Conflicts.** If both sides changed the same path, the repo's `conflicts`
-setting (read at its consensus branch) settles what it can, with the agent
+setting (read at its consensus branch; under `consensus: auto` an absent
+setting means `facts: merge` and `state: consensus`) settles what it can, with the agent
 branch as the consensus side, and the summary names each settled path and any
 version it **dropped**. Whatever the setting leaves unsettled — every conflict,
-when the repo has no setting — makes the commit **refused**: nothing changes,
+when the repo has no setting and is not `consensus: auto` — makes the commit **refused**: nothing changes,
 and the tool error lists the conflicting paths with **three commits** for each:
 the fork point, the experiment's version and the agent branch's version. Read the
 fact at all three with `knomit_explain` (`file`, `commit`), decide per path, and

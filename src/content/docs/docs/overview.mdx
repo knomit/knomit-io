@@ -124,8 +124,8 @@ back as a unit. Several instances can join a [fleet](/docs/fleet/), which keeps 
 member record per agent in a repo of its own.
 
 A fact is a Markdown file with YAML frontmatter (`kind`, `type`, `domain`,
-`entities`, `confidence`, `sources`, `refs`, `evidence_weight`, `origin`, and the
-optional `motifs`, `expires` and `context`). It can be revised and retracted, but
+`entities`, `confidence`, `sources` and `refs`, plus `evidence_weight`, `origin`,
+`motifs`, `expires` and `context` when they apply). It can be revised and retracted, but
 only by commit, so its **history** is immutable and every past version stays
 readable. Topic and category are not frontmatter keys — they are path segments in
 `kb/<topic>/<category>/<uuid8>.md`, where the `uuid8` is allocated at creation

@@ -64,7 +64,6 @@ The release server tarball contains `knomit`, `kb` and `knomit-okf`. See the
   `build-essential` plus `libsqlite3-dev` on Debian and Ubuntu, or
   `mingw-w64-x86_64-sqlite3` under MSYS2 on Windows. Only the header is needed;
   nothing links a system SQLite.
-  {/* UNVERIFIED: that Xcode Command Line Tools alone provide sqlite3.h on macOS; the knomit README says only "the SDK on macOS", and this was not run on a clean machine. */}
 - **Windows only:** Rust and cargo with the `x86_64-pc-windows-gnu` target
   (`rustup target add x86_64-pc-windows-gnu`), because `make setup` builds the
   tokenizer library from source there. The desktop app also needs the WebView2
@@ -119,7 +118,7 @@ The [desktop app](/docs/desktop/) is a system-tray app that runs the server
 in-process and lets MCP clients auto-discover it — no terminal needed to keep
 knomit running. Most people should just [download it](/download/). To build it
 here instead of `make run`, use `make desktop`: on macOS that produces
-`dist/darwin-arm64/Knomit.app`; on other platforms it produces the
+`dist/darwin-<arch>/Knomit.app` (`darwin-arm64` on Apple Silicon); on other platforms it produces the
 `knomit-desktop` binary (plus `kb` and `knomit-okf`) in `dist/<platform>/`. On
 Linux, run `make desktop-install` afterwards for the `.desktop` launcher and
 icon.
@@ -132,7 +131,7 @@ none, and nothing falls back to a default name. Create the first one from the
 gear icon in the web UI, which opens a [wizard](/docs/web-ui/#creating-a-repository),
 or over the REST API.
 
-The create call has six modes. Two are local and four involve a remote:
+The create call has six modes. Three are local and three involve a remote:
 
 | Mode | What it does |
 |------|--------------|
@@ -144,12 +143,13 @@ The create call has six modes. Two are local and four involve a remote:
 | `subscribe` | Follows a remote knowledge base read-only. A subscription has no agent branch and refuses writes. |
 
 The ontology is the set of topics a repo accepts and the rules every fact is
-validated against, and it is fixed when the repo is created; changing it later is
-a migration through git. Choose by what the knowledge base will hold. The
+validated against, and it is chosen when the repo is created. It lives in the repo
+as `.knomit/ontology.yaml`; changing it later means committing a new version of
+that file through git. Choose by what the knowledge base will hold. The
 `default` preset is a broad subject taxonomy (people, technology, science,
 society, culture, business and more). The `code` preset is a set of topics for
-knowledge about a codebase: invariants, architecture, conventions, decisions and
-gotchas. The `fleet` preset holds the member records of a [fleet](/docs/fleet/).
+knowledge about a codebase: invariants, architecture, conventions, decisions,
+gotchas, incidents, principles and meta. The `fleet` preset holds the member records of a [fleet](/docs/fleet/).
 For anything else, write a custom ontology or start from a template. If you point
 knomit at a branch that is *already* a knowledge base, the question does not
 come up at all: that repo's own ontology governs.
@@ -228,13 +228,15 @@ subprocess. `kb` runs in one of three modes, chosen by its flags:
   ```json
   {
     "mcpServers": {
-      "knomit": {
+      "knomit-repo-myproject": {
         "command": "kb",
         "args": []
       }
     }
   }
   ```
+
+  (`kb claude init` names the entry after the directory.)
 
   With neither flag, `kb` connects to the unscoped endpoint `/api/v1/mcp`, where
   nothing is bound yet. The agent calls `knomit_repos` to see the repos and
@@ -305,18 +307,22 @@ decision once it is made, re-verify a fact before relying on it.
 
 ## Write your first fact
 
-With an agent connected, ask it to remember something. Under the hood it calls
-`knomit_learn`, which writes a markdown fact and commits it. A stored fact looks
-like this (frontmatter abbreviated):
+With an agent connected, ask it to record something it has worked out. Under the
+hood it calls `knomit_learn`, which writes a markdown fact and commits it. A
+stored fact looks like this (frontmatter abbreviated):
 
 ```markdown
 ---
+kind: epistemic
 type: observation
 confidence: 0.8
-domain: [music]
-entities: [alice]
+domain: [suppliers, logistics]
+entities: [Acme Freight]
 ---
-Alice prefers rock music over jazz.
+# Acme Freight's Rotterdam lane adds two days in Q4
+
+Acme Freight's Rotterdam–Hamburg lane ran two days over quote on every Q4 shipment logged this year.
+Plan Q4 orders with that margin.
 ```
 
 That write is one atomic, signed git commit on your agent's branch. Browse it in

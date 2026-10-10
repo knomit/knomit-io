@@ -7,7 +7,7 @@ import { Aside } from '@astrojs/starlight/components';
 
 Four binaries expose a command line: `knomit` (server + admin), `kb` (MCP proxy
 + agent-host integration), `knomit-okf` ([OKF export](/docs/okf/)), and
-`knomit-desktop` (the app). All four print the same build string, but the
+`knomit-desktop` (the app). All four print the same build version (`knomit-okf` prefixes it with its name), but the
 accepted spelling differs: `knomit` and `kb` take only the bare `version`
 subcommand — `--version` is an unknown flag on both. `knomit-okf` and
 `knomit-desktop` accept `version`, `--version` and `-version`.
@@ -26,20 +26,20 @@ knomit
   version       print the build version
 ```
 
-Most commands in this group act on the running server or on its `control.db`
-and are listed here because the same binary carries them. `fleet` and `oauth`
-talk to a **running** server over its local authenticated socket (a named pipe
-on Windows), so they fail with a clear message when no server is up or no local
+`fleet`, and `oauth pending`/`approve`/`deny` on the instance itself, talk to
+a **running** server over its local authenticated socket (a named pipe on
+Windows), so they fail with a clear message when no server is up or no local
 listener is configured. `grants` opens `control.db` directly and works beside a
 live server.
 
 ### `knomit serve` — start the HTTP server
 
 Boots the app, opens all repos, and listens on `{host}:{port}`. When it can, it
-also serves on a local authenticated listener (a unix socket in the data root,
+also serves on a local authenticated listener (a unix socket, by default `knomit.sock` in the data root,
 or a named pipe on Windows), where the operating system reports the caller's
 identity; and, when configured, an mTLS listener for enrolled instances
-(`[tls].addr`) and an OAuth listener (`[oauth].addr`). Serves REST `/api/v1`, the
+(`[tls].addr`, once a certificate is installed) and an OAuth listener
+(`[oauth].issuer` and `[oauth].addr`). Serves REST `/api/v1`, the
 MCP endpoints, the web UI, and — if enabled — git smart-HTTP. Graceful shutdown
 on SIGTERM. At startup it logs the address to give `kb` as `KNOMIT_SERVER`.
 
@@ -67,9 +67,8 @@ controls. See [Observability](/docs/observability/).
 Walks the git object chain, SQLite tables, and search index, reporting structural
 issues. Exit codes: `0` clean (warnings do not fail the run), `1` integrity
 errors found, `2` verify itself could not run — bad flags, unknown repo, boot
-failure. The difference between `1` and `2` is the contract: a script that reads
-"the tool could not run" as "the repo is damaged" pages someone at 3am over a
-typo in a flag.
+failure. The split between `1` and `2` lets a script tell a damaged repository from a
+command that could not run.
 
 | Flag | Type | Default | Meaning |
 |------|------|---------|---------|
@@ -77,7 +76,7 @@ typo in a flag.
 | `--all` | bool | `false` | Verify all **active** repos. An archived repo is not opened and cannot be verified; the run names any it skipped |
 | `--deep` | bool | `false` | Parse every fact (slower, stricter) |
 | `--json` | bool | `false` | Emit the report(s) as JSON instead of text |
-| `--max-issues` | int | `100` | Cap issues printed per repo in **text** output (`0` = all). The per-category summary is always complete, and `--json` is never truncated — a truncated machine-readable report would look complete and not be. Ordering puts errors ahead of warnings, so truncation can only drop the least severe |
+| `--max-issues` | int | `100` | Cap issues printed per repo in **text** output (`0` = all). The per-category summary is always complete, and `--json` is never truncated. Errors are sorted ahead of warnings, so truncation drops the least severe first |
 | `--all-branches` | bool | `false` | Parity-check every `refs/heads/*` ref, not just the branches the index maintains |
 | `--prune-generated-refs` | bool | `false` | **Writes.** Deletes the generated `okf/*` refs left by the removed server-side export, and their markers — nothing else. Verify is otherwise strictly read-only |
 
@@ -85,8 +84,7 @@ typo in a flag.
 It is read-only, but it is also a **snapshot**: it takes the read lock on every
 branch it checks up front and holds all of them until it finishes. That is what
 makes the report internally consistent, and it means the run blocks every writer
-on those branches for its whole duration. Budget for it, or stop the agent —
-this is not a cheap probe to fire at a busy one.
+on those branches for its whole duration. Budget for it, or stop the agent first.
 </Aside>
 
 Only branches the index maintains are parity-checked. Other refs under
@@ -104,9 +102,8 @@ When it is on (`log` or `enforce`), it loads the member records of a [fleet](/do
 repository checkout and checks every commit the candidate adds: it is signed,
 its author's agent id has exactly one member record, the signing key is that
 record's current key and no other record's, and the agent is active. An unsigned
-merge passes only if it adds nothing beyond its parents. It works on git
-checkouts, not on the server, so it runs in CI.
-{/* UNVERIFIED: that verify ci/audit need no running server and no control.db; inferred from the flags (--dir, --fleet) and the store.CheckRange/Audit signatures, not run. */}
+merge passes only if it adds nothing beyond its parents. It reads only the two git
+checkouts: no running server, no knomit home, no `control.db`. So it runs in CI.
 
 | Flag | Default | Meaning |
 |------|---------|---------|
@@ -197,7 +194,6 @@ Adds, revokes and lists the permissions held by a principal on this instance. A
 principal is written `kind:id@via`, such as `instance:<64-hex fingerprint>@cert`;
 a certificate principal needs the full 64-hex fingerprint. The permissions are
 `read`, `write`, `push:own`, `merge:main`, `operator` and `admin`.
-{/* merge:main is accepted and listed but no code path enforces it; the auth page owns that statement. */}
 `grants` opens `control.db` directly and never migrates it: if the database or
 its `grants` table does not exist yet, start `knomit serve` once.
 
@@ -213,8 +209,8 @@ instance with `knomit identity revoke`. See [Authentication & permissions](/docs
 ### `knomit oauth` — approve OAuth clients
 
 Lists, approves and denies the authorization requests that OAuth clients (such as
-`kb login`) have parked on this instance. These commands use the local
-authenticated socket.
+`kb login`) have parked on this instance. On the instance, these commands use the
+local authenticated socket.
 
 | Command | Meaning |
 |---------|---------|
@@ -305,7 +301,7 @@ instances on one machine, copy the address the one you mean logs at startup. A
 recipe's `exec` child is started with `KNOMIT_SERVER` already set. The target is
 resolved once at startup, so restart the MCP client if the server moves.
 
-**What it tells the server.** Every request carries `User-Agent:
+**What it tells the server.** Every proxied request, and the closing `DELETE`, carries `User-Agent:
 knomit-bridge/<version>` and an `X-Knomit-Client` header describing the client
 process (a per-process id, transport, pid, parent app, host, user, working
 directory, branch and version). It is self-declared and used only to describe
@@ -332,13 +328,15 @@ Renders embedded templates into the current directory. See
 
 With neither flag, `init` writes an **unbound** entry whose `args` are empty, so
 `kb` connects to the unscoped endpoint and the agent binds with `knomit_bind`.
+If `.mcp.json` already has a knomit entry naming one scope, a flagless init keeps it.
 The file set is eleven `/knomit-…` skills under `.claude/skills/` (owned and
 overwritten on every run) and three files that are merged in place:
 `.mcp.json` (the entry under the derived key), `.claude/settings.json` (any
 missing hook is appended; the rest of the file is untouched) and `CLAUDE.md` (the
 region between the `knomit:integration` markers, currently `v5`, is replaced, or
-the block is appended). A re-run with nothing to change prints nothing and
-leaves the files byte-identical. A companion file (`.mcp.json.knomit`,
+the block is appended). A re-run with nothing to change leaves the three merged files byte-identical
+and says nothing about them; the eleven skills are rewritten every time and
+listed as `Restored:`. A companion file (`.mcp.json.knomit`,
 `CLAUDE.md.knomit-block`) is written only when a merge cannot decide, and an
 unparseable `.claude/settings.json` stops `init` with the file named.
 
@@ -454,9 +452,11 @@ Prints `knomit-okf <semver>.<sha>`. Accepts `version`, `--version`, or
 
 ## `knomit-desktop` — tray/desktop app
 
-No arguments boots the app (picks a free loopback port, defaulting to `19278`,
-boots the server in-process, opens the webview, writes `server.json`). The system
-tray is created on every platform, Linux included. `version` is the only argument
+No arguments boots the app: it binds the configured loopback port (default
+`19278`, falling back to a free one if that is taken), boots the server
+in-process, writes `server.json` and puts an icon in the system tray, on every
+platform, Linux included. The window stays hidden until you choose **Open
+Knomit** from the tray menu. `version` is the only argument
 the binary inspects; anything else is ignored and the app boots normally.
 
 | Arg | Meaning |
