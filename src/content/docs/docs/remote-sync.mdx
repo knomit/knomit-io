@@ -1,47 +1,64 @@
 ---
 title: Remote sync
-description: "Sync a repo with a git remote over SSH, token or basic auth: the consensus model, credential encryption, and the origin gate."
+description: "Connect a repo to a git origin or another knomit instance: SSH, token, basic and mTLS auth, credential encryption, the origin gate, breakers, serving git."
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-knomit is a distributed, multi-machine knowledge base. Each machine writes only
-its own **agent branch** (`agent/<hostname>-<key-fingerprint8>`); **`main` is
-consensus**. Syncing with a git remote ("origin") is how agent branches reach and
-absorb that consensus. Configure it from the web UI (the gear icon in the top
-bar) or with [environment variables](/docs/configuration/#environment-variables).
+knomit is a fabric of instances. Each one holds its own copies of many knowledge
+bases, and each machine writes only its own **agent branch**
+(`agent/<hostname>-<key-fingerprint8>`). An **origin** is how an instance
+reaches the others: a forge such as GitHub or GitLab, a plain git server, or
+another knomit instance serving its repos over `/git`. This page covers the
+mechanics of talking to an origin and of being one. Configure it from the web UI
+(the gear icon in the top bar) or with
+[environment variables](/docs/configuration/#environment-variables).
 
 ## The consensus model
 
-- This machine is the **sole writer** of its agent branch.
-- `main` (or whatever the upstream branch is named) is never written directly by
-  the MCP server.
-- Reconciliation is **merge-based**, not replay-based: in steady state the agent
-  branch merges `main` with a local-wins strategy (the local agent's edits win
-  overlapping paths), producing a fast-forward, a no-op, or a single merge commit
-  — O(1) regardless of how many commits `main` absorbed.
-- A zero-diff merge is reported as a **no-op** and never creates a merge commit,
-  which is what makes squash-merged upstreams fast-forward correctly.
+Every repo has one **consensus branch**: the branch the instances agree is the
+shared knowledge base, `main` by default but configurable per repo. No instance
+writes to it directly. Agent branches reach it by merge, and the sync loop on
+this page is what moves commits between an instance and its origin in both
+directions. How agent branches become consensus, what happens when two instances
+changed the same fact, and the `consensus`, `conflicts` and `sync` attributes of
+the ontology are on the [Sync & consensus](/docs/sync-and-consensus/) page.
 
 <Aside type="caution" title="Never squash-merge an agent branch into main">
 Squashing destroys per-fact authorship — each fact carries its author's signed
-commit. Merge agent branches into `main`; don't squash them.
+commit. Merge agent branches into the consensus branch; don't squash them.
 </Aside>
 
 ## Auth methods
 
 | Method | URL format | Credentials |
 |--------|------------|-------------|
-| **SSH** | `git@github.com:user/repo.git` | knomit's SSH key (`~/.knomit/id_ed25519`); auto-detected for `git@…` / `ssh://` URLs |
-| **Token** (GitHub PAT, etc.) | `https://github.com/user/repo.git` | a PAT, sent as HTTP basic auth with username `x-token`; auto-detected for `https://` URLs with a token present |
+| **SSH** | `git@github.com:user/repo.git` | the instance key (`<KNOMIT_HOME>/id_ed25519`, or `[remote] ssh_key`); auto-detected for `git@…` / `ssh://` URLs |
+| **Token** (GitHub PAT, etc.) | `https://github.com/user/repo.git` | a PAT, sent as HTTP basic auth with the username `x-token` unless a user is set; auto-detected for `https://` URLs with a token present |
 | **Basic** | `https://github.com/user/repo.git` | `user:password`, stored in one field and split on the **first** colon |
+| **Certificate (mTLS)** | `knomit+https://host:19279/git/<repo>` | this instance's fleet certificate; the only method a `knomit+https` origin accepts |
 | **None / anonymous** | any public URL | no credentials (public repos) |
 
-The `auth_method` is inferred from the URL and fields when left empty.
+The `auth_method` is inferred from the URL and fields when left empty. The API
+refuses mismatched pairs up front: SSH auth on an `https://` URL, token or basic
+on an SSH URL, and `cert` on anything but `knomit+https://`.
+
+A **`knomit+https://`** origin is another enrolled knomit instance, reached on
+its mTLS listener (`[tls].addr`) rather than its plaintext port. The scheme is
+always recognised: an instance that has not yet run `knomit identity install`
+fails such an origin with "this instance has no fleet certificate" and starts
+working on its next fetch once the certificate is installed, with no restart.
+The certificate is the whole credential. A token or basic method on that scheme
+is an error, go-git TLS options and proxies are refused, and the global
+`[remote]` credentials are never sent to a fleet peer. Enrolment and the
+certificate files are described under
+[Authentication & permissions](/docs/auth/).
 
 <Aside type="note">
-The same Ed25519 key that authenticates SSH remotes also signs commits and names
-the agent branch — one identity, end to end.
+The same Ed25519 key that authenticates SSH remotes also signs your commits and
+anchors your certificate. The agent branch name, by contrast, is chosen once on
+first boot and stored in `control.db`; changing the key or the hostname later
+does not rename it.
 </Aside>
 
 ### SSH host-key verification
@@ -66,21 +83,22 @@ untrusted. See [Configuration](/docs/configuration/).
 ### Credential encryption
 
 Auth tokens are **never stored in plaintext**. They are encrypted with
-AES-256-GCM using a key derived (HKDF-SHA256) from the agent's SSH private key
-(`id_ed25519`), and stored base64-encoded in `control.db`'s `repo_origins`
+AES-256-GCM using a key derived (HKDF-SHA256) from the instance's SSH private
+key (`id_ed25519`), and stored base64-encoded in `control.db`'s `repo_origins`
 table — one machine-local control plane for every repo, not a copy per repo
-database. If the SSH key is unreadable at boot, the encryptor is unavailable and
+database. If the key is unreadable at boot, the encryptor is unavailable and
 setting a remote **refuses** to persist any auth token rather than writing it in
-the clear. (Legacy plaintext values are still read, with a warning.)
+the clear. (Legacy plaintext values are still read, with a warning.) A
+`knomit+https` origin stores no secret at all: its credential is the certificate
+file.
 
 <Aside type="caution" title="`control.db` is the only copy">
-Since the origin moved out of the repo databases, `control.db` holds the sole
-record of a remote's URL and credential. Losing it loses your remote
-configuration — and because the key is derived from the agent SSH key, rotating
-or replacing `id_ed25519` leaves the stored token undecryptable. knomit does not
-fail loudly there: it logs a warning and tries the stored bytes as plaintext, so
-the symptom is a puzzling `401` from the remote rather than a clear key error.
-Re-enter the credential to recover.
+`control.db` holds the sole record of a remote's URL and credential. Losing it
+loses your remote configuration — and because the key is derived from the
+instance SSH key, rotating or replacing `id_ed25519` leaves the stored token
+undecryptable. knomit does not fail loudly there: it logs a warning and tries
+the stored bytes as plaintext, so the symptom is a puzzling `401` from the
+remote rather than a clear key error. Re-enter the credential to recover.
 </Aside>
 
 This is one of several guarantees that hold at the sync boundary — the local
@@ -98,21 +116,36 @@ holds only the credentials used to reach it (`[remote]` in `knomit.toml`, or the
 | Field | Meaning |
 |-------|---------|
 | `URL` | Git remote URL |
-| `Branch` | Upstream **consensus** branch — default `main`, configurable (e.g. `master`); changeable later via `PATCH /origin/upstream` |
+| `Branch` | The **consensus** branch on the remote — see below; changeable later via `PATCH /origin/upstream` |
 | `Interval` / `PushInterval` | Pull / push cadence (seconds); a single reconcile loop ticks at the shorter of the two and does both |
-| `AuthMethod` | `token` · `basic` · `ssh` · `none` (inferred if empty) |
+| `AuthMethod` | `token` · `basic` · `ssh` · `cert` · `none` (inferred if empty) |
 | `AuthToken` | Encrypted at rest (see above) |
 | `LastSyncAt` / `LastStatus` / `LastError` (+ push variants) | Last-outcome bookkeeping, surfaced through the gear-icon indicator |
+| `fetch_breaker` / `push_breaker` | The loop's circuit breakers (below); in memory, read-only in the origin view |
 
-On clone/init, knomit prefers `main` over a remote agent-branch HEAD as the
-consensus upstream, and syncs **both** the agent branch and the upstream.
+A subscription records its mode too; since it *is* its origin, detaching the origin is refused with 409.
+
+**Which branch is the consensus branch** is never decided by its name. When you
+create a repo from a remote, knomit takes, in order: the branch you named; else
+the remote's `HEAD` branch, unless that is an agent branch; else the one branch
+that has no other role (not `agent/*`, not `exp/*`). If several branches
+qualify, or none does, the create is refused and asks you to name one. The
+result is recorded in the repo's own database and survives detaching the origin.
+A repo created locally with no remote gets `main`, because something has to be
+named at birth, and that too is recorded. A repo whose consensus branch does not
+exist in the store is not served.
 
 `PATCH /origin/upstream` takes a `{"branch": "…"}` body and changes only the
-upstream branch — auth is untouched and the connect flow is not re-run. The
+consensus branch — auth is untouched and the connect flow is not re-run. The
 branch is validated against a conservative subset of git's ref-name rules
 (control characters, spaces, `~ ^ : ? * [ \`, a leading `-` or `/`, a trailing
 `/`, and the `..` / `@{` sequences are rejected with 400). The reconcile loop
 re-reads the record each tick, so the change takes effect on the next cycle.
+
+One local copy per knowledge base: a repo's identity is the root commit of its
+consensus branch, so a second repo pointed at the same knowledge base on one
+machine would clobber the first one's agent branch on push. A create or connect
+that would do that is refused, naming the repo that already holds it.
 
 ## Local-path origins (security gate)
 
@@ -121,7 +154,8 @@ Cloning from a local filesystem path is **disabled by default**. To allow it, se
 origin is then accepted only if it resolves (symlinks evaluated) to a path
 **inside** that root. Network origins (`https://`, `ssh://`, `git://`,
 `git@host:path`) always pass. Every clone/fetch path is gated — there is no
-trusted exemption.
+trusted exemption — and a refusal comes back as a 400 at preflight, before any
+work starts.
 
 ## Connecting a remote at runtime
 
@@ -132,7 +166,10 @@ The "Connect Remote" flow is session-based and ephemeral (≈10-min idle expiry)
    counts of local-only / remote-only / shared-path / dead-ref facts. The
    conflict strategy is not a preview input; it is an argument to apply.
 3. `POST …/apply` then `…/commit` performs the merge, taking
-   `conflict_strategy` in the apply body.
+   `conflict_strategy` (`local_wins` or `remote_wins`) in the apply body.
+
+The web UI's version of this flow has a certificate step for `knomit+https`
+origins.
 
 `…/test`, `…/preview`, `…/apply` and `…/commit` are SSE streams
 (`text/event-stream`), each ending in a `done` event carrying its result. The
@@ -157,51 +194,163 @@ and escalates its log level WARN→ERROR after five consecutive failures. Sync u
 a compare-and-swap watermark on `last_commit`.
 
 Pull and push share one loop rather than running on separate timers: every tick
-syncs, then pushes (push is skipped in read-only mode). The loop interval is the
-shorter of `Interval` and `PushInterval` — a non-positive `PushInterval` is
-ignored, and if neither yields a positive value the interval falls back to 300s.
+syncs, then pushes (push is skipped in read-only mode and for a subscription).
+The loop interval is the shorter of `Interval` and `PushInterval` — a
+non-positive `PushInterval` is ignored, and if neither yields a positive value
+the interval falls back to 300s. A repo whose ontology sets
+`sync: {pull: realtime}` runs the same round every `[git].realtime_pull_interval`
+instead; see [Sync & consensus](/docs/sync-and-consensus/).
+
+`[git].network_timeout` (120 s) bounds every remote git operation, so a remote
+that accepts the connection and never answers cannot hang the loop. A round
+against a failing origin can therefore take up to twice that, one fetch plus one
+push.
+
+### Circuit breakers
+
+Each origin loop has two breakers, one for fetch and one for push. Failures one
+and two run at the normal pace. The **third consecutive failure opens the
+breaker**: that step is skipped for twice the loop's base wait. When the wait
+ends, one probe runs; a failed probe re-opens the breaker for double the
+previous wait, up to a cap of **30 minutes**, and any success closes it. The
+base wait is the loop interval (300 s by default, or the real-time pull
+interval). Both breakers start closed after a server restart. While a breaker is
+open its step writes no status, so `LastSyncAt` and `LastError` keep describing
+the last real attempt; the state, the consecutive failure count and the time the
+breaker opens again are in the origin view as `fetch_breaker` and
+`push_breaker`.
+
+### Snapshot push
+
+A push reads the branch tip once under the branch's write lock, releases the
+lock, then force-pushes **that commit by hash**. Writes therefore never wait on
+the network, and commits made after the snapshot go out on the next push.
+Pushes from one instance are serialised per branch, whether they come from the
+sync loop, a fleet registration or the push at create time.
+
+### Repos with no origin
+
+A repo with no origin has nothing to pull consensus from, so it advances its own
+consensus branch: every `[git].local_reconcile_interval` (30 s; `0` disables) the
+loop fast-forwards the consensus branch to the agent branch tip. It runs once at
+start, ends when an origin is attached, and starts again when one is detached.
+It only ever fast-forwards: if the consensus branch has diverged from the agent
+branch it logs a warning and skips, and it never resets a branch. This is what
+lets a peer that subscribes to a standalone instance see its facts: the peer
+reads the consensus branch over `/git`, and that branch used to stay at the root
+commit.
 
 ## Serving git over HTTP
 
-Set `KNOMIT_GIT_SERVE` (default **on**, optionally with `KNOMIT_GIT_PORT`) to
-expose a git smart-HTTP endpoint at `/git`, so other knomit instances or git
-clients can clone and fetch directly from this server.
+`KNOMIT_GIT_SERVE` (default **on**) mounts a git smart-HTTP endpoint at
+`/git/<repo>` on the main port, so other knomit instances and ordinary git
+clients can clone and fetch directly from this server. A trailing `.git` on the
+repo name is accepted. Nothing else is mounted if `git.serve` is off or the
+instance is [read-only](/docs/deployment/#running-a-read-only--demo-instance).
 
 This endpoint is also what [`knomit-okf`](/docs/okf/) reads: the KB URL you hand
-`clone` is `<server>/git/<repo>`, and it is unauthenticated, so an export against
-your own server needs no credentials.
+`clone` is `<server>/git/<repo>`, and a fetch on the plaintext port needs no
+credentials, so an export against your own server needs none either.
+
+What a client sees is a curated view of the repo, not its raw refs:
+
+- `HEAD` is a symref to the consensus branch. Only the consensus branch and the
+  `agent/*` branches are advertised; remote-tracking refs and knomit's own
+  bookkeeping refs are not, and a request for an object that is not an
+  advertised tip is refused, so a hidden ref cannot be fetched by hash.
+- The advertisement carries **`shallow`** (depth requests work, which is what the
+  create wizard's branch probe sends), **`side-band-64k`** (a fetch streams
+  progress lines beside the pack: one at the start, one at the end and one for
+  every megabyte between), and **`knomit-repo-id`**, the root commit of the
+  consensus branch, which is the knowledge base's identity. A subscriber reads
+  it from the advertisement alone and can refuse a knowledge base it already
+  holds before downloading anything.
+- If the consensus branch does not exist in the store, the endpoint answers with
+  a protocol error instead of an empty clone that looks like success.
+
+### Receiving pushes from peers
+
+The same endpoint accepts `git push` (receive-pack), so a peer can publish its
+agent branch to a host without the host holding any credential for the peer.
+The rules are narrow, and any failure refuses the whole push with a message
+naming the rule:
+
+- Only an **enrolled instance** can push, authenticated by its fleet certificate
+  over the mTLS listener. Bearer tokens, anonymous callers, the local socket and
+  operator principals cannot, and the plaintext port answers a push with a
+  refusal saying so. The certificate carries the `push:own` permission
+  implicitly.
+- A push must update exactly one ref, `refs/heads/agent/<your branch>`, and the
+  branch name must end in the first eight characters of the pusher's own key
+  fingerprint. A peer can write only its own branch. It can never write the
+  host's own agent branch or the consensus branch.
+- **Deleting** a branch is refused. A non-fast-forward update of the peer's own
+  branch is allowed (the peer's sync force-pushes after a rebase) and the host
+  logs a warning that it was force-updated.
+- A subscription refuses all pushes.
+- With `verify_signatures: log` or `enforce` in the host's ontology, each pushed
+  commit is also checked against the fleet's member records. `enforce` refuses
+  the first commit that fails. See [Fleet](/docs/fleet/).
+
+The pack goes to an in-memory quarantine and is promoted in one transaction with
+a compare-and-swap on the old tip. A pushed branch is readable on the host (REST,
+MCP, `/branches`) but never writable there, fires no host trigger and is never
+forwarded to the host's own origin. The host does not merge it on push; an
+operator does that from Manage → the repo → **Pushed branches**, or the host
+sets `consensus: auto`. Both are described under
+[Sync & consensus](/docs/sync-and-consensus/).
 
 ## Creating a repo from a remote
 
-Create a repo directly from a remote through the REST API, in one of two modes.
-They are the two halves of a single question about the branch you name — *does
-it already carry `.knomit/ontology.yaml`?* — which
-`POST /api/v1/repos:probe-initialized` answers.
+Create a repo directly from a remote through the REST API. `clone` and
+`initialize` are the two halves of a single question about the branch you name —
+*does it already carry `.knomit/ontology.yaml`?* — which
+`POST /api/v1/repos:probe-initialized` answers. `subscribe` is a third choice,
+yours rather than derived from the remote.
+
+`POST /api/v1/repos` validates the request and answers **202 Accepted** with a
+`Location` header and a job id; the create runs detached, so closing the client
+cancels nothing. Poll `GET /api/v1/repo-creates/{id}` (`state`, `phase`, `step`,
+and `pct` unless the phase is indeterminate), cancel with
+`POST /api/v1/repo-creates/{id}:cancel`, and dismiss a finished job with
+`DELETE`.
 
 **`clone`** joins a branch that is already a knowledge base. Its ontology
 governs, and passing `ontology_preset` or `ontology_yaml` is refused rather than
 silently dropped:
 
 ```sh
-curl -N -X POST http://localhost:19278/api/v1/repos \
+curl -X POST http://localhost:19278/api/v1/repos \
   -H 'Content-Type: application/json' \
   -d '{"name":"work","mode":"clone",
        "origin":{"url":"git@github.com:you/kb.git","branch":"main"}}'
+# 202 Accepted, Location: /api/v1/repo-creates/<id>
 ```
 
 **`initialize`** turns a branch that is *not* a knowledge base into one. It
 clones the branch, cuts `agent/<host>` from its tip, commits the chosen
-[ontology](/docs/ontologies/) there, and pushes **that branch alone**. An
-`ontology_preset` or `ontology_yaml` is required — writing that file *is* the
-act that makes the branch a knowledge base, so without one there is nothing to
-write:
+[ontology](/docs/ontologies/) there, and pushes **that branch alone**. Exactly
+one of `ontology_preset`, `ontology_yaml` or a `template` is required — writing
+that file *is* the act that makes the branch a knowledge base, so without one
+there is nothing to write:
 
 ```sh
-curl -N -X POST http://localhost:19278/api/v1/repos \
+curl -X POST http://localhost:19278/api/v1/repos \
   -H 'Content-Type: application/json' \
   -d '{"name":"work","mode":"initialize","ontology_preset":"code",
        "origin":{"url":"git@github.com:you/project.git","branch":"main"}}'
 ```
+
+**`subscribe`** follows a branch that already carries an ontology, **read-only**.
+The repo has no agent branch, accepts no writes, never pushes, and picks up new
+commits on each sync. It still serves its facts and skills, so you can bind it
+directly, but it cannot be the write repo of a [lens](/docs/lenses/). Use it to
+read another instance's or another team's knowledge base without being able to
+disturb it. Like `clone`, it takes its ontology from the remote and refuses one
+in the request.
+
+A local repo can also be created from a [template](/docs/templates/) (`mode:
+"template"`), with no remote involved.
 
 <Aside type="tip" title="knomit never pushes to your default branch">
 `initialize` writes only `agent/<host>`, so it does **not** need push access to
@@ -213,7 +362,7 @@ The one remote it refuses is a repository with **no branches at all**: there is
 nothing to cut a branch from. Create a `main` first — one commit is enough.
 </Aside>
 
-Neither mode mints a new identity: the repo id is the remote's existing root
+None of the modes mints a new identity: the repo id is the remote's existing root
 commit, so two machines pointed at the same remote converge on one identity
 instead of splitting into two.
 

@@ -1,6 +1,6 @@
 ---
 title: Observability
-description: Structured logging, crash bundles, and the gated diagnostics port — pprof, Prometheus /metrics, expvar, and live controls.
+description: Logging and the live Logs tab, crash bundles, slow-request and slow-trigger warnings, and the gated diagnostics port — pprof, Prometheus metrics, expvar.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -8,8 +8,9 @@ import { Aside } from '@astrojs/starlight/components';
 knomit ships its own operability, all in the Go standard library — no sidecars,
 no agents. There are two layers:
 
-- **Always on, zero-config** — structured logging and native crash bundles. They
-  cost nothing to leave running and need no port.
+- **Always on, zero-config** — structured logging (with a live view in the web UI)
+  and native crash bundles. They cost nothing to leave running and need no
+  separate port.
 - **Opt-in, off by default** — a **runtime diagnostics port** that exposes pprof,
   Prometheus metrics, expvar, and live process controls. Enable it only when you
   need to look inside a running process.
@@ -45,6 +46,46 @@ Logging is config-driven (`[log]` in `knomit.toml`, or `KNOMIT_LOG_*` — see
   (SSE, MCP streamable HTTP) are excluded outright — they are long-lived by
   design, so their elapsed time is not a latency signal and would fire a
   spurious `WARN` on every normal disconnect.
+- **Slow-trigger log** — a [trigger](/docs/triggers/) whose own work, its `if`
+  condition plus its action, takes longer than `slow_trigger_ms` (default `50`,
+  env `KNOMIT_LOG_SLOW_TRIGGER_MS`) is logged at `WARN` as `slow trigger`, once
+  per trigger and path evaluated. Set `0` to disable. The default is low on
+  purpose: the sandbox caps a trigger's `if` at 100 ms, so a condition that has
+  used half its budget is worth naming, and the request default of 1000 ms could
+  never fire under that cap. The line carries `repo`, `branch`, `trigger`,
+  `path`, `episode`, `commit`, `outcome`, `elapsed`, `threshold`, and two
+  breakdowns, `change_ms` and `host_ms`, so a slow merge walk or a slow host call
+  is not mistaken for a slow trigger.
+
+### The Logs tab
+
+**Manage → Logs** shows the running server's log, live, in the web UI. It reads
+`GET /api/v1/logs/events`, a server-sent-event stream:
+
+- On connect it replays the lines the server has retained (the most recent 2000),
+  oldest first, then sends a `ready` event with how many it replayed and the
+  ring's size, then one `line` event per new log line.
+- A reader that falls behind does not stall the server and does not get a log
+  that looks continuous. Lines it missed are counted and reported in a `dropped`
+  event, and the viewer shows the gap.
+- A `: keepalive` comment every 30 seconds stops proxies from cutting an idle
+  stream.
+
+The viewer filters by level (a floor: *Warn and above* includes errors), searches
+the text, and follows the tail until you scroll away from it. The stream is the
+process's log, not a file, so it shows a *running* server and nothing from before
+it started; for a failed start, read the log file or `crashes/`. The desktop app
+uses the same tab, and no longer has a separate Logs window. A read-only
+instance answers the stream with 403, because its log is not part of what it puts
+on show.
+
+### The Sessions tab
+
+**Manage → Sessions** lists the MCP client sessions the server has seen, with
+live, idle and dead computed from each session's last request
+(`[session] client_dead_after`, `client_hidden_after` and `client_retention`
+shape what is shown and kept). It reads `GET /api/v1/sessions` and refreshes from
+`/api/v1/sessions/events`.
 
 ## Crash safety
 
@@ -81,6 +122,21 @@ controls (force GC, toggle profilers, change log level). It has **no
 authentication**. Bind it to a loopback address and never expose it to a
 network — reach it through an SSH tunnel or `kubectl port-forward` instead.
 </Aside>
+
+Three checks run before any route, and they are what keeps it local:
+
+- A **non-loopback address** is refused at boot (`runtime.addr` must be
+  `localhost:…`, `127.0.0.1:…` or similar) unless you set
+  `[runtime] allow_remote = true` (`KNOMIT_RUNTIME_ALLOW_REMOTE`), which also lets
+  non-loopback peers in. Use it to be scraped by a remote Prometheus, with
+  network controls of your own in front.
+- A **request a web browser made** (one carrying `Origin`, or a cross-site
+  `Sec-Fetch-Site`) is refused with 403, because the controls take their
+  arguments in the query string and a page's cross-origin `POST` would otherwise
+  reach them. `curl`, Prometheus and `go tool pprof` send neither header.
+- A **Host naming something other than this machine** is refused with 421, which
+  is what a DNS-rebound page looks like. Names listed in `[auth] loopback_hosts`
+  are accepted.
 
 ### Endpoints
 
@@ -149,7 +205,6 @@ view of the identical data.
 | Metric | Type | Meaning |
 |--------|------|---------|
 | `knomit_embed_inference_seconds` | histogram | ONNX embedding inference latency per batch |
-| `knomit_cypher_retry_total` | counter | GraphQLite `cypher()` transient-collision retries (read contention) |
 | `knomit_http_requests_total` | counter vec | HTTP requests, labelled `route`, `method`, `status`. `route` is the chi route *pattern* (`/repos/{repo}`), never the concrete path, so cardinality stays bounded; unmatched paths collapse to `other` |
 | `knomit_llm_request_seconds` | histogram | LLM completion latency per **logical** request — the whole retry loop, not each attempt. Buckets run 0.5s…900s, sized so a fully-retried request still lands in a bucket rather than `+Inf` |
 | `knomit_llm_retries_total` | counter | LLM attempts retried after a retryable failure. Zero on a healthy system, so a sustained rise is an early signal that a provider is degrading |
@@ -158,9 +213,25 @@ The two `knomit_llm_*` series come from the shared resilience decorator that
 wraps every provider adapter, so they are emitted for all providers — Gemini,
 Anthropic, Bedrock, Ollama, and the CLI adapters alike.
 
-Those nine series are the whole registration surface: the four gauges above are
-registered by the runtime collector, and the five application metrics are the
-only other `Counter` / `CounterVec` / `Histogram` call sites in the tree.
+Those eight series are the whole registration surface: the four gauges above are
+registered by the runtime collector, and the four application metrics are the
+only other `Counter` / `CounterVec` / `Histogram` call sites in the tree. (An
+earlier release also exported a `knomit_cypher_retry_total` counter for the
+GraphQLite graph engine; that engine is gone and so is the series.) There is no
+SQLite-contention metric.
+
+### Trigger statistics
+
+[Trigger](/docs/triggers/) timings are not in `/metrics`. The dispatcher keeps
+per-repo, per-trigger statistics in memory and serves them from
+`GET /api/v1/repos/{repo}/branches/{branch}/triggers`, beside the declared
+triggers: evaluations, fires, outcome counts (`if` false, `if` error, script
+error, rate-limited, and so on), and the duration of each trigger's own work as
+count, min, max and a p95 over the most recent 1024 evaluations. They reset when
+the server restarts; the durable record is the fire log, which the same endpoint
+returns with `?log=<n>` (and one recipe run's rows with `?run=<id>`). Commits
+that a trigger's script writes carry a `Knomit-Trace` trailer, so the chain of
+writes one cause set off can be followed.
 
 <Aside type="tip">
 For a containerized deployment, the usual shape is `KNOMIT_LOG_FORMAT=json` for
