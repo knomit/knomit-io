@@ -107,7 +107,7 @@ go build -o knomit-okf ./tools/okf/
 ```
 
 The desktop app symlinks it into `<home>/bin` on launch, alongside
-`knomit-bridge`.
+`kb`.
 
 ## Commands
 
@@ -157,11 +157,12 @@ knomit-okf dev
 <Aside type="caution" title="Note which branch it picks">
 Without `-b`, the source's own advertised HEAD is used, falling back to
 `main`/`master`, and finally to the sole fetched branch. A knomit server's HEAD
-is usually the **agent** branch — one author's working memory, not consensus.
-Pass `-b main` when you mean to publish consensus.
+is a symref to its **consensus** branch, so the default exports consensus. Pass
+`-b agent/<host>-<fp8>` to export one agent's working memory instead, and `-b`
+whenever the source is not a knomit server, whose HEAD may be any branch.
 
-The difference is real: on the base above, `main` carried 297 facts against the
-agent branch's 333.
+The difference is real: on one base the consensus branch carried 297 facts
+against an agent branch's 333.
 </Aside>
 
 ### `sync`

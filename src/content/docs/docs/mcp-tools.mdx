@@ -215,7 +215,7 @@ at most 128 bytes with no leading or trailing spaces; at most 8 such keys; two
 keys that differ only in case are refused. Any entry outside these rules refuses
 the whole call and nothing is written. A write made by a trigger script or recipe
 is stamped by knomit itself, and a `trace` there is refused. See
-[Triggers & recipes](/docs/triggers/).
+[the causal trace](/docs/triggers/#causal-trace).
 
 ### `knomit_bind` — bind a repo or lens
 
@@ -435,7 +435,8 @@ Compares a folder at the commit `since` with the folder now and returns each fac
 path under it as `added`, `modified` or `deleted`, plus `head` (the commit it
 compared against) and `bookmark`. No timestamp is read: the answer depends only
 on the two commits. It is the polling primitive for a coordination agent that
-watches a task pool or inbox. See [Triggers & recipes](/docs/triggers/).
+watches a task pool or inbox. See [Reading what changed](/docs/sync-and-consensus/#reading-what-changed)
+and [Triggers & recipes](/docs/triggers/).
 
 | Param | Type | Notes |
 |-------|------|-------|
@@ -651,7 +652,8 @@ in total, and binaries and overflow are listed by path only. `$ARGUMENTS` in the
 body stands for whatever you were asked to apply the skill to. Skills are read
 from the tip of the consensus branch. Use it when told to follow, use or run a
 skill by name, or when looking for how a task is done in this repo before
-improvising one. See [Skills as prompts](#skills-as-prompts).
+improvising one. See [Skills as prompts](#skills-as-prompts) and
+[Templates & playbooks](/docs/templates/#the-program-knomit-skill).
 
 | Param | Type | Notes |
 |-------|------|-------|

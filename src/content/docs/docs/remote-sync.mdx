@@ -290,7 +290,7 @@ naming the rule:
 - A subscription refuses all pushes.
 - With `verify_signatures: log` or `enforce` in the host's ontology, each pushed
   commit is also checked against the fleet's member records. `enforce` refuses
-  the first commit that fails. See [Fleet](/docs/fleet/).
+  the first commit that fails. See [Fleet](/docs/fleet/#hosting-a-repo-for-peers).
 
 The pack goes to an in-memory quarantine and is promoted in one transaction with
 a compare-and-swap on the old tip. A pushed branch is readable on the host (REST,

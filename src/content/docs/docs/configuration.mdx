@@ -60,7 +60,7 @@ $KNOMIT_HOME/
 ├── knomit.toml                 # optional config file
 ├── knomit.sock                 # local authenticated listener (unix; Windows uses a named pipe instead)
 ├── repos/
-│   ├── <uid>.db                # one repo (SQLite cache; git is source of truth)
+│   ├── <uid>.db                # one repo: its git objects and refs, plus the derived index
 │   ├── <uid>.db-shm / -wal     # SQLite sidecars
 │   └── <uid>.sessions.db       # ephemeral: tool cursors + pipeline work-steal sessions
 ├── models/

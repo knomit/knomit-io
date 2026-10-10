@@ -163,7 +163,7 @@ Claude Code uses to decide when to offer each one.
 | `/knomit-why <fact-path>` | Before relying on a fact — walks its provenance and flags stale anchors |
 | `/knomit-update <fact-path>` | A fact's body, confidence or refs no longer match reality — update it in place |
 | `/knomit-retract <fact-path>` | A fact is wrong, superseded, or describes code that no longer exists |
-| `/knomit-experiment <open\|commit\|rollback\|sync\|list> [name]` | Facts for code going out as a PR, or knowledge work that might not survive review — works on an isolated `exp/<name>` branch that is committed or rolled back with the PR's fate; wraps `knomit_experiment`, see [Experiments](/docs/experiments/) |
+| `/knomit-experiment <open\|commit\|rollback\|sync\|list> [name]` | Facts for code going out as a PR, or knowledge work that might not survive review — works on an isolated `exp/<name>` branch that is committed or rolled back with the PR's fate; wraps `knomit_experiment`, see [Experiments](/docs/experiments/#the-knomit-experiment-skill) |
 | `/knomit-review` | After a burst of fact-writing or a refactor — the prune, distill and reflect pass |
 | `/knomit-harden [area]` | Periodic hardening, or after an incident traced to a misapplied fact — audits facts that are true but compressible into falsehoods, checks their consequences against the code, and repairs them |
 | `/knomit-hypothesize` | **User-requested only** — generates falsifiable predictions from synthesis facts |
