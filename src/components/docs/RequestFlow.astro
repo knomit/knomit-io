@@ -4,7 +4,7 @@
 // surface-1 fills with colour-coded hairline borders, mono labels.
 //
 // Shape: clients converge on the server (left), the server diverges to its two
-// stores (right) — git as the source of truth, the SQLite index as a cache.
+// stores (right) — git as the source of truth; one SQLite file per repository holds the git objects and a rebuildable derived index.
 ---
 
 <figure class="rf">
@@ -14,7 +14,7 @@
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
     role="img"
-    aria-label="A request flows from an MCP client through the kb bridge to the knomit server, and from a web or HTTP client directly to the server over REST. The server commits facts to git, the source of truth, and indexes them into a rebuildable SQLite cache."
+    aria-label="A request flows from an MCP client through the kb bridge to the knomit server, and from a web or HTTP client directly to the server over REST. The server commits signed facts to git, the source of truth, stored in one SQLite file per repository alongside a rebuildable index."
   >
     <defs>
       <marker id="rf-arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
