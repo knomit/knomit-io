@@ -18,7 +18,7 @@ The origin itself (auth methods, credentials, the reconcile loop) is covered in
 | Rung | Branch | Who writes it |
 |------|--------|---------------|
 | Experiment | `exp/<name>` | sessions on this instance; local only ([Experiments](/docs/experiments/)) |
-| Agent branch | `agent/<host>-<fp8>` | this instance only, every commit signed |
+| Agent branch | `agent/<host>-<fp8>` | this instance only, every authored commit signed |
 | Consensus | `main` | merges of agent branches |
 
 "`main`" on these pages means the repo's **configured consensus branch**,
@@ -150,7 +150,7 @@ version named is readable with `knomit_explain {file, commit}` or plain git.
 <Aside type="tip" title="Set it once and forget it">
 `consensus`, `conflicts` and `sync` are meant to be set when a repo is created
 and left alone. Nothing re-merges past history when they change, and an
-instance that has not synced yet reads the old value for one more round. The
+instance that has not synced since reads the old value for one more round. The
 `mission` template writes all three out explicitly
 ([Templates & playbooks](/docs/templates/)).
 </Aside>
@@ -207,7 +207,10 @@ on the two commits.
 ```
 
 `consensus: true` reads the repo's consensus branch whatever it is called;
-`branch` names another (pass one or the other). The response carries a
+`branch` names another. Never pass both. With neither, the call reads the
+branch your binding reads: your agent branch, or your experiment while you are
+in one. Agents coordinating through a shared folder should pass
+`consensus: true`. The response carries a
 `bookmark` to pass as the next `since`, and the agent keeps it: knomit writes
 nothing. A `since` that is not behind the current head is refused rather than
 answered with false deletions; omit `since` to list the folder as it is now.

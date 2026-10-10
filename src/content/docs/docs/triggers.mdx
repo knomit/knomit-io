@@ -79,9 +79,9 @@ pass: each sync round starts one, and so does every write. All times are UTC.
 
 | Object | Holds |
 |--------|-------|
-| `fact` | The fact as validation rules see it: path, type, kind, entities, `expires`, `context` (so `fact.context.<key>` is available), and the rest. `null` when the fact is gone or unparseable. |
+| `fact` | The fact as validation rules see it: path, type, kind, entities, `expires`, `context` (so `fact.context.<key>` is available), and the rest. For a `retract` it is the version that was retracted. `null` when the version cannot be read or parsed. |
 | `agent` | This instance: `id`, `host`, `fp8`, `branch`. |
-| `change` | `episode`, `source` (`local` for this instance's own commits, `merged` for what came in by merge), `commit`, `trace`, `path`, `author` (`kind`, `id`, `fp`, `verified`), and `before` (the previous version, for update and retract). |
+| `change` | `episode`, `source` (`local` for this instance's own commits, `merged` for what came in by merge, `due` for a due fire), `commit`, `trace`, `path`, `author` (`kind`, `id`, `fp`, `verified`), and `before` (the previous version, for update and retract). |
 
 `change.author.verified` is true only when signature verification is on for
 the repo and the commit has already passed the acceptance gate into `main`
@@ -145,13 +145,16 @@ not wait for it. The fire is recorded `started` with a run id
 (`run-` and 32 hex characters); the recipe's result is a second row with the
 same id.
 
-A recipe is trusted JavaScript with one more function than a script:
-`exec(argv, {stdin, env, cwd, timeout_ms})`, which runs a program (argv only,
-no shell) and returns `{exit, stdout, stderr}`. This is how a knowledge base
+A recipe is trusted JavaScript with one more host function than a script:
+`knomit.exec(argv, {stdin, env, cwd, timeout_ms})`, which runs a program (argv
+only, no shell) and returns `{exit, stdout, stderr}` (plus `truncated` when
+output was capped). This is how a knowledge base
 launches an agent: the recipe in the mission template starts one headless
 Claude Code session that works through this machine's queue. A recipe sees
 `fact`, `agent` and `change` like a script, plus `payload` (from
-`knomit.run`) and `run.id`.
+`knomit.run`), `run.id`, `task_path` (the firing fact's repo path) and `mcp`
+(this repo's MCP server entry, `{server, config, tools}`, ready for
+`claude --mcp-config`).
 
 **Where recipes come from.** Per fire, in this order:
 
@@ -186,7 +189,7 @@ plus:
 | `KNOMIT_TRACE`, `KNOMIT_CAUSE`, `KNOMIT_RUN` | The fire's trace, its triggering commit, and the run id. |
 
 The recipe's own `env` option overrides them. If the server has not recorded
-its address yet (a fire during boot), `exec` waits up to two minutes and then
+its address (a fire during boot), `knomit.exec` waits up to two minutes and then
 fails the run rather than start a program without `KNOMIT_SERVER`.
 
 <Aside type="caution" title="A recipe can run any program">
@@ -203,7 +206,7 @@ chain of work together:
 
 | Trailer | Meaning |
 |---------|---------|
-| `Knomit-Trace` | The story this commit belongs to: the triggering commit's own trace, else the task id when the fact is a task signal with one entity, else the triggering commit's hash. |
+| `Knomit-Trace` | The story this commit belongs to: the triggering commit's own trace, else the fact's single entity when the fact is a signal with exactly one entity (a task id, in the mission template), else the triggering commit's hash. |
 | `Knomit-Cause` | The one commit that led to this one. |
 | `Knomit-Trigger` | The trigger that made the hop (also the loop guard). |
 | `Knomit-Run` | The recipe run, on a recipe's own writes. |
@@ -217,8 +220,11 @@ commit hash) and `Knomit-Run`; every other `Knomit-*` name is reserved. Its own
 keys are git trailer tokens of at most 32 characters with one-line values of at
 most 128 bytes, at most 8 of them. A bad entry refuses the whole call. knomit
 keeps nothing between calls, so pass the same object on every write of one
-task. The `mission` template's recipe hands the trace to the session it starts
-in the session's prompt, so that session's writes join the task's story.
+task. The `mission` template's recipe hands the session it starts a `trace` in its
+prompt: `Knomit-Trace` set to the mission, `Mission-Task` (an entry of the
+template's own) set to the task id, and `Knomit-Run` set to the run. The
+session's writes join the mission's story, and
+`git log --all --grep='^Mission-Task: <task id>'` finds one task's.
 
 Read a story back with plain git:
 

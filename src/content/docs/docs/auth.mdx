@@ -33,7 +33,7 @@ release:
 | `push:own` | `git push` to `/git` (receive-pack), together with the rule that an instance pushes only its own agent branch. Held implicitly by every enrolled instance certificate. |
 | `operator` | Merging a peer's pushed branch: `POST /api/v1/repos/{repo}/branches/{branch}/merge`, the web UI's Pushed branches panel. |
 | `admin` | Approving OAuth requests from the web UI's Authorizations tab. |
-| `merge:main` | Defined and accepted in grants and token scopes, but no route checks it yet. |
+| `merge:main` | Defined and accepted in grants and token scopes; no route checks it. |
 
 The check is default-deny: no principal, no grant, or a store error refuses.
 A refusal is HTTP 403 with the title `Authentication required` (no principal)
@@ -134,7 +134,7 @@ instance keys.
    openssl's certificate fingerprint. `knomit identity show` prints the
    instance's fingerprint, certificate and CRL state.
 
-4. **Open the TLS listener** by setting an address; it is off until then:
+4. **Open the TLS listener** by setting an address; with no address it stays closed:
 
    ```toml
    [tls]
@@ -217,7 +217,7 @@ a compromised host or operator harmless.
 - **Trust is transitive through accepted merges.** If you trust instance A and
   A merged B's commits, you trust them; the [chain of trust](/docs/fleet/#the-chain-of-trust)
   is how a re-clone adopts them without a waiver.
-- **Breaches are investigated afterwards.** Every commit is signed, and
+- **Breaches are investigated afterwards.** Every authored commit is signed, and
   `knomit verify audit` lists everything a key signed.
 
 ### `.knomit/` changes through git only

@@ -20,15 +20,14 @@ fabric, see [Concepts](/docs/concepts/).
 ## Identity
 
 Every instance has an Ed25519 key (`<KNOMIT_HOME>/id_ed25519`, or
-`[remote].ssh_key`). It signs every commit the instance writes, and its
+`[remote].ssh_key`). It signs every commit the instance authors, and its
 fingerprint names the agent branch, `agent/<host>-<fp8>`.
 
 On first boot the instance derives its **agent id** from that branch name and
 **persists** it in `control.db`. From then on the id never changes, even if the
 hostname or the key does. The id is opaque: nothing parses a fingerprint out of
-it. Commits are authored as `<agent-id>@agents.knomit.io` (with `+<operation>`
-on the author side), and that address is how a verifier finds the signer's
-member record. `knomit fleet status` and `GET /api/v1/fleet` show the id as
+it. Commits are authored as `<agent-id>+<operation>@agents.knomit.io`, and the
+agent id in that address is how a verifier finds the signer's member record. `knomit fleet status` and `GET /api/v1/fleet` show the id as
 `agent_id`.
 
 Instance **certificates** for mutual TLS between instances are a separate
@@ -96,7 +95,7 @@ branch into the fleet's `main`, other instances can join.
    pushes. `--token` and `--auth-method` supply credentials for the origin.
 
 2. A person **accepts** the instance by merging its agent branch into the
-   fleet's `main`. Until then its record reads `pending`. Admission is that
+   fleet's `main`. Before that merge its record reads `pending`. Admission is that
    merge, and whoever may merge into the fleet's `main` decides who is in.
 
 3. `knomit fleet status` shows the instance's fleet state
@@ -106,8 +105,8 @@ branch into the fleet's `main`, other instances can join.
 </Steps>
 
 `knomit fleet unregister` writes a `left` record and pushes it. The fleet
-repository is unmounted only after that push succeeds; until then the sync loop
-retries, and a new registration is refused. The fleet repository cannot be
+repository is unmounted only after that push succeeds; while it is pending the sync loop
+retries it, and a new registration is refused. The fleet repository cannot be
 deleted by name while the instance is registered.
 
 `knomit fleet` is a thin client of the running server over its local socket,
@@ -125,8 +124,9 @@ member list, a form to register, and an unregister button.
 
 ## Signing and verification
 
-Every commit an instance writes is signed before it is stored; with no signer
-the write is refused. Whether a knowledge base **checks** those signatures is a
+Every commit an instance authors is signed before it is stored, and with no
+signer the write is refused. The only unsigned commits are a new repository's
+init commits. Whether a knowledge base **checks** those signatures is a
 root attribute of its ontology:
 
 ```yaml
@@ -154,10 +154,10 @@ An unsigned merge commit passes only if it adds nothing beyond its parents.
 - **On a forge**, as a CI job before the step that merges an agent branch.
   knomit ships a workflow template, `tools/ci/verify-signatures.yml`, that
   checks out the fleet repository (repository variable `KNOMIT_FLEET_URL`,
-  optional secret `KNOMIT_FLEET_TOKEN`) and runs:
+  optional secret `KNOMIT_FLEET_TOKEN`) and runs `knomit verify ci` against it; by hand that is:
 
   ```sh
-  knomit verify ci --candidate HEAD --fleet ../fleet
+  knomit verify ci --candidate <agent branch> --fleet <fleet checkout>
   ```
 
   It reads `verify_signatures` at the upstream tip first; when it is `off` it
@@ -223,8 +223,8 @@ keeps the host's version or takes the peer's for the **whole** set, or cancels.
 The REST routes are `GET /api/v1/repos/{repo}/pushed-branches` and
 `POST /api/v1/repos/{repo}/branches/{branch}/merge` with
 `{"expected_tip": "<40 hex>", "resolution": "host" | "peer"}`. The merge
-requires the `operator` permission, which a peer's certificate never holds, so
-a peer cannot merge itself in.
+requires the `operator` permission. A peer's certificate does not carry it
+(only a grant on this host can add it), so a peer cannot merge itself in.
 
 ### The chain of trust
 
