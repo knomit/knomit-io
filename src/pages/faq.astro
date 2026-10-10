@@ -8,8 +8,8 @@ const jsonLd = faqPageSchema(FAQ_ITEMS.map((i) => ({ q: i.q, a: i.a })));
 ---
 
 <BaseLayout
-  title="knomit FAQ — git-backed knowledge for AI agents"
-  description="Answers to common questions about knomit: what it is, how it differs from RAG, MCP support, open source, offline use, provenance, and synthesis."
+  title="knomit FAQ — the knowledge distillation factory, explained"
+  description="Questions about knomit: what the knowledge distillation factory is, how it differs from RAG, experiments, triggers, fleets, consensus, Windows and more."
   jsonLd={jsonLd}
 >
   <section class="k-section">
@@ -18,7 +18,7 @@ const jsonLd = faqPageSchema(FAQ_ITEMS.map((i) => ({ q: i.q, a: i.a })));
         as="h1"
         eyebrow="FAQ"
         title="Questions, answered."
-        lead="What knomit is, how typed facts with provenance differ from RAG and vector search, and how ontologies, MCP tools, and agent consensus fit together."
+        lead="What knomit is and who it is for, how typed facts with provenance differ from RAG and vector search, and how ontologies, MCP tools, fleets, experiments, triggers and consensus fit together."
       />
       <div class="faq">
         {FAQ_ITEMS.map((item) => (

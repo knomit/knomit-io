@@ -1,199 +1,272 @@
 ---
 title: knomit for Claude Code
-description: "knomit as persistent memory for Claude Code: 10 slash commands, 4 editor hooks, and one-time scaffolding with claude init."
+description: "Connect Claude Code to a knomit server with kb claude init: 11 slash commands, 5 hooks, an in-place merge of .mcp.json, settings.json and CLAUDE.md."
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-knomit integrates with Claude Code as a **persistent, shared knowledge base** —
-durable, typed, signed facts with provenance that your agents build on instead of
-re-deriving.
+Claude Code is one host adapter among several: each host reaches the same knomit
+server through the same `kb` bridge, and the adapter decides how much tooling
+sits around that connection. The Claude Code adapter is the deepest knomit has.
+It adds source-ref hooks that watch what an agent edits, skills for the
+moments an agent should read or write the knowledge base, and a `CLAUDE.md`
+block that tells the agent when to use them. Other hosts get a thinner
+integration — see [Claude Cowork](/docs/claude-cowork/) and
+[Antigravity](/docs/antigravity/).
 
-This is **not** an agent's private memory store that stashes and replays notes:
-it is a temporal graph of lessons — learned and discovered — that links, evolves,
-and can be read as of any moment in its history.
+What the agent reads and writes is a **shared knowledge base**: typed, signed
+facts with provenance, in a temporal graph that can be read as of any moment in
+its history. It is not a private notes file for one session. Many agents, on
+many machines and in different hosts, can work against the same repo, and the
+repo can hold any kind of knowledge, not only knowledge about code.
 
-The integration is a balanced hybrid where **hooks** automate the obvious capture
-and recall moments, **skills** (slash commands) handle the deliberate ones, and a
-**CLAUDE.md** block carries the philosophy and when-to-use guidance. It
-deliberately does *not* auto-inject facts via `PreToolUse` — recall is a tool the
-agent reaches for, not a firehose.
+The integration is a hybrid. **Hooks** automate the obvious capture and recall
+moments, **skills** (slash commands) handle the deliberate ones, and a
+**CLAUDE.md** block carries the guidance on when to use which. It does *not*
+inject facts on every tool call: the agent calls recall when it needs it.
 
 ## One-time setup
 
 From a project's root:
 
 ```bash
-knomit-bridge claude init [--repo <name> | --lens <name>]
+kb claude init [--repo <name> | --lens <name>]
 ```
 
-This renders embedded templates into the project:
+`init` writes into the project:
 
 | File | Ownership |
 |------|-----------|
-| `.mcp.json` | merge-required (a companion file is written if one already exists) |
-| `.claude/settings.json` (hook registration) | merge-required |
-| `CLAUDE.md` (knomit usage block) | merge-required |
-| `.claude/skills/knomit-*/SKILL.md` (all 10 commands) | **owned** — always (over)written |
+| `.mcp.json` | merged in place |
+| `.claude/settings.json` (hook registration) | merged in place |
+| `CLAUDE.md` (the knomit usage block) | merged in place |
+| `.claude/skills/knomit-*/SKILL.md` (all 11 commands) | **owned** — overwritten on every run |
 
-- `--repo` defaults to the current directory's basename.
-- `--lens` binds the project to a lens instead of a single repo. The two flags
-  are mutually exclusive. See [lens mode](#lens-mode).
-- Both names are validated against the repo-name grammar `[a-z0-9_-]+` before
-  any file is written, so a JSON-hostile value is rejected up front rather than
-  baked into a broken `.mcp.json`.
+- `--repo <name>` binds the project to one repo; `--lens <name>` binds it to a
+  [lens](/docs/lenses/). The two are mutually exclusive.
+- **With neither flag, `init` writes an unbound entry** (`"args": []`). The agent
+  then picks a target itself: it calls `knomit_repos` to see what the server
+  serves and `knomit_bind` to choose. See [unscoped mode](#unscoped-mode).
+- A name is checked against the repo-name grammar (lowercase letters, digits,
+  hyphens, underscores) before any file is written, so a JSON-hostile value is
+  rejected up front instead of ending up in a broken `.mcp.json`.
+- `kb` is the bare command in the generated entry, so it must be on the `PATH`
+  of the process that launches Claude Code.
 
-### The `.mcp.json` key is derived from the scope
+### What a re-run does
 
-The `mcpServers` key is **not** the constant `knomit`. It is derived from the
-**scope** the bridge is bound to: `knomit-lens-<lens>` with `--lens`,
-`knomit-repo-<repo>` otherwise. The prefix is applied unconditionally, which
-makes the mapping injective — a repo and a lens sharing a name, or a repo
-literally named `knomit-repo-x`, cannot collide on one key.
+Re-running `init` merges rather than drops companion files beside yours:
 
-Each entry is one **bridge connection to a scope** — a repo or a lens — not a
-separate knomit server; a single knomit server hosts all of them. The constant
-key used to mean a second `claude init` in a project collided with the first, so
-its output could not be merged in at all. A derived key makes those entries
-mergeable.
+| File | What a re-`init` does |
+|------|-----------------------|
+| `.mcp.json` | Refreshes the `args` of the entry under the derived key, or adds the entry next to your other servers. Your `command` and any other key on that entry are left alone. |
+| `.claude/settings.json` | Inserts any knomit hook the file does not yet register. Your own hooks, matchers, permissions and formatting are untouched. A knomit hook you deleted comes back, because `init` cannot tell "removed on purpose" from "predates this hook". |
+| `CLAUDE.md` | Replaces the region between `<!-- knomit:integration vN -->` and `<!-- /knomit:integration -->` with the current block (currently v5); a file without the block gains one at the end. Everything outside the markers is yours. |
 
-- The name budget is **27 characters**. Claude Code builds tool names as
-  `mcp__<key>__<tool>` and the API caps those at 64; the longest knomit tool is
-  `knomit_hypothesize`. A name that would overflow is rejected at `init` rather
-  than producing an entry whose tools silently cannot be called.
-- **The `command` identifies a knomit entry, not the key.** The hooks select on
-  the `knomit-bridge` command basename, so a hand-written `.mcp.json` under any
-  key still binds. The key is consulted only as a fallback, when *no* entry
-  matched on command — the legacy case, and the wrapper-script or `go run` case
-  where the command is unrecognisable. A key match is a guess and never dilutes
-  a command match, so an unrelated server that borrowed the `knomit-` namespace
-  cannot be counted as a second knomit entry.
-- The skills name tools **bare** (`knomit_learn`, not `mcp__knomit__knomit_learn`)
-  so they resolve under whatever key is in play.
+When nothing has changed the files come back byte-identical and `init` prints
+nothing for them; when it merges something it says what, for example
+`Updated: .claude/settings.json (+PreToolUse memory-guard)`.
 
-<Aside type="caution" title="Keep one knomit scope per project">
-Mergeable entries are not an invitation to bind a project to both a repo and a
-lens. Entries naming **different** scopes leave no single answer to "which repo
-do the `post-edit` and `session-start` hooks read?", so rather than guess and
-run against the wrong repo, **the hooks disable themselves** with reason
-`multiple_knomit_servers`. The `knomit_*` MCP tools keep working for every
-entry — it is only the hooks you lose.
+A **flagless re-run never unbinds a working install.** If the existing entry
+names exactly one usable scope, or is already unbound, `init` keeps it
+byte-identical (`Kept: …`). A broken or ambiguous entry under `init`'s own key
+is replaced by the unbound entry (`Replaced: …`). To change a kept scope, edit
+or remove the entry in `.mcp.json` and run `init` again.
 
-Duplicate entries naming the **same** scope are fine and are the likely case:
-`.mcp.json` is merge-required, so re-running `init` leaves the pre-existing
-entry beside the freshly derived one. Both point at the same scope, and the
-hooks treat them as one.
-</Aside>
+A companion file (`.mcp.json.knomit`, `CLAUDE.md.knomit-block`) is written only
+where a merge cannot decide: a knomit entry under a different key, a
+`.mcp.json` that does not parse, or a knomit block in `CLAUDE.md` that has no
+closing marker or no markers at all. A `.claude/settings.json` that does
+not parse makes `init` fail with the file named and nothing written.
 
-<Aside type="note">
-The `CLAUDE.md` block carries a version marker (`<!-- knomit:integration v3 -->`)
-and `init` reads it: it reports whether an existing `CLAUDE.md` has a current
-block, a stale one, or none at all. If yours predates v3 it still says *"Eleven
-slash commands"* and references the removed `/knomit-bootstrap` — re-run
-`claude init` and merge.
-</Aside>
-
-<Aside type="note">
-There is no `--source` and no `--profile` flag. The source slug used in
-generated `src://` refs is a per-repo server setting; skills read it from the
-`knomit_repos` mount table's `source` column, falling back to the repo name when
-no source is listed. Profile is likewise a per-repo setting with no client-side
-switch.
+<Aside type="caution">
+Keep the knomit hooks in the project's `.claude/settings.json` only. Claude Code
+merges hook entries across user, project and local settings and runs identical
+handlers once, but the same hook registered elsewhere under a different spelling
+(an absolute path to `kb`, say) is a different handler, and both run on every
+tool call. `init` reads only the project file and cannot see the others.
 </Aside>
 
 <Aside type="caution">
-The skills are deployed **only** by `claude init` from embedded templates — never
-hand-edit `.claude/skills/`. They are overwritten on the next run.
+In a Claude Code project the skills are deployed **only** by `kb claude init`, from templates embedded in
+the binary. Do not hand-edit `.claude/skills/`: the next run overwrites the
+edit, and a fix in the templates reaches a project only after the binary is
+rebuilt and `init` is run again. Any other skill in `.claude/skills/` belongs to
+the project, and `init` neither installs nor touches it.
 </Aside>
 
-## The 10 slash commands
+### The `.mcp.json` key is derived from the scope
 
-All ten are embedded templates under `templates/skills/` in the bridge, and
-`claude init` writes all ten. Any other skill in a project's `.claude/skills/`
-is that project's own — the bridge neither installs nor overwrites it.
+The `mcpServers` key is derived, not constant: `knomit-repo-<repo>` with
+`--repo`, `knomit-lens-<lens>` with `--lens`. The prefix is always applied, so a
+repo and a lens sharing a name, or a repo literally named `knomit-repo-x`,
+cannot collide on one key. An unbound entry gets `knomit-repo-<directory name>`,
+lowercased, with other characters turned into `-` and cut to 27 characters, so
+no directory name can make `init` fail. The key does not say what the entry is
+bound to; only the entry's `args` do.
+
+```jsonc
+{
+  "mcpServers": {
+    "knomit-repo-work": {
+      "command": "kb",
+      "args": ["--repo", "work"]
+    }
+  }
+}
+```
+
+Each entry is one bridge connection to a scope — a repo or a lens — not a
+separate server; one knomit server hosts all of them.
+
+- The scope name is limited to **27 characters**. Claude Code builds tool names
+  as `mcp__<key>__<tool>`, the API caps those at 64 characters, and the longest
+  knomit tool is `knomit_hypothesize`. A name that would overflow is rejected at
+  `init` instead of producing tools that cannot be called.
+- The skills name tools bare (`knomit_learn`, not `mcp__…__knomit_learn`), so
+  they work under whatever key is in play.
+
+### How the hooks find their binding
+
+When `.mcp.json` has a knomit entry, a hook's binding comes from that entry's
+`args` and nothing else, parsed the way `kb` itself parses them: `--lens` wins over `--repo`, and parsing
+stops at the first positional argument. The `command` basename must be `kb` (or
+`kb.exe`) for an entry to count as knomit's; an entry whose command is a wrapper
+script is recognised only through its key (`knomit` or a `knomit-` prefix), and only
+when no entry matched on command.
+
+| `args` | Hook behaviour |
+|--------|----------------|
+| `["--repo", "x"]` | reads repo `x` |
+| `["--lens", "x"]` | resolves the lens's write repo, see [lens mode](#lens-mode) |
+| `[]` | unbound: injects one line telling the agent to call `knomit_repos`, then `knomit_bind` |
+| a flag with no or an empty value | broken: the hooks are disabled with a notice. The directory name is not used as a fallback. |
+| no knomit entry at all (no `.mcp.json`, or no `kb` server in it) | reads the repo named after the project directory. This is the only place the directory name is used, and only because no entry exists. A user-scope knomit server is not visible to the hooks. |
+
+<Aside type="caution" title="Keep one knomit scope per project">
+Entries naming **different** scopes leave no single answer to "which repo do
+`post-edit` and `session-start` read?", so the hooks disable themselves with the
+reason `multiple_knomit_servers` rather than guess. The `knomit_*` MCP tools keep
+working for every entry; only the hooks are lost. Duplicate entries naming the
+**same** scope are fine and count as one.
+</Aside>
+
+## The 11 slash commands
+
+All eleven are templates embedded in the bridge, and `kb claude init` writes all
+of them. The one-line descriptions below are the skills' own frontmatter, which
+Claude Code uses to decide when to offer each one.
 
 | Command | When to use |
 |---------|-------------|
-| `/knomit-recall <area>` | Before non-trivial work — surface invariants, decisions, anti-patterns for an area |
-| `/knomit-remember` | Right after a discovery, a user correction, or a bug fix that exposed a hidden invariant |
-| `/knomit-decided <slug>` | The moment a tradeoff is resolved (incl. an `AskUserQuestion` answer), before starting the work it authorizes |
-| `/knomit-why <fact-path>` | Before relying on a fact — walk its provenance and flag stale anchors |
-| `/knomit-update <fact-path>` | A fact's body/confidence/refs drifted — fix it in place |
-| `/knomit-retract <fact-path>` | A fact is wrong or its subject no longer exists — remove it |
-| `/knomit-review` | After a burst of fact-writing or a refactor — prune (dedup), distill (synthesis), reflect (methodology) |
-| `/knomit-harden [area]` | Periodic corpus hardening, or after an incident traced to a misapplied fact — adversarially audits facts that are true but compressible into falsehoods, verifies the consequences a hurried reader would derive against the current code, and repairs the trap |
-| `/knomit-hypothesize` | **User-requested only** — generate falsifiable predictions from synthesis facts |
-| `/knomit-principle` | **User-invoked only** — author a designer principle (agents must not invoke; validation rejects agent attempts) |
+| `/knomit-recall <area>` | Before brainstorming, implementing, or non-trivial work in an area, and before committing to an explanation of why something fails — surfaces invariants, decisions and anti-patterns |
+| `/knomit-remember` | Right after something non-obvious turns up, the user corrects you, or a bug fix exposes a hidden invariant |
+| `/knomit-decided <slug>` | The moment a tradeoff is resolved, including answers to a multiple-choice question, before starting the work it authorized |
+| `/knomit-why <fact-path>` | Before relying on a fact — walks its provenance and flags stale anchors |
+| `/knomit-update <fact-path>` | A fact's body, confidence or refs no longer match reality — update it in place |
+| `/knomit-retract <fact-path>` | A fact is wrong, superseded, or describes code that no longer exists |
+| `/knomit-experiment <open\|commit\|rollback\|sync\|list> [name]` | Facts for code going out as a PR, or knowledge work that might not survive review — works on an isolated `exp/<name>` branch that is committed or rolled back with the PR's fate; wraps `knomit_experiment`, see [Experiments](/docs/experiments/#the-knomit-experiment-skill) |
+| `/knomit-review` | After a burst of fact-writing or a refactor — the prune, distill and reflect pass |
+| `/knomit-harden [area]` | Periodic hardening, or after an incident traced to a misapplied fact — audits facts that are true but compressible into falsehoods, checks their consequences against the code, and repairs them |
+| `/knomit-hypothesize` | **User-requested only** — generates falsifiable predictions from synthesis facts |
+| `/knomit-principle <slug>` | **User-invoked only** — authors a designer principle; validation rejects an agent-authored attempt |
 
-## The 4 hooks
+A knowledge base can also ship its own skills under `.knomit/skills/`. The server
+serves them as MCP prompts and through `knomit_skill`, separately from the eleven
+above, which `init` installs into the project. See [MCP tools](/docs/mcp-tools/).
 
-Registered in `.claude/settings.json`, each runs `knomit-bridge claude hook
-<event>`:
+## The 5 hooks
 
-| Event | Claude Code trigger | What it does |
-|-------|---------------------|--------------|
-| `session-start` | SessionStart | Pre-warms the session as a system reminder: the repo's global principles (or, until any exist, its top load-bearing invariants) plus the five most recent facts |
-| `post-edit` | PostToolUse(`Edit`/`Write`/`MultiEdit`) | If an edited file matches a fact's entities, nudges `/knomit-update` or `/knomit-retract` for possibly-stale facts |
-| `post-ask` | PostToolUse(`AskUserQuestion`) | Fires after every resolved `AskUserQuestion` and nudges `/knomit-decided` before the authorized work begins — the "is this worth recording" filter lives in the skill, not the hook |
-| `pre-compact` | PreCompact | Scans a wider window for capture-worthy moments and suggests `/knomit-remember` / `/knomit-decided` |
+Registered in `.claude/settings.json`, each one runs `kb claude hook <event>`:
+
+| Hook | Claude Code event | What it does |
+|------|-------------------|--------------|
+| `session-start` | `SessionStart` | At the start of a session (Claude Code also fires `SessionStart` on resume, `/clear` and compaction), prints context that Claude Code wraps as a system reminder: up to 7 of the repo's global principles (or, until it has any, up to 5 load-bearing invariants) plus the 5 most recent facts. Silent when the repo has no facts. |
+| `post-edit` | `PostToolUse` on `Edit`, `Write`, `MultiEdit` | If the edited file is listed as an `entities` value on any fact, says how many facts reference it and nudges `/knomit-update` or `/knomit-retract`. It matches `entities` only, not refs or fact bodies. |
+| `post-ask` | `PostToolUse` on `AskUserQuestion` | After every resolved question, nudges `/knomit-decided` before the authorized work starts. Whether the answer is worth recording is left to the skill. |
+| `pre-compact` | `PreCompact` | Scans the last 50 transcript messages for capture-worthy moments and passes up to 8 candidates into the compaction summary, so they survive it. |
+| `memory-guard` | `PreToolUse` on `Write`, `Edit`, `MultiEdit`, `Bash` | Denies a call that would write a team-relevant note into Claude Code's private auto-memory directory (`~/.claude/projects/<cwd>/memory/`) and points at `/knomit-remember` instead. A note left there is visible to one session on one machine; a fact is visible to every agent on the repo. `MEMORY.md` and `type: user` memories are allowed. It fails open on anything it does not positively recognise: a malformed payload, a path outside the memory directory, a Bash command that only reads the directory. An Edit to a file it cannot read is judged by its path alone, so it is denied unless the file is `MEMORY.md`. |
 
 <Aside type="note">
-`SessionStart` stdout is auto-wrapped as a system reminder, so that hook emits
-plain text; the other hooks inject context as
-`{"hookSpecificOutput":{"additionalContext":"…"}}` JSON. `SessionEnd` is **not**
-used — Claude Code discards its output — so the `pre-compact` path covers that
-role instead.
+`SessionStart` stdout is wrapped by Claude Code as a system reminder, so that hook
+prints plain text; `pre-compact` text is likewise plain stdout, written as
+summarization guidance. `post-edit` and `post-ask` inject context as
+`{"hookSpecificOutput":{"additionalContext":"…"}}`. `SessionEnd` is not used,
+because Claude Code discards its output.
 </Aside>
+
+### Intent detection
+
+The "is this moment worth capturing?" signal is computed in the bridge with
+regular expressions; there is no server-side detection endpoint. Five intents
+are recognised — `correction`, `discovery`, `decision`, `fix-bug`, `gotcha` — and
+they are conversational signals rather than fact types: a `fix-bug` moment might
+become an incident or a gotcha. Only `pre-compact` reads the transcript and runs
+them; `post-ask` reads only its own payload. Only `session-start` and `post-edit`
+resolve a repo and read facts, so those are the two hooks the lens-mode scope
+limit applies to.
 
 ## Lens mode
 
 A [lens](/docs/lenses/) mounts several repos behind one binding: one is the
-**write** repo, the rest are read-only. To scaffold a project against a lens
-instead of a single repo:
+**write** repo and the rest are read-only. To scaffold a project against a lens:
 
 ```bash
-knomit-bridge claude init -lens <name>
+kb claude init --lens <name>
 ```
 
-The only difference in the scaffold is the argument vector in `.mcp.json` —
-`["--repo", "<name>"]` becomes `["--lens", "<name>"]`. The skills, the hook
-registrations, and the `CLAUDE.md` block are identical:
+The only difference in the scaffold is the argument vector in `.mcp.json`:
 
 ```jsonc
 {
   "mcpServers": {
     "knomit-lens-work": {
-      "command": "knomit-bridge",
+      "command": "kb",
       "args": ["--lens", "work"]
     }
   }
 }
 ```
 
-The hooks read the binding out of `.mcp.json` themselves. A `--lens` argument
-puts them in lens mode, where they resolve the lens's write repo via
-`GET /api/v1/lenses/{name}`. `--lens` wins over `--repo` if a hand-edited file
-somehow carries both, in either order. On any resolution failure — server down,
-unknown lens, malformed response — the hook skips with reason `lens_unresolved`.
-A lens-configured session never falls back to the directory basename, because
-that basename could name an unrelated repo.
+Skills, hook registrations and the `CLAUDE.md` block are identical. A `--lens`
+argument puts the hooks in lens mode, where they resolve the lens's write repo
+with `GET /api/v1/lenses/{name}`. On any failure — server down, unknown lens,
+malformed response — the hook skips with the reason `lens_unresolved`; it never
+falls back to the directory name, which could name an unrelated repo.
 
 <Aside type="caution">
-Hook reads are deliberately **write-repo-scoped**, not lens-wide. In a lens
-session, the session-start context and the post-edit staleness lookup cover the
-write repo only — not the union of mounts. The `knomit_*` MCP tools are
-unaffected: they see every mount.
+Hook reads are **write-repo-scoped**, not lens-wide. In a lens session the
+session-start context and the post-edit lookup cover the write repo only. The
+`knomit_*` MCP tools are unaffected and see every mount.
 </Aside>
 
-## Intent detection
+## Unscoped mode
 
-The "is this moment worth capturing?" signal is computed **entirely in the
-bridge** via regex — there is no server-side `/detect` endpoint. Intents
-(correction, discovery, decision, fix-bug, gotcha…) are *conversational signals*,
-not fact kinds: a "fix-bug" moment might become an `incident` or a `gotcha` fact.
+With no flag, `kb` connects to the server's unscoped endpoint, which fixes no repo
+or lens up front. The agent calls `knomit_repos` to list what the server serves,
+then `knomit_bind` with a repo or lens to get an opaque binding handle, and passes
+that handle on every later `knomit_*` call. Binding is per call, not per
+connection, so a host that shares one connection across independent jobs can keep
+each job pointed at its own repo. Any tool other than `knomit_repos` and
+`knomit_bind` called without a handle returns a tool error naming `knomit_bind`.
+The tool reference is on [MCP tools](/docs/mcp-tools/).
 
-Only `pre-compact` scans the transcript and runs the intent regexes; `post-ask`
-reads just its own hook payload (the questions and the answers). Neither
-contacts the server. Only `session-start` and `post-edit` resolve a repo and
-read facts, which is why they are the two hooks the lens-mode scope limit
-applies to.
+## Choosing the server
+
+`kb` resolves one server address: a positional server argument, then the
+`KNOMIT_SERVER` environment variable, then the desktop app's `server.json`
+lockfile, then `http://localhost:19278`. The positional argument applies to the
+MCP proxy only (`"args": ["--repo", "work", "https://knomit.example.com"]`). The
+hooks are separate `kb` processes with no argument to read, so they use
+`KNOMIT_SERVER`, the lockfile or the default. For a server that is not on the
+default address, set `KNOMIT_SERVER` in the environment Claude Code launches with
+and both halves agree. Prefer `KNOMIT_SERVER` over a server argument in
+`.mcp.json`: a re-run of `init --repo …` or `init --lens …` resets the entry's
+`args` to the scope it derives, which drops a server argument you added. The proxy resolves the address once at startup, so
+restart Claude Code if the server moves.
+
+For a server that requires sign-in, run `kb login <base-url>` once. The token is
+stored under the knomit home for that host and sent on every `kb` request, the
+hooks' included; nothing is written to `.mcp.json`. `kb logout <base-url>`
+revokes it. How the server issues and checks credentials is covered under
+[Authentication](/docs/auth/).

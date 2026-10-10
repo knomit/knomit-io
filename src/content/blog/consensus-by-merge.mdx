@@ -17,8 +17,10 @@ faq:
   - q: >-
       Who merges agent branches into main?
     a: >-
-      Today, a human, via ordinary GitHub pull requests. An automated Librarian
-      agent or a CI merge policy could take over that role in the future.
+      A human, through a reviewed merge: a GitHub pull request, or the host's
+      web UI when a peer pushes its branch to a knomit host. A repository can
+      also set `consensus: auto`, which merges pushed branches on a host with
+      no origin.
   - q: >-
       Does this contradict "Don't Build Multi-Agents"?
     a: >-
@@ -235,9 +237,9 @@ uncoordinated writers, not a swarm of dozens.
    *beliefs*, parallel writes are safe.
 2. **The merge into main is still external.** In the observed history it is
    a human merging GitHub pull requests, so today "consensus is a merge"
-   concretely means a person merges the belief branches. An automated
-   Librarian agent or a CI merge policy could take over that step in the
-   future.
+   concretely means a person merges the belief branches. A repository can now
+   opt into `consensus: auto`, where the host merges pushed branches itself;
+   the merge stays external to the agents either way.
 3. **The partition is per-machine, not per-session.** Concurrent sessions on
    one machine share one agent branch through one MCP server, and their
    writes are serialized by an in-process lock. The zero-coordination claim
@@ -309,8 +311,9 @@ covers beliefs — facts, decisions, invariants — where a merge operator is
 definable and implemented.
 
 **Who merges agent branches into main?**
-Today, a human, via ordinary GitHub pull requests. An automated Librarian
-agent or a CI merge policy could take over that role in the future.
+A human, through a reviewed merge: a GitHub pull request, or the host's web
+UI when a peer pushes its branch to a knomit host. A repository can also set
+`consensus: auto`, which merges pushed branches on a host with no origin.
 
 **Does this contradict "Don't Build Multi-Agents"?**
 We say build — what changes is what the agents share. Cognition's principles

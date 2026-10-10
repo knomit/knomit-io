@@ -1,72 +1,138 @@
 ---
 title: Overview & architecture
-description: The four shipped artifacts (server, desktop app, bridge, OKF exporter), how a request flows, and the core model in one paragraph.
+description: knomit as a fabric of agents and knowledge bases, the shipped artifacts, how a request flows, and the core model.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 import RequestFlow from '../../../components/docs/RequestFlow.astro';
 
-**knomit** = *knowledge* + *commit*. It is a git-backed, temporal knowledge base
-for AI agents: every fact is a Markdown file committed to git, so the full history
-of belief *is* a git history, and provenance is cryptographically signed per
-commit.
+**knomit** = *knowledge* + *commit*. It is a distributed, decentralized
+knowledge distillation factory: a fabric that stitches together many agents and
+many knowledge bases, so that what any one of them learns is accumulated,
+distilled and put to use by all of them.
+
+Without a shared substrate, every agent starts from nothing, re-derives what
+others have already worked out, and forgets it when the session ends. knomit
+pays for each piece of knowledge once, across the whole network, instead of once
+per agent.
+
+- **Accumulate.** An agent writes what it learns as a typed, signed fact on its
+  own branch. Peers fetch and merge it, so the corpus converges on one best
+  statement of each truth instead of collecting copies.
+- **Distill.** Review prunes duplicates, groups what is related, notices where
+  facts about unrelated subjects share a pattern, and derives conclusions that no
+  single source states. See [Synthesis](/docs/synthesis/) and
+  [Emergent discovery](/docs/discovery/).
+- **Use.** Distilled knowledge flows back into agents' working context and into
+  the decisions of the people who work with them. Every fact carries its
+  provenance, its confidence and the history of how it came to be believed.
+
+Git is the substrate, so each operation means what it says:
+
+| Git | In knomit |
+|-----|-----------|
+| commit | a signed assertion of belief |
+| branch | an agent's identity |
+| merge | consensus |
+| conflict | a disagreement surfaced for someone to settle |
+| log | the timeline of what the fabric believed, and when |
+
+Git is the only source of truth. Indexes, embeddings and search are rebuildable
+caches. A knowledge base can hold facts about a codebase, a market, a supply
+chain or a research field, and a participant can be a coding agent, a research
+agent, an analyst or a team. [Lenses](/docs/lenses/) let one participant read
+several knowledge bases as one.
 
 Knowledge is reached over two surfaces:
 
-- an **MCP server** — cognitive tools (learn, query, explain, update, retract,
-  review, hypothesize) plus `knomit_repos`, which reports the mounts behind the
-  current binding, and
+- an **MCP server** with twelve tools: `knomit_learn`, `knomit_query`,
+  `knomit_explain`, `knomit_update`, `knomit_retract`, `knomit_review`,
+  `knomit_hypothesize`, `knomit_changes`, `knomit_experiment`, `knomit_skill`,
+  `knomit_repos` and `knomit_bind`. See [MCP tools](/docs/mcp-tools/).
 - a **REST API** (`/api/v1`, HAL+JSON, commit-anchored URIs) that the web UI and
   any HTTP client use.
 
-## The four shipped artifacts
+## The shipped artifacts
 
 | Artifact | Binary | What it is |
 |----------|--------|------------|
-| **Server** | `knomit` | The core HTTP server. Serves the REST API, the MCP endpoint, the embedded web UI, and (optionally) a git smart-HTTP endpoint. CGO build (ONNX Runtime + graphqlite). |
-| **Desktop app** | `knomit-desktop` | A Wails v3 tray/desktop app that boots the server in-process on a loopback port and shows the web UI in a native webview. Ships as `Knomit.app` on macOS; a binary on Linux, where `make desktop-install` adds the `.desktop` launcher and icon. See [Desktop app](/docs/desktop/). |
-| **Bridge** | `knomit-bridge` | A small pure-Go adapter. Its primary job is a **stdio ↔ HTTP MCP proxy** that an MCP client (Claude Code, Claude Desktop, Claude Cowork) spawns to talk to the server. It also scaffolds Claude Code integration and runs the editor hooks. |
+| **Server** | `knomit` | The core HTTP server. Serves the REST API, the MCP endpoints, the embedded web UI and a git smart-HTTP endpoint, which also receives pushes from [enrolled peers](/docs/fleet/). It doubles as the admin CLI (`verify`, `fleet`, `identity`, `grants`, `oauth`). CGO build: ONNX Runtime for embeddings, SQLite with the sqlite-vec extension, native tokenizers. |
+| **Desktop app** | `knomit-desktop` | A Wails v3 tray/desktop app that boots the server in-process on a loopback port and shows the web UI in a native webview. Releases ship it as `Knomit.app` on macOS and an AppImage on Linux; Windows builds from source. See [Desktop app](/docs/desktop/). |
+| **Bridge** | `kb` | A small pure-Go adapter. Its primary job is a **stdio ↔ HTTP MCP proxy** that an MCP client (Claude Code, Claude Desktop, Claude Cowork, Antigravity and others) spawns to talk to the server. It also scaffolds the Claude Code and Antigravity integrations, runs their editor hooks, signs in to an OAuth listener (`kb login`) and creates a repo from a template (`kb repo create`). |
 | **OKF exporter** | `knomit-okf` | A standalone CLI that publishes a knowledge base as a portable [Open Knowledge Format](/docs/okf/) repository. It talks to the git endpoint and nothing else — no server, database, or cache is involved in an export. Pure Go, like the bridge. |
 
 A fifth layer, the **web UI** (React/TypeScript), is built to static assets and
 embedded into both `knomit` and `knomit-desktop`. There is no separately deployed
-frontend.
+frontend. See [Web UI](/docs/web-ui/).
 
 <Aside type="note">
-Build-only tools (not shipped to users): `fetchlibs` downloads the native libs,
-`calibrate` derives per-model retrieval thresholds, and `drone` runs
-implementation plans unattended.
+Build and release tooling is not shipped to users: `fetchlibs` downloads the
+native libraries, `calibrate` derives per-model retrieval thresholds, `appcast`
+signs desktop releases and publishes the update feed, and `relnotes` turns a
+commit range into release notes.
 </Aside>
 
 ## How a request flows
 
 <RequestFlow />
 
-- The **bridge** discovers the running server through a lockfile (`server.json`,
-  written by the desktop app/tray) or a base URL. In repo mode it resolves the
-  agent branch and forwards JSON-RPC to `…/repos/{repo}/branches/{branch}/mcp`;
-  in [lens mode](/docs/lenses/) it skips branch discovery and posts to
-  `…/lenses/{lens}/mcp`, leaving each mount's branch for the server to resolve.
-- The **server** translates tool/HTTP calls into fact reads and writes. Git is the
-  only source of truth; the SQLite index (per repo, under
-  `KNOMIT_HOME/repos/<name>.db`) is a rebuildable cache for search, the graph, and
-  the commit log.
+- The **bridge** picks one server and uses it for everything: the positional
+  argument, else `KNOMIT_SERVER`, else the desktop app's lockfile (`server.json`),
+  else `http://localhost:19278`. The address may be a TCP URL, or the server's
+  local socket (a unix socket, or a named pipe on Windows), which carries the
+  caller's verified operating-system identity. The bridge then runs in one of
+  three modes:
+  - `kb --repo <name>` resolves the repo's agent branch and forwards JSON-RPC to
+    `…/repos/{repo}/branches/{branch}/mcp`.
+  - `kb --lens <name>` skips branch discovery and posts to `…/lenses/{lens}/mcp`,
+    leaving each mount's branch for the server to resolve. See
+    [lenses](/docs/lenses/).
+  - `kb` with neither flag connects to the **unscoped** endpoint `/api/v1/mcp`.
+    Nothing is bound there until the agent calls `knomit_bind`, which returns an
+    opaque `binding` handle that the agent passes on every later call. Binding is
+    per call, so several independent jobs can share one connection.
+- The **server** attributes every request to a principal and checks its
+  permissions: the user behind a local socket, an enrolled instance's
+  certificate, or an OAuth token. See [Authentication & permissions](/docs/auth/).
+  It then translates tool and HTTP calls into fact reads and writes.
+- **Storage.** Each repo is one SQLite file, `<KNOMIT_HOME>/repos/<uid>.db`, that
+  holds the git objects and refs together with derived tables for search, the
+  graph and the commit log. Git is the source of truth; the derived tables can be
+  rebuilt from it, and the web UI shows an index chip while that happens.
 
 ## The core model, in one paragraph
 
 A **repo** is one knowledge base; a fresh install has none, and no repo is
-privileged. Each machine writes only its
-own **agent branch** (`agent/<host>-<fp8>`); **`main` is consensus** and is never
-written directly by the MCP server — agreement is reached by merging agent
-branches into `main`. A fact is a Markdown file with YAML frontmatter (`kind`,
-`type`, `domain`, `entities`, `confidence`, `sources`, `refs`,
-`evidence_weight`, `origin`). It can be revised and retracted, but only by
-commit, so its **history** is immutable and every past version stays readable.
-Topic and category are not frontmatter keys — they are path segments in
+privileged. Each repo has three roots. **`kb/`** holds the facts and is the only
+root the fact tools write to by topic and category. **`.knomit/`** is the
+system: the ontology, [triggers and recipes](/docs/triggers/), skills and
+[templates](/docs/templates/). It changes only through git and can be read by
+its exact path with `knomit_explain`. **`artifacts/<area>/`** holds an agent's
+own working files, which are never indexed, queried or exported. Each instance
+writes only its own **agent branch** (`agent/<host>-<fp8>`); the id is built
+when the instance first boots, stored, and does not change if the key or
+hostname later does. The **consensus branch** (`main` unless the repo says
+otherwise) is never written directly by the MCP server. It advances by merge: a
+person or CI merges an agent branch into it, the host merges pushed peer
+branches itself when the repo sets `consensus: auto`, or an operator merges them
+from the web UI. When both sides changed the same fact, the repo's `conflicts`
+setting can merge the two field by field and records each settled conflict on
+the merge commit. See [Sync, consensus & conflicts](/docs/sync-and-consensus/).
+Work that might not survive review can first be staged on an
+[experiment](/docs/experiments/), an `exp/<name>` branch that commits or rolls
+back as a unit. Several instances can join a [fleet](/docs/fleet/), which keeps a
+member record per agent in a repo of its own.
+
+A fact is a Markdown file with YAML frontmatter (`kind`, `type`, `domain`,
+`entities`, `confidence`, `sources` and `refs`, plus `evidence_weight`, `origin`,
+`motifs`, `expires` and `context` when they apply). It can be revised and retracted, but
+only by commit, so its **history** is immutable and every past version stays
+readable. Topic and category are not frontmatter keys — they are path segments in
 `kb/<topic>/<category>/<uuid8>.md`, where the `uuid8` is allocated at creation
 and never derived from the content, so a fact keeps its identity across every
-edit. Both are passed as `knomit_learn` arguments. Reads are **commit-anchored**: a fact resolves
-at a commit, not at HEAD, so the graph can be walked as of any point in history.
+edit. Both are passed as `knomit_learn` arguments. Reads are **commit-anchored**:
+a fact resolves at a commit, not at HEAD, so the graph can be walked as of any
+point in history.
 
 See [Concepts](/docs/concepts/) for the full conceptual model; the rest of this
 section is the operational and reference surface.

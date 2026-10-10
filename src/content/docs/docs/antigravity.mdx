@@ -1,0 +1,109 @@
+---
+title: knomit for Antigravity
+description: "Install knomit into Google Antigravity with kb antigravity init: a project-local plugin with MCP config, a once-per-conversation context hook, rules and skills."
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Antigravity (`agy`) is one of knomit's host adapters. It reaches the same server
+through the same `kb` bridge as Claude Code, so a repo that Claude Code agents
+write to can be read and written from Antigravity too. The adapter packs
+everything into a single plugin directory inside the project.
+
+## Prerequisites
+
+1. **A running knomit server** and the **`kb` binary on the `PATH`** of the
+   process that launches Antigravity. The generated `mcp_config.json` uses the
+   bare command `kb`. The [desktop app](/docs/desktop/) or a bare `knomit serve`
+   provides the server.
+2. **The `agy` CLI**, run from the project's directory.
+
+## Install
+
+From the project's root:
+
+```bash
+kb antigravity init [--repo <name> | --lens <name>]
+```
+
+`agy` is accepted as an alias for `antigravity`. The command writes one directory,
+`.agents/plugins/knomit/`:
+
+| File | Purpose |
+|------|---------|
+| `plugin.json` | The plugin manifest (`{"name":"knomit"}`) |
+| `mcp_config.json` | The MCP entry: `kb --repo <name>`, `kb --lens <name>`, or `kb` with no flag |
+| `hooks.json` | Registers the one hook, `PreInvocation` running `kb antigravity hook pre-invocation` (10 second timeout) |
+| `rules/AGENTS.md` | The "Working with knomit memory" block, the same guidance Claude Code gets in `CLAUDE.md` |
+| `skills/knomit-*/SKILL.md` | The same eleven `/knomit-…` skills as Claude Code |
+
+Nothing here is merged. You do not edit these files, so every one is overwritten
+on each run, and deleting the directory and running `init` restores it. With
+neither flag the server is **unbound**: the agent calls `knomit_repos`, then
+`knomit_bind`. A flagless re-run keeps the scope an existing `mcp_config.json`
+already names, rather than dropping a working install back to unbound; pass the
+flag to change it. The skills are described under
+[Claude Code](/docs/claude-code/#the-11-slash-commands). Antigravity shows MCP
+tools under bare names (`knomit_query`), so the skills work unchanged.
+
+## The context hook
+
+Antigravity has no session-start event, so knomit uses `PreInvocation`, which
+fires before every model call. The hook therefore gates itself to **once per
+conversation**: it acts only when Antigravity reports the first invocation of the
+conversation (`invocationNum` is zero-based) and no marker file exists for that
+conversation. It fails closed — if either signal is missing it stays silent, so a
+changed payload can never cause the corpus block to be injected on every call.
+
+When it does act, it reads the binding from the `mcp_config.json` beside its own
+`hooks.json` and injects the same context as Claude Code's `session-start`: the
+repo's global principles (or its top invariants until it has any) and its most
+recent facts. If the entry is unbound it injects one line telling the agent to
+call `knomit_repos` and `knomit_bind`; if the config is broken, names two
+scopes, or the plugin was installed machine-wide, it injects a one-line notice
+naming the problem. A lens it cannot resolve (server down, unknown lens) is
+skipped silently. For a lens, the hook
+resolves the write repo.
+
+This is the only hook. Claude Code's `post-edit`, `post-ask`, `pre-compact` and
+`memory-guard` hooks have no Antigravity counterpart.
+
+## Constraints
+
+<Aside type="caution" title="Antigravity must have a registered workspace">
+Running `agy -p …` from inside the project is not enough: the working directory
+alone registers nothing, and `agy` then silently loads no knomit skills, rules,
+hooks or MCP tools. Launch `agy` interactively from the project directory, or pass
+`--add-dir <project directory>` on every headless run.
+</Aside>
+
+- **Keep the plugin project-local.** The hook binds to the `mcp_config.json`
+  beside it. Installing it machine-wide with `agy plugin install` copies one
+  project's scope to every project, so leave it where `init` put it.
+- **A custom agent with `inheritCustomizations: false`** adopts none of your
+  skills, rules, plugins or MCP servers, knomit's included.
+- **To switch it off,** run `agy plugin disable knomit`. That setting lives in
+  your own `config.json` and survives a re-run of `init`.
+- **Choosing the server and signing in.** Set `KNOMIT_SERVER` in the
+  environment `agy` launches with; otherwise the desktop lockfile, then
+  `http://localhost:19278`, is used. Do not add a server argument to
+  `mcp_config.json`: `init` rewrites that file on every run. Run
+  `kb login <base-url>` once for a server that needs sign-in. See [Claude Code](/docs/claude-code/#choosing-the-server).
+
+## Verify it works
+
+1. Run `kb antigravity init` in the project and note the `Wrote
+   .agents/plugins/knomit/ (…)` line, which says whether the plugin is bound to
+   a repo, a lens, or unbound.
+2. Start `agy` interactively from that directory.
+3. In the first turn, ask the agent what knomit context it was given: it
+   should quote the principles or recent facts, or the unbound note if you did
+   not pass a flag. A repo with no facts yet produces no block.
+4. Ask the agent to run `knomit_repos`. It lists the repos and lenses the server
+   serves; see [MCP tools](/docs/mcp-tools/).
+
+If nothing shows up, check the registered-workspace constraint above first. The
+hook logs a skip reason for every call it declines (`already_greeted`,
+`not_first_invocation`, `no_agent_branch`, and others) to the bridge log, by
+default `knomit-bridge.log` in the system temp directory. Setting
+`KNOMIT_MCP_DEBUG=1` raises the log level to debug.

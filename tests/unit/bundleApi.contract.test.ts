@@ -24,7 +24,9 @@ describe('bundleApi covers every api.* call site in the vendored UI', () => {
 
     const called = new Set<string>();
     for (const f of files) {
-      const src = await readFile(path.join(UI_DIR, f), 'utf8');
+      const raw = await readFile(path.join(UI_DIR, f), 'utf8');
+      // Comments mention "api.ts" and "api.status" in prose; only code counts.
+      const src = raw.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:'"`])\/\/.*$/gm, '$1');
       for (const m of src.matchAll(/\bapi\.([a-zA-Z_$][\w$]*)/g)) called.add(m[1]);
     }
     expect(called.size).toBeGreaterThan(0);

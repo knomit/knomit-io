@@ -17,7 +17,7 @@ const clusters = [
     strong:
       'Dead simple, no new dependency — fine for one-shot retrieval over a static set of documents.',
     exposed:
-      'Nothing dedups or structures itself. Duplicates pile up, knowledge drifts, and every chunk is trusted equally with no idea where it came from.',
+      'Nothing dedups or structures itself. Duplicates pile up, knowledge drifts, and every chunk is trusted equally, with only the source metadata you attach yourself.',
   },
   {
     icon: 'api',
@@ -27,7 +27,7 @@ const clusters = [
     strong:
       'Low-effort continuity for a single assistant, with broad framework integrations.',
     exposed:
-      'Memories are flat free text with no link back to their source, siloed per agent, and impossible to review or version like code.',
+      'Memories are free text that links back at most to the conversation it came from, partitioned per user or agent, and reviewed through a change log in a hosted API rather than a diff in a pull request.',
   },
   {
     icon: 'ontology',
@@ -37,7 +37,7 @@ const clusters = [
     strong:
       'Structured, multi-hop reasoning — and, at best, genuine temporal awareness of when a fact held.',
     exposed:
-      'Heavy infrastructure bound to a database you can’t diff in a pull request, with unsigned facts and updates that sometimes overwrite history.',
+      'Heavy infrastructure bound to a database you can’t diff in a pull request. The best keep a fact’s validity history and trace data to its source, but none documents signing a fact or its author.',
   },
   {
     icon: 'mcp',
@@ -47,7 +47,7 @@ const clusters = [
     strong:
       'Self-editing memory and stateful agents out of the box, with strong tooling around the runtime.',
     exposed:
-      'You inherit the entire runtime, each agent keeps its own private silo, and the change history — where it exists — is unsigned.',
+      'You inherit the entire runtime. Memory is per agent by default, sharing it across agents is a hosted feature, and where the change history is git-backed, signing it is not documented.',
   },
 ];
 
@@ -65,7 +65,7 @@ const refinery = [
   {
     icon: 'cluster',
     title: 'It distills, not just stores',
-    body: 'Similar inputs subsume into one fact; synthesis derives higher-order structure. Every other profile retrieves what is similar — knomit also discovers, surfacing emergent keystones across the cross-cluster bridges similarity is blind to. The corpus sharpens as it grows instead of bloating.',
+    body: 'Similar inputs subsume into one fact; synthesis derives higher-order structure, and each distilled fact cites the facts it came from. Some recall layers now consolidate duplicates and derive patterns in a background job; knomit also discovers, proposing the keystones implied by bridges between similarity clusters that a similarity search does not reach. Each review pass leaves the corpus sharper, not merely larger.',
   },
   {
     icon: 'discovery',
@@ -75,27 +75,61 @@ const refinery = [
   {
     icon: 'provenance',
     title: 'Every change is signed — and reversible',
-    body: 'Each fact is an Ed25519-signed git commit. Because the substrate is git, knomit prunes and rewrites itself safely: nothing is ever lost, and every refinement is a commit you can review, diff, and revert.',
+    body: 'Each write is a signed git commit by an agent whose identity is kept for life. A repository can verify those signatures when commits are accepted into main, against the fleet’s member records. Because the substrate is git, review can prune and rewrite the corpus safely: every refinement is a commit you can review, diff, and revert.',
     link: { href: '/security/', label: 'How the signing holds up' },
   },
   {
     icon: 'consensus',
-    title: 'Knowledge converges across peers',
-    body: 'Agents and humans propose facts on branches; review merges them to main. One reviewed source of truth, shared instead of siloed — the gap every other cluster leaves open.',
+    title: 'Knowledge converges across agents and machines',
+    body: 'Agents and people write on their own branches; facts reach main by review or by automatic merge, and edits to the same fact can be merged field by field. Instances sync in real time and host each other’s repositories, so what one agent learns, every agent inherits.',
   },
   {
     icon: 'markdown',
     title: 'It exports to a standard nobody owns',
-    body: 'Every profile above is somewhere knowledge goes in and does not come out. knomit publishes the whole base as Open Knowledge Format — Google Cloud’s open spec — plain markdown in a git repo that any conformant consumer can read without knomit in the picture. The exit is the feature.',
+    body: 'Every profile above is somewhere knowledge goes in and does not come out. knomit publishes the whole base as Open Knowledge Format — Google Cloud’s open spec — plain markdown in a git repo that any conformant consumer can read without knomit in the picture.',
     link: { href: '/okf/', label: 'How OKF export works' },
+  },
+];
+
+// Coordination: what lets many agents on many machines work as one fabric.
+// The profiles column states the closest documented equivalent in the four
+// profiles, by capability, not by product. Checked against each profile's
+// representative vendors' public docs on 2026-10-10
+// (.claude/plans/2026-10-10-review-compare.md).
+const coordination = [
+  {
+    cap: 'Experiments',
+    knomit: 'An agent stages work on a local branch forked from its own; commit merges it as a unit, rollback discards it. Never pushed.',
+    profiles: 'A hosted vector store can fork a collection copy-on-write for rollback, but a fork is not merged back; none documents commit and rollback of a knowledge change.',
+  },
+  {
+    cap: 'Triggers and recipes',
+    knomit: 'Rules in the ontology fire when facts are learned, updated, retracted or fall due, and can run a script or a recipe that starts an agent session.',
+    profiles: 'Recall layers and graph engines send webhooks on memory events, and an agent runtime runs memory agents on a schedule or after a number of steps, but none documents a rule on a knowledge event that starts an agent session.',
+  },
+  {
+    cap: 'Signed identity, verified at acceptance',
+    knomit: 'Each agent has a kept identity and signs every commit; a repository can refuse commits into main not signed by an active fleet member’s current key.',
+    profiles: 'No equivalent documented. Some record which agent wrote a memory; none documents per-agent signing verified at acceptance.',
+  },
+  {
+    cap: 'Conflict merge',
+    knomit: 'When two agents changed the same fact, the repository’s conflicts setting (on by default under consensus: auto) combines their edits field by field or lets consensus win, and records every conflict it settled.',
+    profiles: 'An agent runtime with git-backed memory documents conflict resolution, and recall layers and graph engines supersede contradicted facts, but none documents a field-by-field merge of two versions with the conflict recorded.',
+  },
+  {
+    cap: 'Lenses across machines',
+    knomit: 'One query reads several knowledge bases at once, including ones synced from other machines, with one shared motif vocabulary.',
+    profiles: 'An agent runtime can attach several shared git repositories to one hosted agent; none documents one query across several knowledge bases on different machines.',
   },
 ];
 
 const reach = [
   'Knowledge has to be shared and trusted across many agents and humans, not siloed inside one tool.',
+  'Several agents or machines work on the same problem and should build on each other’s results.',
   'You need to explain a claim — where it came from, how confident it is, how it changed.',
   'You want it reviewable like code and hostable anywhere: it’s just a git repo.',
-  'You want the store to improve itself — dedup, synthesis, hypotheses — not merely hold text.',
+  'You want the store refined, through dedup, synthesis and hypotheses, not merely holding text.',
 ];
 
 const outgrow = [
@@ -109,8 +143,8 @@ const mapAria =
 ---
 
 <BaseLayout
-  title="knomit vs the AI-memory landscape — comparison"
-  description="How knomit compares to the four operational profiles of AI memory: raw stores, recall layers, graph engines, and agent runtimes."
+  title="knomit vs RAG, recall layers, graph engines and agent runtimes — comparison"
+  description="How knomit compares to RAG, recall layers, graph engines and agent runtimes: a fabric that accumulates, distills and shares knowledge across many agents."
 >
   <!-- Reframe + map -->
   <section class="k-section">
@@ -119,7 +153,7 @@ const mapAria =
         as="h1"
         eyebrow="Comparison"
         title="The landscape, by operational profile."
-        lead="The tools agents use for memory cluster into four profiles. Each is good at something. None of them refine what they store — or let you audit how it changed. That gap is where knomit lives."
+        lead="The tools agents use for memory cluster into four profiles. Each is good at something. None of them is built to connect many agents and many knowledge bases so that what one learns is distilled and used by all, with every change auditable. That is what knomit is for."
       />
 
       <div
@@ -144,7 +178,9 @@ const mapAria =
         ))}
       </div>
       <p class="cmp-note k-text-2">
-        Everyone else accumulates. knomit refines — and signs its work.
+        The four profiles are built to store and retrieve, and some consolidate
+        what they hold. knomit distills it, shares it across agents, and signs
+        every change.
       </p>
     </div>
   </section>
@@ -185,8 +221,8 @@ const mapAria =
     <div class="k-container">
       <SectionHeading
         eyebrow="Where knomit sits"
-        title="A fifth profile: the knowledge refinery."
-        lead="knomit isn’t a better point on the memory axis — it’s on a different one. It refines the knowledge it holds, and signs every change so you can trust what it kept and what it dropped."
+        title="A fifth profile: the knowledge distillation factory."
+        lead="knomit is not a better point on the memory axis. It is a fabric of many agents and many knowledge bases that accumulates knowledge, distills it, and puts it to use, signing every change so you can trust what it kept and what it dropped."
         align="center"
       />
       <div class="cmp-grid">
@@ -207,16 +243,62 @@ const mapAria =
       </div>
 
       <p class="cmp-callout k-reveal">
-        Provenance, time-travel, and synthesis aren’t three features. They’re
-        one: <strong>a knowledge base that improves itself — and lets you audit
-        every improvement.</strong>
+        Provenance, history and synthesis share one mechanism: <strong>every
+        refinement is a signed commit, so each can be read, diffed and
+        reverted.</strong> Time-travel reads a fact and its provenance graph
+        as of any commit (<code>knomit_explain</code> with a commit, or
+        <code>at:&lt;sha&gt;</code> and <code>vs:&lt;from&gt;..&lt;to&gt;</code> in
+        the web UI), so a reader sees what was believed and when.
       </p>
 
       <p class="cmp-underneath k-text-2">
         Underneath it all: typed atomic facts, not chunks; a customisable
-        epistemic ontology you author in plain markdown; confidence that rises
+        epistemic ontology, one YAML file in the knowledge base that validates every write; confidence that rises
         and falls with the evidence; and external references that keep
         provenance intact beyond the corpus.
+      </p>
+    </div>
+  </section>
+
+  <!-- Coordination -->
+  <section class="k-section cmp-coord">
+    <div class="k-container">
+      <SectionHeading
+        eyebrow="Coordination"
+        title="What it takes for many agents to work as one."
+        lead="Sharing a store is not the same as working together. These are the pieces knomit has for agents on several machines building one body of knowledge."
+        align="center"
+      />
+      <div class="cmp-table-wrap k-reveal">
+        <table class="cmp-table">
+          <caption class="k-text-2">
+            The profiles column states the closest equivalent each profile
+            documents, as documented, as of October 2026.
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Capability</th>
+              <th scope="col">knomit</th>
+              <th scope="col">Closest in the four profiles</th>
+            </tr>
+          </thead>
+          <tbody>
+            {coordination.map((row) => (
+              <tr>
+                <th scope="row">{row.cap}</th>
+                <td>{row.knomit}</td>
+                <td class="cmp-table__none">{row.profiles}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="cmp-coord__more k-text-2">
+        Read more: <a href="/docs/experiments/">experiments</a>,
+        <a href="/docs/triggers/">triggers and recipes</a>,
+        <a href="/docs/fleet/">fleets</a>,
+        <a href="/docs/sync-and-consensus/">sync and consensus</a>,
+        <a href="/docs/lenses/">lenses</a>.
       </p>
     </div>
   </section>
@@ -248,8 +330,8 @@ const mapAria =
       </div>
       <p class="cmp-fit__more k-text-2">
         Recognise yourself on the left?
-        <a href="/use-cases/">See what people build on it</a> — twelve of them,
-        from a solo developer's codebase to an open knowledge network.
+        <a href="/use-cases/">See what people build on it</a>, from a research
+        corpus to work coordinated across several machines.
       </p>
     </div>
   </section>
@@ -259,8 +341,8 @@ const mapAria =
     <div class="k-container cmp-cta">
       <h2>See knowledge compound, not drift.</h2>
       <p class="k-lead cmp-cta__lead">
-        It’s open source and it’s just git. Clone it, point your agents at it,
-        and watch the corpus sharpen itself.
+        It’s source-available (FSL) and it’s just git. Clone it, point your agents at it,
+        and run review over what they learn.
       </p>
       <div class="cmp-cta__actions">
         <a href={GITHUB_URL} class="k-btn" rel="noopener">View on GitHub</a>
@@ -448,6 +530,65 @@ const mapAria =
     text-align: center;
     font-size: 0.94rem;
     line-height: 1.65;
+  }
+
+  /* ── Coordination ────────────────────────────────────────────────── */
+  .cmp-coord {
+    background: var(--k-surface-1);
+    border-block: 1px solid var(--k-hairline-soft);
+  }
+  .cmp-table-wrap {
+    margin-top: 2.5rem;
+    overflow-x: auto;
+  }
+  .cmp-table {
+    width: 100%;
+    min-width: 36rem;
+    border-collapse: collapse;
+    border: 1px solid var(--k-hairline);
+    background: var(--k-bg);
+    font-size: 0.93rem;
+    line-height: 1.5;
+  }
+  .cmp-table caption {
+    caption-side: bottom;
+    text-align: left;
+    padding-top: 0.7rem;
+    font-size: 0.85rem;
+  }
+  .cmp-table th,
+  .cmp-table td {
+    text-align: left;
+    vertical-align: top;
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--k-hairline-soft);
+  }
+  .cmp-table thead th {
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--k-text-muted);
+  }
+  .cmp-table tbody th {
+    color: var(--k-brand);
+    font-weight: 600;
+    width: 22%;
+  }
+  .cmp-table td {
+    color: var(--k-text-2);
+  }
+  .cmp-table__none {
+    color: var(--k-text-muted);
+    width: 34%;
+  }
+  .cmp-coord__more {
+    margin-top: 1.5rem;
+    text-align: center;
+    font-size: 0.95rem;
+  }
+  .cmp-coord__more a {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
   }
 
   /* ── Honest fit ──────────────────────────────────────────────────── */

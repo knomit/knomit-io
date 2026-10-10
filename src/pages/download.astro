@@ -19,7 +19,7 @@ const published = release
 
 <BaseLayout
   title="Download knomit"
-  description="Download knomit for macOS and Linux: a signed, notarized desktop app that keeps itself up to date, or the server binary. Open source, local-first."
+  description="Download knomit for macOS (arm64) and Linux (amd64): the desktop app or the server, with kb and knomit-okf. Windows builds from source. Source-available (FSL)."
 >
   <section class="k-section">
     <div class="k-container">
@@ -27,7 +27,7 @@ const published = release
         as="h1"
         eyebrow="Download"
         title="Run knomit on your machine."
-        lead="A tray app that runs the server for you, or the bare server binary. Local-first: your knowledge base is a git repo on your own disk."
+        lead="A tray app that runs the server for you, or the bare server binary. Local-first: every knowledge base is a git repository on your own disk."
       />
 
       {release && (
@@ -84,8 +84,10 @@ const published = release
       )}
 
       <p class="dl-source k-text-2">
-        Prefer to build it yourself? The <a href="/docs/quick-start/">quick start</a> covers
-        cloning and building from source, and everything here is
+        <strong>Windows:</strong> knomit, kb and the desktop app build and run on
+        Windows, but releases do not include Windows binaries yet. Build from
+        source with the <a href="/docs/quick-start/">quick start</a>, which also
+        covers building on macOS and Linux. Everything here is
         <a href={GITHUB_URL} rel="noopener">open on GitHub</a>.
       </p>
     </div>
@@ -93,13 +95,31 @@ const published = release
 
   <section class="k-section k-grid-bg">
     <div class="k-container dl-prose">
+      <h2 class="dl-h2">What you get</h2>
+      <p class="k-text-2">
+        Every download carries <code>kb</code> and <code>knomit-okf</code>; they
+        differ in how the server runs. <code>kb</code> is the bridge that connects an MCP client such as Claude Code,
+        Antigravity or Claude Desktop to a server, and creates knowledge bases from
+        templates. <code>knomit-okf</code> publishes a knowledge base as
+        <a href="/okf/">Open Knowledge Format</a>. The desktop app is
+        <code>knomit-desktop</code>, a tray app that runs the server for you, with
+        <code>kb</code> and <code>knomit-okf</code> inside it. The server tarball
+        carries <code>knomit</code>, the server binary, beside <code>kb</code> and
+        <code>knomit-okf</code>.
+      </p>
+      <p class="k-text-2">
+        For servers there is also a container image for Linux amd64,
+        <code>ghcr.io/knomit/knomit</code>, with the embedding model already inside
+        it. See the <a href="/docs/deployment/">deployment guide</a>.
+      </p>
+
       <h2 class="dl-h2">Installing</h2>
 
       <h3 class="dl-h3">Desktop</h3>
       <p class="k-text-2">
         The desktop app boots a full knomit server inside itself on a loopback port and
         shows the web UI in a native window. It also publishes a lockfile that
-        <code>knomit-bridge</code> discovers, so MCP clients find the running server without
+        <code>kb</code> discovers, so MCP clients find the running server without
         being told a port. See the <a href="/docs/desktop/">desktop guide</a>.
       </p>
       <p class="k-text-2">

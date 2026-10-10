@@ -1,12 +1,14 @@
 import type { Bundle, BundleFact } from './bundleTypes';
 import { BUNDLE_SCHEMA_VERSION } from './bundleTypes';
+import { motifsPage, motifClusterDetail, motifFilter } from './bundleMotifs';
 import { buildIndex, tokenize, type KbIndex } from './kbIndex';
 import {
   parseSearchQuery,
   type Fact, type FactRef, type DirChild, type BrowseResponse, type HistoryResponse,
   type CommitDetail, type CommitFile, type SearchResult, type RefGroup,
   type RefVersion, type RecentResponse, type Stats, type ActivityStats,
-  type Highlight, type RankAxis,
+  type Highlight, type RankAxis, type Status, type MotifMatch, type RepoCreateStatus,
+  type MotifsPage, type MotifCluster, type MotifsQuery,
   type LensFactEntry, type LensSource, type LensStats, type LensBrowseResponse,
 } from '../generated/kb-ui/upstreamApi';
 
@@ -70,6 +72,7 @@ function toFact(
     path, title: blob.title, kind: blob.kind, type: blob.type, origin: blob.origin,
     body: blob.body, domain: blob.domain, confidence: blob.confidence,
     sources: blob.sources, entities: blob.entities,
+    ...(blob.motifs?.length ? { motifs: blob.motifs } : {}),
     refs: blob.refs.map(r => classifyRef(r, tree)),
     parse_error: blob.parse_error,
     commit_hash: commit,
@@ -570,9 +573,12 @@ export const api = {
   search: async (
     _repo: string, _branch: string, q: string, path = '', minConfidence = 0,
     opts?: { types?: string[]; kinds?: string[]; excludeKinds?: string[];
-             origins?: string[]; eps?: string[]; domains?: string[]; entities?: string[] },
+             origins?: string[]; eps?: string[]; domains?: string[]; entities?: string[];
+             motifs?: string[]; motifMatch?: MotifMatch; sinceFork?: boolean },
   ): Promise<{ results: SearchResult[] }> => {
     const { b } = state();
+    // sinceFork is accepted and ignored: the reducer only holds it true inside
+    // an experiment, and a bundle is one branch with no experiments.
     // eps (operation tags: learn/update/retract/subsume/synthesize/sync) has
     // no equivalent in the bundle — BundleFact carries only the CURRENT
     // frontmatter, not a per-commit operation tag, and guessing a mapping
@@ -586,9 +592,11 @@ export const api = {
     const wantDomains = [...domains, ...(opts?.domains ?? [])];
     const wantEntities = [...entities, ...(opts?.entities ?? [])];
 
+    const carries = motifFilter(b, opts?.motifs, opts?.motifMatch);
     const results: SearchResult[] = [];
     for (const { path: p, fact } of scopedFacts(b, path)) {
       if (fact.confidence < minConfidence) continue;
+      if (carries && !carries(fact)) continue;
       if (opts?.types?.length && !opts.types.includes(fact.type ?? '')) continue;
       if (opts?.kinds?.length && !opts.kinds.includes(fact.kind ?? '')) continue;
       if (opts?.excludeKinds?.length && opts.excludeKinds.includes(fact.kind ?? '')) continue;
@@ -664,9 +672,12 @@ export const api = {
   recent: async (
     _repo: string, _branch: string, path: string, query = '', limit = 50, offset = 0,
     opts?: { types?: string[]; excludeType?: string; kinds?: string[]; excludeKinds?: string[];
-             origins?: string[]; domains?: string[]; entities?: string[]; eps?: string[] },
+             origins?: string[]; domains?: string[]; entities?: string[]; eps?: string[];
+             motifs?: string[]; motifMatch?: MotifMatch; sinceFork?: boolean },
   ): Promise<RecentResponse> => {
     const { b } = state();
+    // sinceFork: same decision as search (only ever true inside an experiment).
+    const carries = motifFilter(b, opts?.motifs, opts?.motifMatch);
     // Same eps decision as search: the bundle has no episode data, so an
     // eps-filtered query returns nothing rather than silently matching
     // everything. See report Finding 6.
@@ -674,6 +685,7 @@ export const api = {
     const q = query.trim().toLowerCase();
     const all = scopedFacts(b, path)
       .filter(({ fact }) => !q || fact.title.toLowerCase().includes(q))
+      .filter(({ fact }) => !carries || carries(fact))
       // OR-combined, matching the server: `types` is a multi-value facet, so a
       // fact qualifies if it matches ANY of them (unlike domains/entities
       // below, which are AND-combined).
@@ -758,6 +770,23 @@ export const api = {
     return { values: [...seen].filter(v => v.toLowerCase().startsWith(p)).sort() };
   },
 
+  // The branch row. Only useFactEdges reads it, to refresh a stale head after
+  // a 404; a bundle's head never moves, so this returns the bundle's own head
+  // (useFactEdges then sees head === anchor and reports the 404 as the answer).
+  // embeddings off, writable false, no `experiment` (a bundle is one branch).
+  status: async (_repo: string, _branch: string): Promise<Status> => {
+    const { b } = state();
+    return {
+      head: b.head, branch: b.ref, index_commit: b.head,
+      embeddings_enabled: false, ontology_root: 'kb', writable: false,
+      experiment: null,
+    };
+  },
+
+  // The repo-create job list polled by StatusFooter. /explore creates nothing,
+  // so the answer is always the empty list (no pending-create rows).
+  listRepoCreates: async (): Promise<RepoCreateStatus[]> => [],
+
   getAgentBranch: async (_repo: string): Promise<string> => state().b.ref,
 
   // Unreachable: the shell hides the write controls in CSS, so isReadOnly() hides every
@@ -779,4 +808,22 @@ export const api = {
   getLensStats: noLens<LensStats>('getLensStats'),
   lensBrowse: noLens<LensBrowseResponse>('lensBrowse'),
   lensCompletions: noLens<{ values: string[] }>('lensCompletions'),
+
+  // The motif vocabulary, derived from the bundle's frontmatter by
+  // bundleMotifs.ts in the posture knomit takes before its alias table is
+  // built (stemmed-token clusters, no judge merges, no written definitions:
+  // definition_state is 'missing'). A lens never exists in /explore.
+  motifs: async (_repo: string, _branch: string, opts?: MotifsQuery): Promise<MotifsPage> =>
+    motifsPage(state().b, opts),
+  motifCluster: async (_repo: string, _branch: string, key: string): Promise<MotifCluster> => {
+    const { b } = state();
+    const c = motifClusterDetail(
+      b, key, p => lastTouched(b, p),
+      p => { const f = b.blobs[treeAt(b)[p]]; return { title: f?.title ?? p, type: f?.type }; },
+    );
+    if (!c) throw Object.assign(new Error(`no motif cluster or spelling "${key}"`), { status: 404 });
+    return c;
+  },
+  lensMotifs: noLens<MotifsPage>('lensMotifs'),
+  lensMotifCluster: noLens<MotifCluster>('lensMotifCluster'),
 };

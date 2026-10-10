@@ -1,20 +1,40 @@
 ---
 title: Deployment
-description: "Run knomit as a self-contained Docker server: building the image, multi-arch targets, volumes, and a read-only demo instance."
+description: "Run knomit as a Docker server: the GHCR image, building it, volumes, who may write, a reverse-proxy path prefix, TLS and mTLS listeners, and a read-only demo."
 ---
 
 import { Aside, Steps } from '@astrojs/starlight/components';
 
-knomit's first goal is to be *a plain HTTP server deployable anywhere*. The
-Docker image is **fully self-contained**: every dependency — the native
-libraries (ONNX Runtime, graphqlite, tokenizers) **and** the embedding model —
-is fetched at **build** time and baked in. The running container performs **no
-network downloads at startup**.
+A knomit instance is one node of the fabric, and it serves HTTP so agents, peers
+and people can reach it. The server runs anywhere Docker does. The Docker image is **fully self-contained**: every dependency — the native
+libraries (ONNX Runtime and tokenizers) **and** the embedding model — is fetched
+at **build** time and baked in. The running container performs **no network
+downloads at startup**.
+
+One server is one node of a fabric. A container can stand alone, follow another
+instance read-only, or serve its repos to a fleet of peers; the sections below
+say which listener each of those uses.
+
+## Getting the image
+
+The rolling dev release publishes the image to GitHub's container registry for
+`linux/amd64`, tagged `dev` (moving) and `<version>.<sha>` (fixed), where a dev build's version reads like
+`0.5.3-dev.<timestamp>`:
+
+```sh
+docker pull ghcr.io/knomit/knomit:dev
+```
+
+The image is publicly pullable without `docker login`.
+
+Stable tagged releases publish the macOS and Linux tarballs and the desktop
+artifacts; the image comes from the rolling release. There is no Windows
+download: to run on Windows, [build from source](/docs/desktop/#windows).
 
 ## Building the image
 
 The `Dockerfile` is a three-stage build: `node` builds the web UI, a CGO Go
-stage builds the binary + fetches native libs + bakes the model with
+stage builds the binary + fetches the native libs + bakes the model with
 `knomit warm-models`, and a slim Debian runtime stage assembles the final image.
 
 <Steps>
@@ -23,7 +43,7 @@ stage builds the binary + fetches native libs + bakes the model with
 
    ```sh
    make docker
-   # → knomit:<semver>.<sha>  and  knomit:latest
+   # → knomit:<version>.<sha>  and  knomit:latest
    ```
 
 2. Or cross-build for `linux/amd64` from a non-amd64 host (Apple Silicon, etc.).
@@ -31,15 +51,17 @@ stage builds the binary + fetches native libs + bakes the model with
 
    ```sh
    make docker-amd64
-   # → knomit:<semver>.<sha>-amd64  and  knomit:latest-amd64
+   # → knomit:<version>.<sha>-amd64  and  knomit:latest-amd64
    ```
 
 </Steps>
 
-Both targets tag the image with the full **`<semver>.<sha>`** version string (the
-same string the binary reports as its version) **and** a moving `latest`. The
-Dockerfile itself is architecture-agnostic — `fetchlibs` pulls the per-platform
-native libraries and the runtime stage globs `dist/linux-*/lib`.
+Both targets tag the image with the full **`<version>.<sha>`** version string **and**
+a moving `latest`. The Dockerfile itself is architecture-agnostic — `fetchlibs`
+pulls the per-platform native libraries, the build stage copies them out of
+`dist/linux-*/lib` to a fixed path, and the runtime stage takes them from there.
+The binary inside is built without the Makefile's version flags, so
+`knomit version` in the container prints `dev`; the image tag is the version.
 
 ## Running the container
 
@@ -47,11 +69,12 @@ native libraries and the runtime stage globs `dist/linux-*/lib`.
 docker run -d --name knomit \
   -p 19278:19278 \
   -v knomit-data:/data \
-  knomit:latest
+  ghcr.io/knomit/knomit:dev
 ```
 
-Open **http://localhost:19278/**. The container starts with **no repositories** —
-create your first from **Manage** in the web UI, or with `POST /api/v1/repos`.
+Open **http://localhost:19278/**. The container starts with **no repositories**,
+and a browser reaching it through `-p` cannot create one yet; see
+[Who may write](#who-may-write).
 
 <Aside type="caution" title="Use a named volume, not a bind mount">
 The embedding model is baked into the image at **`/data/models`**. A **named
@@ -72,17 +95,55 @@ The image ships these defaults (set in the `Dockerfile`):
 | `KNOMIT_HOME` | `/data` | Data root — mount a volume here |
 | `ORT_LIB_PATH` | `/opt/knomit/lib/libonnxruntime.so` | Baked ONNX Runtime |
 
-Common additions for a container deployment:
+Everything in [`knomit.toml`](/docs/configuration/#knomittoml) can also live in
+`/data/knomit.toml` on the volume; the environment variables cover most keys, but
+not all (see the note in Configuration). Common additions:
 
 - **`KNOMIT_LOG_FORMAT=json`** — structured logs on stdout for your log driver.
   Leave `KNOMIT_CRASH_LOG` unset; the driver already captures fd 2.
-- **Synthesis credentials** — synthesis is the only LLM-backed feature. If you
-  run it, pass a provider key (e.g. `GOOGLE_AI_API_KEY`); a read-only or
-  browse-only instance needs none. See
+- **Synthesis credentials** — server-side synthesis runs need a provider key
+  (e.g. `GEMINI_API_KEY`); a read-only or browse-only instance needs none. See
   [LLM configuration](/docs/configuration/#llm-configuration).
 - **Metrics/pprof** — set `KNOMIT_RUNTIME_ADDR` to a **loopback** address and
-  reach it via a port-forward; never expose it. See
+  reach it with `docker exec` or a port-forward; never expose it. See
   [Observability](/docs/observability/).
+
+## Who may write
+
+Binding to `0.0.0.0` does not make the network trusted. knomit reads every
+request's origin and decides what it may do:
+
+- Over the plaintext port, a caller from **loopback** (`127.0.0.0/8`, `::1`) with
+  a Host name that is this machine is the anonymous local user and holds
+  `[auth] loopback_default`: by default read, write, `push:own`, operator and
+  admin. So does a process using the local socket, which the kernel identifies by
+  user id. A caller from anywhere else has **no principal**: it can read, and
+  every mutation is refused with 403 "Permission denied" (the write permission is
+  missing).
+- `[auth] require = true` removes the anonymous path entirely. The refusal then
+  comes earlier, as 403 "Authentication required", and covers reads too. It
+  refuses to boot if the local socket cannot be bound.
+- A caller can instead prove who it is: an **enrolled instance** by client
+  certificate on the mTLS listener, or a **bearer token** on the OAuth listener.
+  Both are covered on [Authentication & permissions](/docs/auth/).
+
+For a container this means the published port serves reads to everyone,
+**including your own browser on the same host**. A connection through
+`docker run -p` reaches knomit from Docker's network, not from loopback, so
+creating a repository from the UI is refused with 403. Writes need one of the
+identities above. A grant cannot fix this for a browser, because grants attach
+to certificate identities (`knomit grants add instance:<64-hex>@cert write`,
+run with `docker exec knomit knomit grants add …`) and the anonymous user comes
+from `[auth] loopback_default`. The paths that work:
+
+- On Linux, start the container with `--network host` instead of `-p`, which
+  makes a same-host browser a loopback caller again. That is Docker's
+  networking, not a knomit setting.
+- Enroll the instance that will write, grant it `write`, and have it create the
+  repository over the mTLS listener (see [Authentication &
+  permissions](/docs/auth/)).
+
+Decide this before you publish the port beyond your own machine, not after.
 
 ## Running a read-only / demo instance
 
@@ -95,16 +156,19 @@ runtime) and, across every surface:
 
 - **HTTP** — all mutating methods (`POST`/`PUT`/`PATCH`/`DELETE`) return `403`,
   and the built-in git smart-HTTP endpoint is not mounted — so a read-only
-  instance cannot serve an [OKF export](/docs/okf/), which reads that endpoint.
-  Point `knomit-okf` at a writable instance, or at the repo on disk. Both MCP dispatch
-  routes (`/repos/{repo}/branches/{branch}/mcp` and `/lenses/{lens}/mcp`) are
-  exempt from the method gate, because MCP reads are `POST`s; read-only-ness
-  there is enforced by tool filtering instead. The [lens](/docs/lenses/) REST
-  endpoints (`/lenses`, `/lenses/{lens}`) stay gated, so lens CRUD is blocked.
+  instance cannot serve an [OKF export](/docs/okf/), which reads that endpoint,
+  and cannot receive pushes from peers. Point `knomit-okf` at a writable
+  instance, or at the repo on disk. The three MCP dispatch routes
+  (`/repos/{repo}/branches/{branch}/mcp`, `/lenses/{lens}/mcp` and the
+  session-bound `/mcp`) are exempt from the method gate, because MCP reads are
+  `POST`s; read-only-ness there is enforced by tool filtering instead. The
+  [lens](/docs/lenses/) REST endpoints (`/lenses`, `/lenses/{lens}`) stay gated,
+  so lens CRUD is blocked, and the server log stream (`/api/v1/logs/events`)
+  is refused.
 - **MCP** — only the read tools are exposed (`knomit_query`, `knomit_explain`,
-  `knomit_repos`); the write tools (`knomit_learn`, `knomit_update`,
-  `knomit_retract`, `knomit_hypothesize`, `knomit_review`) are omitted from the
-  tool list.
+  `knomit_changes`, `knomit_skill`, `knomit_repos`, `knomit_bind`); the write
+  tools (`knomit_learn`, `knomit_update`, `knomit_retract`, `knomit_hypothesize`,
+  `knomit_review`, `knomit_experiment`) are omitted from the tool list.
 - **Origin sync** — pull-only: it fetches and fast-forwards from origin but never
   pushes back.
 
@@ -112,17 +176,78 @@ runtime) and, across every surface:
 docker run -d --name knomit-demo \
   -e KNOMIT_READ_ONLY=true \
   -p 19278:19278 -v knomit-demo:/data \
-  knomit:latest
+  ghcr.io/knomit/knomit:dev
 ```
 
 There is no environment variable for the origin URL: a repo is created from a
-remote through `POST /api/v1/repos` (`mode: "clone"`), and the `[remote]` /
-`KNOMIT_REMOTE_*` settings supply only the **credentials** that call uses. For a
-demo instance, create the repo once against the mounted volume; the origin is
-recorded in `control.db` and survives restarts.
+remote through `POST /api/v1/repos` (`mode: "clone"`, or `"subscribe"` to follow
+a branch read-only), and the `[remote]` / `KNOMIT_REMOTE_*` settings supply only
+the **credentials** that call uses. For a demo instance, create the repo once
+against the mounted volume; the origin is recorded in `control.db` and survives
+restarts.
 
 <Aside type="note">
 A read-only instance needs no LLM credentials at all — synthesis is a write path.
-Give its repo an origin and it will keep pulling consensus from `main` without
-ever writing back.
+Give its repo an origin and it will keep pulling consensus from the origin
+without ever writing back.
 </Aside>
+
+## Behind a reverse proxy
+
+The server serves from `/` and knows nothing about a path prefix. The web UI is
+built with relative asset URLs and works out its API base from where the page was
+loaded, so one build serves both `https://kb.example.com/` and
+`https://example.com/knomit/`. To mount it under a prefix:
+
+- The proxy **strips the prefix** before forwarding, so knomit still sees
+  `/`-rooted paths. The mount must be requested with its trailing slash
+  (`/knomit/`); the page redirects a prefixed mount that lacks it, because the
+  API base is the directory of the page URL.
+- Pass `text/event-stream` responses through unbuffered. The UI's live views, the
+  log stream and the MCP bridge all use them.
+- A same-host proxy reaches knomit from loopback. A request whose Host is a DNS
+  name other than `localhost` or the bind host is refused with 421, which is what
+  a DNS-rebound web page looks like. If the Host is your own proxy's name, list it
+  in `[auth] loopback_hosts` in `knomit.toml`.
+
+<Aside type="danger" title="loopback_hosts grants the anonymous user's permissions">
+Listing a name in `[auth] loopback_hosts` gives everyone who reaches knomit
+*through that name* the `loopback_default` permissions, because to knomit they are
+a loopback caller. Use it only when the proxy in front already decides who may
+reach knomit, and never list a name you do not control.
+</Aside>
+
+## TLS, sockets and the other listeners
+
+The main port speaks plain HTTP. Terminate HTTPS in front of it. knomit can open
+up to three more listeners, each off until configured, and `knomit serve` binds
+all of them **before** it reports ready: a taken port or a failed setup stops the
+boot instead of leaving a half-served instance.
+
+| Listener | Turned on by | Who it is for |
+|----------|--------------|---------------|
+| Local authenticated listener | on by default: `<home>/knomit.sock` (`/data/knomit.sock` in the image), or a named pipe on Windows | Processes on the same machine, identified by the user id the OS reports. `KNOMIT_SOCKET` / `socket` moves it |
+| mTLS listener | `[tls] addr` / `KNOMIT_TLS_ADDR`, e.g. `0.0.0.0:19279`, plus a certificate from `knomit identity install` | Enrolled instances of a fleet: fetch, and push of their own agent branch. With the address set but no certificate installed it logs a warning and serves plaintext only. A held address fails `knomit serve` |
+| OAuth listener | `[oauth] issuer` and `addr` (`KNOMIT_OAUTH_ISSUER`, `KNOMIT_OAUTH_ADDR`), set together | Clients that hold bearer tokens. The only place a bearer token is judged. Put a TLS-terminating proxy in front and set `issuer` to its public https URL; knomit never reads `X-Forwarded-*` |
+| Diagnostics port | `[runtime] addr` / `KNOMIT_RUNTIME_ADDR` | You, on loopback. See [Observability](/docs/observability/) |
+
+If peers reach this instance at an address other than the one it listens on (a
+TLS-terminating proxy, `tailscale serve`), list that address in
+`external_addresses` so the fleet's member record carries it. Behind a container
+runtime, publish the mTLS and OAuth ports yourself (`-p 19279:19279`).
+
+## Topologies
+
+- **Standalone server.** The command above. Repos are created through
+  `POST /api/v1/repos` or Manage, subject to who may write.
+- **Read-only demo.** `KNOMIT_READ_ONLY=true`, as above.
+- **Follower.** An instance whose repos were created with `mode: "subscribe"`
+  follows another instance's (or a forge's) branch read-only and serves what it
+  pulls. See [Remote sync](/docs/remote-sync/#creating-a-repo-from-a-remote).
+- **Host for a fleet.** An instance with `[tls] addr`, an installed certificate
+  and `external_addresses` serves its repos to enrolled peers over `/git`,
+  accepts their agent branches, and merges them according to the repo's
+  `consensus` setting. See [Fleet](/docs/fleet/) and
+  [Sync & consensus](/docs/sync-and-consensus/).
+- **Windows.** Server, desktop app and `kb` build and run on Windows, but no
+  Windows binary is released. See [Desktop app](/docs/desktop/#windows).

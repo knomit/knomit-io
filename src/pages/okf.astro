@@ -25,7 +25,7 @@ const steps = [
   {
     cmd: 'knomit-okf sync && git push',
     title: 'Refresh it whenever the knowledge moves',
-    body: 'An unchanged source does no work at all: a sync with nothing to do costs a fetch and about 70ms, so running it on a timer is free.',
+    body: 'An unchanged source does no work at all: a sync with nothing to do costs a fetch and about 70ms, so running it on a timer costs almost nothing.',
   },
 ];
 
@@ -33,7 +33,7 @@ const why = [
   {
     icon: 'distributed',
     title: 'An exit, not a silo',
-    body: 'Every other memory tool is somewhere your knowledge goes in and does not come out. An OKF bundle is plain markdown in a git repo, readable by any conformant consumer and by anyone with a text editor. Nothing about it depends on knomit still being in the picture.',
+    body: 'Most knowledge stores are somewhere your knowledge goes in and does not come out. An OKF bundle is plain markdown in a git repo, readable by any conformant consumer and by anyone with a text editor. Nothing about it depends on knomit still being in the picture.',
   },
   {
     icon: 'provenance',
@@ -137,8 +137,8 @@ const jsonLd = howToSchema({
       <aside class="okf-note k-reveal">
         <p class="okf-note__tag k-mono">Where knomit sits</p>
         <p class="k-text-2">
-          A knomit knowledge base is a <strong>private, agent-shaped</strong>
-          thing: facts under <code>kb/</code>, one branch per author, provenance
+          A knomit knowledge base is an <strong>agent-shaped</strong> working
+          original: facts under <code>kb/</code>, one branch per author, provenance
           edges, an embedding index. OKF is the <strong>portable,
           consumer-shaped</strong> thing.
         </p>

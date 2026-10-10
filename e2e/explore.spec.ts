@@ -99,6 +99,52 @@ test.describe('/explore live KB browser', () => {
     await expect(page.getByTestId('fact-body')).not.toBeEmpty();
   });
 
+  // The motif surfaces are fed by the bundle's frontmatter (bundleMotifs.ts).
+  // Asserted on shape, never on which motifs the KB currently holds.
+  test('the folder overview lists the motif vocabulary', async ({ page }) => {
+    await page.goto('/explore/');
+    await showTree(page);
+    const block = page.getByTestId('motifs-block');
+    await expect(block).toBeVisible();
+    // Resolved, not stuck: the count is drawn and neither failure state is.
+    await expect(page.getByTestId('motifs-count')).toBeVisible();
+    await expect(page.getByTestId('motifs-error')).toHaveCount(0);
+    await expect(page.getByTestId('motifs-empty')).toHaveCount(0);
+  });
+
+  test('a fact shows its motifs, and a motif pivots the library', async ({ page }) => {
+    await page.goto('/explore/');
+    await showRecent(page);
+    // Most facts in the public KB carry a motif, but the newest might not:
+    // walk the first few rows until one has an interactive cell.
+    const rows = page.getByTestId('chrono-item');
+    const cell = page.locator('[data-testid="motif-cell"][data-interactive="true"]').first();
+    let found = false;
+    for (let i = 0; i < 12 && !found; i++) {
+      await rows.nth(i).click();
+      await expect(page.getByTestId('fact-body')).toBeVisible();
+      found = await cell.waitFor({ state: 'visible', timeout: 1500 }).then(() => true, () => false);
+    }
+    expect(found, 'none of the first 12 facts carries a motif').toBe(true);
+
+    const name = (await cell.getAttribute('data-motif'))!;
+    // The count resolves from the bundle: a number, not the loading dots or the failure bang.
+    await expect(cell).toHaveAttribute('data-state', 'ok');
+    await expect(cell).toContainText(/\d+$/);
+
+    await cell.click();
+    const panel = page.getByTestId('motif-panel');
+    await expect(panel).toBeVisible();
+    await expect(page.getByTestId('motif-error')).toHaveCount(0);
+
+    await page.getByTestId('motif-pivot').first().click();
+    // The library is now the motif's carriers: the header names it, rows are facts.
+    await expect(page.getByTestId('library-motif')).toBeVisible();
+    await expect(page.getByTestId('library-leaf')).not.toBeEmpty();
+    expect(name.length).toBeGreaterThan(0);
+    await expect(page.getByTestId('chrono-item').first()).toBeVisible();
+  });
+
   test('shows the connection counts only while a fact is open', async ({ page }) => {
     await page.goto('/explore/');
     // Nothing is open on arrival (Path sort opens no fact), so the absent
@@ -478,7 +524,7 @@ test.describe('/explore guided tour', () => {
     // KB only grows — asserting 147/83 went red overnight at 169/92. What
     // matters is that real numbers are interpolated, not that they are any
     // particular numbers.
-    await expect(launcher).toContainText(/\d+ facts, \d+ commits of history/);
+    await expect(launcher).toContainText(/[\d,]+ facts, [\d,]+ commits of history/);
     // Label and href both derive from bundle.repo, so this catches a
     // retargeted KB_REPO_SLUG leaving the link pointing at the old repo.
     const link = launcher.getByRole('link');

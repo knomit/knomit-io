@@ -10,10 +10,11 @@ const toc = [
   { id: 'facts', label: 'Facts as markdown' },
   { id: 'kinds', label: 'Epistemic vs pragmatic' },
   { id: 'ontology', label: 'Ontology & inheritance' },
+  { id: 'roots', label: 'Three roots' },
   { id: 'clusters', label: 'How knowledge clusters' },
   { id: 'dedup', label: 'Subsumption' },
   { id: 'branches', label: 'Peers, branches & consensus' },
-  { id: 'provenance', label: 'Provenance & signing' },
+  { id: 'provenance', label: 'Identity & signing' },
   { id: 'temporal', label: 'The temporal graph' },
   { id: 'refs', label: 'Ref forms' },
   { id: 'synthesis', label: 'Synthesis & hypotheses' },
@@ -24,17 +25,20 @@ const toc = [
 
 <BaseLayout
   title="Concepts — typed facts, provenance, and agent consensus"
-  description="How knomit works: typed facts with provenance, ontology and inheritance, agent branches and consensus, the temporal graph, and the forms a ref can take."
+  description="How knomit joins many agents and knowledge bases: typed facts, the ontology, agent branches and consensus, signed provenance, and the temporal graph."
 >
   <section class="k-section concepts-hero k-grid-bg">
     <div class="k-container">
       <p class="k-eyebrow">Concepts</p>
       <h1 class="concepts-hero__title">How knomit works</h1>
       <p class="k-lead concepts-hero__lead">
-        knomit is a distributed, decentralized knowledge base built from facts on
-        git. A handful of ideas explain the whole system — each one falls out of a
-        single decision: make git the only source of truth, and represent
-        knowledge as facts, not documents.
+        knomit stitches many agents and many knowledge bases into one fabric
+        that accumulates knowledge, distills it, and puts it to use. Each agent
+        writes to a branch of its own, each knowledge base is a git repository
+        of facts, and merges carry what one agent learned to every agent that
+        shares the base. A handful of ideas explain the whole system, and most
+        of them follow from two decisions: git is the only source of truth, and
+        knowledge is stored as facts, not documents.
       </p>
       <nav class="concepts-toc" aria-label="On this page">
         {toc.map((t) => <a href={`#${t.id}`} class="concepts-toc__link">{t.label}</a>)}
@@ -61,6 +65,17 @@ const toc = [
           graph. Because it's just a file, humans edit it with any text editor and
           agents write it over MCP — both paths land at the same file, through the
           same operations.
+        </p>
+        <p>
+          Three optional fields help agents find and handle facts.
+          <code>motifs</code> name the general pattern a fact is an instance of,
+          so facts about unrelated subjects that follow the same pattern can be
+          found together. <code>context</code> carries short typed labels the
+          ontology declares, such as the task a fact belongs to.
+          <code>expires</code> marks when a fact stops being current: knomit
+          flags it as expired in results and never deletes it, leaving the
+          decision to a person or an agent.
+          <a href="/docs/concepts/#a-fact-is-a-markdown-file">Every field &rarr;</a>
         </p>
       </div>
       <div class="concept-block__art">
@@ -90,7 +105,14 @@ const toc = [
           what <em>is</em> — observations, concepts, syntheses, hypotheses —
           knowledge to weigh as evidence, with a confidence that can move;
           <strong>pragmatic</strong> facts prescribe what to <em>do</em> — policies
-          and heuristics — rules to follow or lean on.
+          and heuristics to follow or lean on, and <strong>signals</strong>.
+        </p>
+        <p>
+          A <code>signal</code> is a task, a message or an acknowledgement passed
+          between agents as a fact: consumed once, never weighed as evidence. The
+          verb is the topic (<code>tasks</code>, <code>inbox</code>), the
+          addressee is the path, and the sender is the commit author, so agents
+          sharing a knowledge base coordinate through it with no other channel.
         </p>
         <p>
           The leaf <code>type</code> refines this further
@@ -114,6 +136,7 @@ const toc = [
             <p class="kinds-col__h kinds-col__h--prag k-mono">pragmatic — what to do</p>
             <span class="kinds-tag kinds-tag--prag k-mono"><span class="kinds-glyph">⚖</span> policy</span>
             <span class="kinds-tag kinds-tag--prag k-mono"><span class="kinds-glyph">☼</span> heuristic</span>
+            <span class="kinds-tag kinds-tag--prag k-mono"><span class="kinds-glyph">→</span> signal</span>
           </div>
         </div>
       </div>
@@ -130,20 +153,26 @@ const toc = [
           inherited by <code>kb/invariants/concurrency/branch-lock/</code>.
         </p>
         <p>
-          The ontology is configurable. knomit ships with two:
+          The ontology is one file per knowledge base,
+          <code>.knomit/ontology.yaml</code>, and every agent that writes to the
+          base reads the same one. knomit ships three presets:
           <strong>General Knowledge</strong> — a broad taxonomy derived from
-          Wikipedia's main topic classifications, covering
-          <code>technology</code>, <code>science</code>, <code>geography</code>,
-          <code>history</code>, and more — and <strong>Source Code Knowledge</strong>
-          — a codebase taxonomy for AI agents, with topics like
-          <code>invariants</code>, <code>conventions</code>,
-          <code>decisions</code>, and <code>gotchas</code>.
+          Wikipedia's main topic classifications — <strong>Source Code
+          Knowledge</strong> — topics organised by epistemic role, such as
+          <code>invariants</code>, <code>decisions</code> and
+          <code>gotchas</code> — and <strong>Fleet</strong>, the registry of the
+          agents allowed to contribute. Knowledge bases can also be created from
+          <a href="/docs/templates/">templates</a> other knowledge bases publish.
         </p>
         <p>
-          An ontology also carries <strong>validation rules</strong> — expressions
-          evaluated against every fact on write — so it does not just say where a
-          claim is filed, it decides whether the claim may enter the corpus at
-          all. <a href="/docs/ontologies/">Writing an ontology</a>.
+          An ontology carries <strong>validation rules</strong> — expressions
+          evaluated against every fact on write — so it decides whether a claim
+          may enter the corpus at all. It also sets policy for every agent that
+          shares the base: <strong>attributes</strong> that switch signature
+          checks, automatic merges, conflict settlement and real-time sync; the
+          <strong>context keys</strong> facts may carry; and
+          <strong>guidance</strong> files that steer how agents review and
+          extend the corpus. <a href="/docs/ontologies/">Writing an ontology</a>.
         </p>
       </div>
       <div class="concept-block__art">
@@ -169,6 +198,48 @@ const toc = [
             </div>
           </div>
           <p class="tree-caption k-mono">a fact at a higher path is inherited by everything below it</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Three roots -->
+    <section id="roots" class="concept-block concept-block--reverse">
+      <div class="concept-block__text k-prose-content">
+        <h2>Three roots: knowledge, system, working files</h2>
+        <p>
+          A knowledge base is an ordinary git repository with three roots, each
+          with one kind of content and one rule for who writes it.
+          <code>kb/</code> holds the facts: indexed, searched, merged, exported.
+          <code>.knomit/</code> holds the system — the ontology, trigger
+          scripts, recipes, skills, guidance and templates — and changes only
+          through git, so a change to how the base operates is reviewed like
+          any other merge. Agents can read a system file by its exact path, and
+          no fact tool can write one.
+        </p>
+        <p>
+          <code>artifacts/&lt;area&gt;/&lt;name&gt;</code> holds agents'
+          working files: drafts, run reports, a job's bookkeeping. An agent
+          writes one by naming its path; it is never indexed, queried or
+          exported, and fires no trigger, so working state never pollutes the
+          knowledge. <a href="/docs/concepts/#what-a-knowledge-base-repo-contains">What a knowledge base contains &rarr;</a>
+        </p>
+      </div>
+      <div class="concept-block__art">
+        <div class="uri-card k-mono" aria-hidden="true">
+          <div class="uri-row">
+            <span class="uri-type">facts</span>
+            <div class="uri-text"><span class="uri-host">kb/</span><span class="uri-path">policy/refunds/3c9e1a20.md</span></div>
+          </div>
+          <div class="uri-divider"></div>
+          <div class="uri-row">
+            <span class="uri-type">system</span>
+            <div class="uri-text"><span class="uri-host">.knomit/</span><span class="uri-path">ontology.yaml · triggers/ · recipes/ · skills/ · guidance/</span></div>
+          </div>
+          <div class="uri-divider"></div>
+          <div class="uri-row">
+            <span class="uri-type">working</span>
+            <div class="uri-text"><span class="uri-host">artifacts/</span><span class="uri-path">triage/run-report.md</span></div>
+          </div>
         </div>
       </div>
     </section>
@@ -282,17 +353,21 @@ const toc = [
         <h2>Subsumption — never learned twice</h2>
         <p>
           When a fact is written via <code>knomit_learn</code>, knomit runs a
-          near-duplicate check in the same category using embedding similarity
-          before committing. If a match is found, the incoming fact
-          <strong>subsumes</strong> the existing one — or is absorbed by it —
-          producing a single fact that carries refs to both sources. Two chunks
-          that say the same thing never pile up.
+          near-duplicate check over its category, by path prefix and embedding
+          similarity, before committing. If a match is found, the two fold into one fact at
+          the existing path: the more confident version supplies the claim,
+          confidence takes the higher value, refs, domains and entities are
+          unioned, and motifs are unioned up to three, the winner's first. Two facts that say the same thing never pile up.
         </p>
         <p>
-          There is a special case worth knowing: a <code>hypothesis</code> is
-          subsumed by a newer <code>observation</code> when the world catches up
-          to the prediction. The fact survives, its type transitions, and the
-          git history records the exact moment evidence closed the loop.
+          The <code>sources</code> count grows only when the incoming fact is
+          not a hypothesis and cites evidence the existing fact does not
+          already carry: re-reading the same source is not corroboration. And
+          when a fact that is not itself a hypothesis settles a
+          <code>hypothesis</code>, the new fact is written at its own path, cites the hypothesis, and retracts it in
+          the same commit, so git history records the moment evidence closed
+          the loop. Because peers share a base by merging, this is what keeps
+          learning paid for once across every agent that uses it.
         </p>
       </div>
       <div class="concept-block__art">
@@ -306,24 +381,24 @@ const toc = [
             <div class="subsume-fact subsume-fact--dup k-mono">
               <span class="subsume-fact__type">◉ observation</span>
               <span class="subsume-fact__title">KPMG survey: employee AI-agent adoption at 68%</span>
+              <span class="subsume-fact__meta">conf 0.78 · ai, workforce</span>
               <span class="subsume-tag">sim 0.94 · near-duplicate</span>
             </div>
           </div>
-          <div class="subsume-glyph k-mono">knomit_learn · subsume ↓</div>
+          <div class="subsume-glyph k-mono">knomit_learn · merge ↓</div>
           <div class="subsume-merged k-mono">
             <div class="subsume-merged__hd">
               <span class="subsume-merged__type">◉ observation</span>
-              <span class="subsume-merged__conf">conf 0.78 ↑</span>
+              <span class="subsume-merged__conf">conf 0.78 (max)</span>
             </div>
-            <span class="subsume-merged__title">KPMG: 68% of employees are using AI agents daily</span>
+            <span class="subsume-merged__title">KPMG survey: employee AI-agent adoption at 68%</span>
             <div class="subsume-merged__tags">
               <span class="subsume-tag-domain">ai</span>
               <span class="subsume-tag-domain">agents</span>
               <span class="subsume-tag-domain">workforce</span>
             </div>
             <div class="subsume-refs">
-              <span class="subsume-ref">⊃ kb/…/3fa17c8.md</span>
-              <span class="subsume-ref">⊃ kb/…/a9d4bf2.md</span>
+              <span class="subsume-ref">refs: kpmg.com/…/ai-agents.html</span>
             </div>
           </div>
         </div>
@@ -335,20 +410,30 @@ const toc = [
       <div class="concept-block__text k-prose-content">
         <h2>Peers, branches &amp; consensus</h2>
         <p>
-          knomit is distributed and decentralized by construction. Every peer —
-          human or agent — operates on a long-lived personal branch
-          (<code>agent/&lt;id&gt;</code>, derived from machine hostname plus a
-          short hash of its key). All learn, update, and retract operations land
-          on that branch. <strong>No peer writes <code>main</code> directly.</strong>
+          knomit is distributed and decentralized by construction. Every
+          instance owns one long-lived agent branch per knowledge base
+          (<code>agent/&lt;id&gt;</code>) and is its only writer. Knowledge
+          climbs a ladder: an <strong>experiment</strong>
+          (<code>exp/&lt;name&gt;</code>, local and never pushed) for work that
+          may not survive, then the <strong>agent branch</strong>, then the
+          <strong>consensus branch</strong> every peer agrees on — usually
+          <code>main</code>, recorded per knowledge base and taken from the
+          remote's default branch when a peer first clones it.
+          <strong>No agent writes the consensus branch directly.</strong>
         </p>
         <p>
-          Consensus is reached deliberately: a peer's facts are reviewed,
-          approved, and merged into <code>main</code> — by a Librarian agent, a CI
-          policy, or a human merge. <strong>No peer merges another's branch
-          directly</strong>; <code>main</code> is the single point of agreement.
-          Each peer then pulls <code>main</code> and merges it locally, inheriting
-          the agreed truth instead of re-deriving it. Learning effort is shared,
-          not re-paid.
+          The consensus branch advances by merge: a human or a CI job reviewing
+          a pushed agent branch, an operator merging one from the web UI, or,
+          with <code>consensus: auto</code>, a knomit host merging every branch
+          a peer pushes to it. Each peer merges the consensus branch back on
+          every sync, inheriting the agreed knowledge instead of re-deriving it.
+          When two branches changed the same fact, the repository's
+          <code>conflicts</code> policy can merge the two versions field by
+          field, the more confident value winning each field both changed and a
+          retraction winning over an edit; every settled conflict is recorded as
+          a <code>Knomit-Merge</code> or <code>Knomit-Conflict</code> trailer on
+          the merge commit.
+          <a href="/docs/sync-and-consensus/">Sync &amp; consensus</a> ·
           <a href="/blog/consensus-by-merge/">Why parallel writers don't conflict &rarr;</a>
         </p>
       </div>
@@ -358,11 +443,11 @@ const toc = [
         <div class="branch-diagram">
           <svg
             class="branch-svg"
-            viewBox="0 0 460 340"
+            viewBox="0 0 460 290"
             fill="none"
             xmlns="http://www.w3.org/2000/svg"
             role="img"
-            aria-label="A git graph: two agent branches fork off main, each committing learn, update, distill and retract operations on its own, then merge back into main, where a final merge-and-distill commit becomes HEAD."
+            aria-label="A git graph: two agent branches fork off main, each committing learn, update, distill and retract operations on its own, then merge back into main; main's latest merge is HEAD."
           >
             <defs>
               <filter id="bg-glow" x="-60%" y="-60%" width="220%" height="220%">
@@ -371,10 +456,10 @@ const toc = [
               </filter>
             </defs>
             <!-- Trunk: main -->
-            <line x1="230" y1="14" x2="230" y2="326" stroke="var(--k-brand)" stroke-width="2.5" stroke-linecap="round"/>
+            <line x1="230" y1="14" x2="230" y2="272" stroke="var(--k-brand)" stroke-width="2.5" stroke-linecap="round"/>
             <!-- Branch A: agent/mindev.local-8ef0cd32 (left) -->
-            <path d="M230 72 C168 92 112 118 112 158 C112 198 168 222 230 240" stroke="var(--k-ref)" stroke-width="2" stroke-linecap="round"/>
-            <!-- Branch B: agent/research-7f3 (right) -->
+            <path d="M230 72 C168 92 112 118 112 158 C112 214 168 252 230 272" stroke="var(--k-ref)" stroke-width="2" stroke-linecap="round"/>
+            <!-- Branch B: agent/research-7f3a91c2 (right) -->
             <path d="M230 100 C288 120 346 144 346 172 C346 202 288 222 230 238" stroke="var(--k-brand-2)" stroke-width="2" stroke-linecap="round"/>
             <!-- Trunk commits -->
             <circle cx="230" cy="22" r="5" fill="var(--k-brand)"/>
@@ -382,7 +467,6 @@ const toc = [
             <circle cx="230" cy="100" r="5" fill="var(--k-brand)"/>
             <circle cx="230" cy="238" r="5" fill="var(--k-brand)"/>
             <circle cx="230" cy="272" r="7" fill="var(--k-brand)" filter="url(#bg-glow)"/>
-            <circle cx="230" cy="318" r="5" fill="var(--k-brand)"/>
             <!-- Branch A commits (left) -->
             <circle cx="112" cy="128" r="5.5" fill="var(--k-ref)"/>
             <circle cx="112" cy="162" r="5.5" fill="var(--k-ref)"/>
@@ -399,16 +483,15 @@ const toc = [
             <text aria-hidden="true" x="6" y="157" font-size="8" fill="var(--k-ref)" font-family="monospace" opacity="0.85">mindev</text>
             <text aria-hidden="true" x="6" y="168" font-size="7.5" fill="var(--k-ref)" font-family="monospace" opacity="0.6">.local-8ef0cd32</text>
             <text aria-hidden="true" x="352" y="148" font-size="8" fill="var(--k-brand-2)" font-family="monospace" opacity="0.85">agent/</text>
-            <text aria-hidden="true" x="352" y="159" font-size="8" fill="var(--k-brand-2)" font-family="monospace" opacity="0.85">research-7f3</text>
+            <text aria-hidden="true" x="352" y="159" font-size="8" fill="var(--k-brand-2)" font-family="monospace" opacity="0.85">research-7f3a91c2</text>
             <!-- Commit op labels -->
             <text aria-hidden="true" x="120" y="132" font-size="7.5" fill="var(--k-text-muted)" font-family="monospace">learn</text>
             <text aria-hidden="true" x="120" y="166" font-size="7.5" fill="var(--k-text-muted)" font-family="monospace">update</text>
             <text aria-hidden="true" x="120" y="196" font-size="7.5" fill="var(--k-temporal)" font-family="monospace">retracted</text>
             <text aria-hidden="true" x="354" y="152" font-size="7.5" fill="var(--k-text-muted)" font-family="monospace">learn</text>
             <text aria-hidden="true" x="354" y="182" font-size="7.5" fill="var(--k-text-muted)" font-family="monospace">distill</text>
-            <text aria-hidden="true" x="236" y="242" font-size="7.5" fill="var(--k-text-muted)" font-family="monospace">← merge research</text>
-            <text aria-hidden="true" x="236" y="276" font-size="7.5" fill="var(--k-brand)" font-family="monospace">← merge + distill</text>
-            <text aria-hidden="true" x="236" y="322" font-size="7.5" fill="var(--k-brand)" font-family="monospace">HEAD</text>
+            <text aria-hidden="true" x="236" y="242" font-size="7.5" fill="var(--k-text-muted)" font-family="monospace">← merge agent/research…</text>
+            <text aria-hidden="true" x="236" y="276" font-size="7.5" fill="var(--k-brand)" font-family="monospace">← merge agent/mindev… · HEAD</text>
           </svg>
         </div>
       </div>
@@ -417,19 +500,25 @@ const toc = [
     <!-- Provenance -->
     <section id="provenance" class="concept-block concept-block--reverse">
       <div class="concept-block__text k-prose-content">
-        <h2>Provenance & signing</h2>
+        <h2>Identity, provenance &amp; signing</h2>
         <p>
           Every write — learn, update, retract, subsume, sync — is a commit
           authored under an identity-carrying address. Agent commits use
           <code>&lt;agent-id&gt;+&lt;operation&gt;@agents.knomit.io</code> as the
           author; humans use their own email with <code>+operation</code>
-          subaddressing. Commits are signed with the agent's Ed25519 key.
+          subaddressing. The agent id is computed once, on an instance's first
+          boot, from its hostname and a short hash of its key, then stored and
+          kept: renaming the host or rotating the key does not rename the
+          branch.
         </p>
         <p>
-          That makes the <strong>(who, what, when, why)</strong> tuple
-          cryptographic rather than hand-waved. The same key that signs commits
-          also names the branch and authenticates remote sync — one identity,
-          end to end.
+          Every commit an instance writes is signed with its Ed25519 key, which
+          makes the <strong>(who, what, when, why)</strong> tuple cryptographic
+          rather than hand-waved. Signatures are checked once, where commits are
+          accepted into a knowledge base, against the agents' records in the
+          <a href="/docs/fleet/">fleet repository</a>; the knowledge base's
+          <code>verify_signatures</code> attribute chooses <code>off</code>,
+          <code>log</code> or <code>enforce</code>.
           <a href="/security/">What that key protects &rarr;</a>
         </p>
       </div>
@@ -524,7 +613,8 @@ const toc = [
           Refs anchor a fact to its source material — the evidence behind the
           claim. A ref points to another fact, to a source file at a given
           commit, or to any web resource: an article, a paper, a press release.
-          Refs are stored verbatim — never rewritten or resolved.
+          A ref to this repo is stored in its canonical <code>kb://</code>
+          form; every other ref is stored exactly as written, never resolved.
         </p>
         <table>
           <thead>
@@ -532,7 +622,8 @@ const toc = [
           </thead>
           <tbody>
             <tr><td><code>kb/technology/debugging/pool-fix.md</code></td><td>Local fact in this knowledge base</td></tr>
-            <tr><td><code>kb://&lt;id12&gt;/kb/…</code></td><td>Fact in another repo mounted in this lens</td></tr>
+            <tr><td><code>kb://&lt;id12&gt;/kb/…</code></td><td>Fact in another repo, such as another mount of a lens</td></tr>
+            <tr><td><code>.knomit/triggers/triage.js</code></td><td>System file in this repo, by exact path</td></tr>
             <tr><td><code>src://&lt;repo&gt;/&lt;path&gt;@&lt;commit&gt;:&lt;blob&gt;</code></td><td>Source file, pinned to a commit and a blob — so it resolves even after a rename</td></tr>
             <tr><td><code>https://…</code></td><td>Any web resource — article, paper, press release</td></tr>
           </tbody>
@@ -547,7 +638,7 @@ const toc = [
           <div class="uri-divider"></div>
           <div class="uri-row">
             <span class="uri-type">source</span>
-            <div class="uri-text"><span class="uri-scheme">src://</span><span class="uri-host">knomit/internal/store/</span><span class="uri-path">service.go@cfef409</span></div>
+            <div class="uri-text"><span class="uri-scheme">src://</span><span class="uri-host">7b4887ce51d9/internal/store/</span><span class="uri-path">service.go@&lt;commit&gt;:&lt;blob&gt;</span></div>
           </div>
           <div class="uri-divider"></div>
           <div class="uri-row">
@@ -556,8 +647,8 @@ const toc = [
           </div>
           <div class="uri-divider"></div>
           <div class="uri-row">
-            <span class="uri-type">commit</span>
-            <div class="uri-text"><span class="uri-scheme">knomit-kb@</span><span class="uri-host">core/</span><span class="uri-path">124c68ec · 2026-06-26</span></div>
+            <span class="uri-type">system</span>
+            <div class="uri-text"><span class="uri-host">.knomit/triggers/</span><span class="uri-path">triage.js</span></div>
           </div>
         </div>
       </div>
@@ -585,6 +676,12 @@ const toc = [
           <strong>Skipping is the expected default</strong>; a hypothesis is
           only written when it fills a genuinely load-bearing gap that new
           evidence could close.
+        </p>
+        <p>
+          Any agent bound to a knowledge base can take a turn at both passes,
+          and the knowledge base steers all of them the same way through
+          <a href="/docs/ontologies/#guidance">guidance files</a> named in its
+          ontology, read from the consensus branch.
         </p>
       </div>
       <div class="concept-block__art">
@@ -626,10 +723,12 @@ const toc = [
         <p>
           Most systems <strong>retrieve</strong> what is similar to a query.
           knomit also <strong>discovers</strong>: an effort dial seeds from
-          <em>bridges</em> — facts sharing a domain or entity yet sitting in
-          different similarity clusters — and proposes the keystone those bridges
-          imply. Load-bearing facts hide in exactly the cross-cluster links that
-          similarity-only retrieval is structurally blind to.
+          <em>bridges</em>, which are facts about different subjects that name
+          the same motif yet sit in different similarity clusters, and proposes
+          the consequence or keystone those bridges imply. A shared domain or
+          entity alone does not make a bridge. Keystones come from
+          <code>knomit_review</code> at <code>high</code> effort, and are kept
+          only when enough live facts depend on them.
           <a href="/docs/discovery/">How discovery works &rarr;</a>
         </p>
       </div>
@@ -643,27 +742,30 @@ const toc = [
       <div class="concept-block__text k-prose-content">
         <h2>The MCP operational loop</h2>
         <p>
-          MCP is not an optional add-on — it is the primary interface for
-          humans (via Claude Code and editors) and agents alike.
-          <a href="/docs/mcp-tools/">Eight tools</a> cover the full fact
-          lifecycle; their descriptions are written as prompt engineering for
-          the calling model, so none of them need scaffolding to be called
-          correctly.
+          MCP is the primary interface for humans and agents alike, through any
+          MCP client and the web UI. <a href="/docs/mcp-tools/">Twelve tools</a>
+          cover the full lifecycle; their descriptions are written as prompt
+          engineering for the calling model, so none of them need scaffolding to
+          be called correctly.
         </p>
         <p>
-          Each agent connects to a <strong>branch-scoped endpoint</strong>, so
-          reads and writes land on its own branch automatically — isolation is
-          structural, not enforced by convention. One server instance serves
-          every repo and <a href="/docs/lenses/">lens</a>: each handler resolves
-          its binding from the request, and the instructions the model receives
-          are computed per session from that binding.
+          One server serves every repo and <a href="/docs/lenses/">lens</a> it
+          mounts. A client connects to an endpoint scoped to one of them, or to
+          the unscoped endpoint and calls <code>knomit_bind</code> for a handle
+          it passes on every call. Either way, writes land on the instance's own
+          agent branch, or its open experiment — isolation is structural, not a
+          convention. Each write can carry a <code>trace</code> that is stamped
+          on its commits, so one task's writes can be found later with
+          <code>git log</code>, and <code>knomit_changes</code> reports what
+          changed under a folder since a bookmark, which is how agents sharing a
+          knowledge base notice each other's work.
         </p>
       </div>
       <div class="concept-block__art">
         <div class="mcp-card" aria-hidden="true">
           <div class="mcp-row">
             <span class="mcp-phase k-mono">orient</span>
-            <span class="mcp-tool k-mono">knomit_repos</span>
+            <span class="mcp-tool k-mono">knomit_repos · knomit_bind</span>
           </div>
           <div class="mcp-row">
             <span class="mcp-phase k-mono">recall</span>
@@ -674,12 +776,20 @@ const toc = [
             <span class="mcp-tool k-mono">knomit_learn</span>
           </div>
           <div class="mcp-row">
-            <span class="mcp-phase k-mono">trace</span>
+            <span class="mcp-phase k-mono">explain</span>
             <span class="mcp-tool k-mono">knomit_explain</span>
           </div>
           <div class="mcp-row">
             <span class="mcp-phase k-mono">revise</span>
             <span class="mcp-tool k-mono">knomit_update · knomit_retract</span>
+          </div>
+          <div class="mcp-row">
+            <span class="mcp-phase k-mono">watch</span>
+            <span class="mcp-tool k-mono">knomit_changes</span>
+          </div>
+          <div class="mcp-row">
+            <span class="mcp-phase k-mono">isolate</span>
+            <span class="mcp-tool k-mono">knomit_experiment</span>
           </div>
           <div class="mcp-row">
             <span class="mcp-phase k-mono">synthesize</span>

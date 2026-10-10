@@ -1,5 +1,6 @@
 import type { APIRoute } from 'astro';
 import { getCollection } from 'astro:content';
+import { SITE_DESCRIPTION } from '../lib/site';
 
 export const GET: APIRoute = async ({ site }) => {
   const origin = site!.origin;
@@ -8,7 +9,7 @@ export const GET: APIRoute = async ({ site }) => {
     .filter((p) => !p.data.draft)
     .sort((a, b) => b.data.pubDate.getTime() - a.data.pubDate.getTime());
 
-  const out: string[] = ['# knomit — full text', ''];
+  const out: string[] = ['# knomit — full text', '', `> ${SITE_DESCRIPTION}`, ''];
 
   for (const d of docs) {
     out.push(`\n\n---\n# ${d.data.title ?? d.id}`);

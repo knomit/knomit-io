@@ -11,7 +11,10 @@ runs through one engine, driven by either the MCP tools
 [`knomit_hypothesize`](/docs/mcp-tools/#knomit_hypothesize--generate-predictions))
 or the HTTP synthesis-run endpoints. The work is **work-stealing**: it borrows
 cycles from the calling model, one work item at a time, rather than running a
-separate headless service.
+separate headless service. Any agent bound to a knowledge base can take a turn,
+so the distilling is shared across the agents that use it, and the knowledge
+base itself can steer how all of them reason through
+[guidance files](#guidance-and-what-the-model-sees).
 
 ## The pipeline
 
@@ -24,14 +27,20 @@ served, until the phase completes. Sessions track three independent axes:
 
 ### Answering the right work item
 
-Each work item carries an `id`. Echo it back as the optional `item_id` parameter
-on the next `knomit_review` / `knomit_hypothesize` call, and the server rejects
-the call if that item is no longer the current one. This matters because the
-queue can grow between rendering an item and answering it — applying a distill
-item enqueues RAPTOR follow-up items — so without the id a response reasoned
-about against one item's facts can be applied to a different one. Omitting
-`item_id` preserves the previous behaviour of answering whatever item is
-current.
+Each work item carries an `id`. Echo it back as `item_id` with your response,
+and the server rejects the call if that item is no longer the current one. This
+matters because the queue can grow between rendering an item and answering it —
+applying a distill item enqueues RAPTOR follow-up items — so without the id a
+response reasoned about against one item's facts can be applied to a different
+one. `knomit_review` **requires** `item_id` with every response;
+`knomit_hypothesize` accepts a response without one and applies it to whatever
+item is current.
+
+A session belongs to the knowledge base, not to the caller. Starting
+`knomit_review` resumes the session already in progress there (the result says
+`resumed: true`); every call after the first passes its `session_id`. A start
+whose scope or effort differs from the live session is refused, and
+`takeover: true` abandons that session and starts a new one.
 
 A response is decoded and validated before the item is claimed, and the claim
 itself is an atomic compare-and-swap, so a failed validation leaves the item
@@ -42,8 +51,8 @@ per item, so a large cluster arrives as several items rather than one oversized
 prompt. Prune clusters are not chunked.
 
 A single item can still exceed what one tool result should carry, so an
-oversized item is additionally **paged** at roughly 24 KiB of delivered facts
-per page. A result carrying `more_available: true` is a partial view of the
+oversized item is additionally **paged** so that each delivered page, prompt
+included, stays under 32 KiB (about 19.5 KiB of it facts). A result carrying `more_available: true` is a partial view of the
 item: keep calling with `session_id`, `item_id` and the next `page` until it is
 false, then answer once with the `completion_token` from the final page. The
 token is the server's proof you read every page, and a response without it is
@@ -62,11 +71,18 @@ heuristics) never enter synthesis.
 
 | Stage | What it does |
 |-------|--------------|
-| **Prune** (dedup) | Detects near-duplicate facts and merges them. Tiebreak: a non-hypothesis always wins; then higher confidence; then more sources. Domains and entities are unioned. |
+| **Prune** (dedup) | Before any prune item is served, near-duplicates within each cluster are merged without the model: only facts of the same kind merge, a non-hypothesis always wins over a hypothesis, then higher confidence, then more sources. Domains and entities are unioned and the loser's `sources` move to the winner, except a hypothesis loser's, which count for nothing. The model then judges each remaining cluster: it keeps, updates or retracts each fact, and may merge several into one new fact. |
 | **Distill** (synthesis) | Clusters related facts and distills them into a higher-order `synthesis` fact. Evidence weight uses `SumProductNorm = Σ(c·s) / (Σ(c·s)+1)`; hypothesis sources are excluded from the weight. |
 | **Reflect** (methodology) | Reflects on hypothesis→outcome transitions to record reasoning lessons as `methodology` facts. Reinforcement appends the methodology's path to the transition fact's `refs` — git is the only source of truth, no side-channel counter. New-methodology proposals are hard-capped (`KNOMIT_REFLECT_PROPOSE_CAP`, default 1) and gated by a novelty/cosine floor (`KNOMIT_REFLECT_NOVELTY_THRESHOLD`). |
 
 `knomit_review` does **not** generate new hypotheses.
+
+Review also maintains the corpus's **motifs**. A prune merge or a distilled fact
+may name motifs of its own (at most three per fact). At `medium` and `high`
+effort, motif items show the model pairs of motif names that may name the same
+pattern, and ask it to define motifs; its verdicts decide which spellings group
+together, so a `motifs` filter finds facts about unrelated subjects that follow
+the same pattern. At `normal` effort these items are skipped.
 
 `KNOMIT_REFLECT_NOVELTY_THRESHOLD` defaults to the **active embedding model's
 calibrated `ReflectNovelty` value** — `0.69` under the default EmbeddingGemma —
@@ -102,12 +118,13 @@ constant in the code, not a setting — there is nothing to tune.
 Walks `synthesis` facts on the agent branch and, per item, lets the model decide
 whether to write a falsifiable `hypothesis` fact (skipping is the expected outcome
 for most). It is a **distinct, user-initiated** operation — never an auto-follow-up
-to `review`. On a later dedup collision with a confirmed observation, the
-hypothesis is retracted and the observation links to it via `refs`.
+to `review`. When a later fact that is not a hypothesis matches it on learn,
+the hypothesis is retracted and the new fact links to it via `refs`.
 
 <Aside type="tip">
-Run `hypothesize` at higher `effort` to surface emergent **keystones** — unstated
-load-bearing premises ranked by blast radius. See [Emergent discovery](/docs/discovery/).
+Run `review` at `high` effort to surface emergent **keystones** as well: unstated
+load-bearing premises, kept only when they reach enough live dependents. See
+[Emergent discovery](/docs/discovery/).
 </Aside>
 
 ## Methodology in the loop
@@ -119,8 +136,35 @@ default 0.15). Methodology facts are identified by `type=methodology`, never by
 path. The server never auto-cites — it injects candidate methodology into the
 prompt and the model decides.
 
+## Guidance, and what the model sees
+
+A knowledge base can add its own instructions to these prompts with
+[`guidance` files](/docs/ontologies/#guidance): markdown files under
+`.knomit/guidance/`, named per topic in the ontology, one key for
+`hypothesize` and one for `review`. They are read with the ontology at the tip
+of the consensus branch, so every agent maintaining the knowledge base works
+under the same instructions, and an edit takes effect on the next work item.
+
+- A **hypothesize** item gets the root file, then the nearest declaring topic's
+  file, then that topic's validation rules, after the methodology section and
+  before the workflow steps, under a header naming the branch and commit the
+  text was read at.
+- A **prune**, **distill** or **reflect** item gets one block per distinct file,
+  placed before any text taken from the facts. Motif and discovery items get
+  none.
+- Each section is capped at 16 KiB, cut at a line and marked.
+
+Guidance is the only instruction text a knowledge base contributes. Neither
+`knomit_review` nor `knomit_hypothesize` takes an instruction argument. Facts
+reach the model as **data**: they travel in the JSON payload of the work item,
+`context` map included. No fact's path, title, body or context value is ever
+placed in a guidance section, and a test over the prompt builders enforces that
+no `context` value is formatted into prompt text.
+
 ## LLM provider
 
-Synthesis and distillation use an LLM, configured by `[llm]` (default provider
+Through `knomit_review` and `knomit_hypothesize`, the calling model does the
+reasoning. Only the HTTP synthesis-run endpoint, which runs a whole session
+headless, calls an LLM of its own, configured by `[llm]` (default provider
 `gemini`, model `gemini-2.5-flash`). Embeddings are a separate, local model — see
 [Embeddings](/docs/embeddings/) and [Configuration](/docs/configuration/#llm-configuration).

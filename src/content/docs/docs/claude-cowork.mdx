@@ -1,75 +1,105 @@
 ---
-title: knomit for Claude Cowork — MCP memory integration
-description: Register the knomit stdio MCP bridge in Claude Cowork's config — the same wiring as Claude Desktop, no Cowork-specific code.
+title: knomit for Claude Cowork — MCP integration
+description: Register the kb stdio bridge in Claude Cowork's MCP config, scoped to a repo or lens or left unscoped so the agent binds itself. No Cowork-specific code.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-Claude Cowork talks to knomit through the **same stdio MCP bridge** that every
-other MCP client uses. There is no Cowork-specific code in knomit — you register
-`knomit-bridge` as an MCP server in Cowork's configuration, exactly as you would
-for Claude Desktop.
+Claude Cowork talks to knomit through the same stdio MCP bridge that every other
+MCP client uses. There is no Cowork-specific code in knomit: you register the
+`kb` binary as an MCP server in Cowork's configuration, exactly as you would for
+Claude Desktop. This host adapter is deliberately thin. It is the MCP wiring and
+nothing else, which makes it a good fit for work that is not a codebase — a
+Cowork session can read and write any repo or lens on the server.
 
 ## Prerequisites
 
 1. **A running knomit server.** The simplest path is the
-   [desktop app](/docs/desktop/) (`Knomit.app` / `knomit-desktop`), which boots
-   the server on a local port and writes the `server.json` lockfile the bridge
-   uses to discover it. A bare `knomit serve` on `localhost:19278` works too.
-2. **The `knomit-bridge` binary on disk.** The desktop app symlinks it into
-   `$KNOMIT_HOME/bin` (default `~/.knomit/bin`) on launch; otherwise point at
-   the built binary.
+   [desktop app](/docs/desktop/), which boots the server on a local port and
+   writes the `server.json` lockfile the bridge uses to find it. A bare
+   `knomit serve` on `localhost:19278` works too.
+2. **The `kb` binary on disk.** The desktop app places it in `$KNOMIT_HOME/bin`
+   (default `~/.knomit/bin` on macOS and Linux,
+   `%LOCALAPPDATA%\knomit\home\bin\kb.exe` on Windows) on launch; otherwise point at a built `dist/kb`.
+   Use an absolute path in the config, since the host does not necessarily share
+   your shell's `PATH`.
 
 ## Configure Cowork
 
-Add `knomit-bridge` as an MCP server in the Claude Cowork config file (see
-Cowork's own documentation for the exact config-file location and schema). The
-entry mirrors a Claude Desktop server:
+Cowork runs in the Claude desktop app and uses the MCP servers configured
+there, so add `kb` to the Claude Desktop config:
+`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS,
+`%APPDATA%\Claude\claude_desktop_config.json` on Windows. Claude Desktop opens
+one connection per configured server and shares it across Cowork sessions. The
+entry:
 
 ```jsonc
 {
   "mcpServers": {
-    "knomit": {
-      "command": "/Users/<you>/.knomit/bin/knomit-bridge"
-    }
-  }
-}
-```
-
-Optional arguments select a different repo, or bind the server to a
-[lens](/docs/lenses/) instead:
-
-```jsonc
-{
-  "mcpServers": {
-    "knomit": {
-      "command": "/Users/<you>/.knomit/bin/knomit-bridge",
+    "knomit-repo-work": {
+      "command": "/Users/<you>/.knomit/bin/kb",
       "args": ["--repo", "work"]
     }
   }
 }
 ```
 
-- Exactly one of `--repo <name>` or `--lens <name>` is required — there is no
-  default repo to fall back to. `--lens` connects to
-  `/api/v1/lenses/<name>/mcp` instead, and the two are mutually exclusive.
-- There is no `--profile` flag. Profile is a per-repo server setting; the
-  `?profile=` query parameter is deprecated and ignored.
-- If the server is not on the default port and the lockfile isn't found, pass the
-  base URL as a positional argument (or set `KNOMIT_BASE_URL`), e.g.
-  `"args": ["http://localhost:19278"]`.
+Three ways to scope the connection:
 
-Once registered, Cowork sees the eight knomit MCP tools — see
-[MCP tools](/docs/mcp-tools/). `knomit_repos` is the one to call first: it takes
-no parameters and returns the binding name plus a mount table (name, repo id,
-branch, `read` or `read+write` role, and the `src://` source slug where one is
-set), which tells a Cowork session what it is actually pointed at.
+| `args` | Connection |
+|--------|------------|
+| `["--repo", "work"]` | Fixed to the repo `work`. |
+| `["--lens", "work"]` | Fixed to the [lens](/docs/lenses/) `work`; one write repo, the rest read-only. |
+| `[]` (or no `args`) | **Unscoped.** The agent binds itself, see below. |
+
+`--repo` and `--lens` are mutually exclusive, and a flag given with an empty value
+(`--repo ""`) is an error: it never falls through to unscoped mode. Name the entry
+`knomit-repo-<name>` or `knomit-lens-<name>`, as `kb claude init` does, so a repo
+and a lens with the same name cannot collide on one key.
+
+### Unscoped mode
+
+Unscoped is the natural setup for a host that shares one connection across
+independent jobs, which is how Cowork and Claude Desktop behave. With no flag,
+`kb` connects to the server's unscoped endpoint. The agent calls `knomit_repos`
+to list every repo and lens the server serves, calls `knomit_bind` with the one it
+wants, and passes the returned handle on every later `knomit_*` call. Binding is
+per call rather than per connection, so two jobs on the same connection can work
+against different repos. Any other tool called without a handle returns a tool
+error naming `knomit_bind`.
+
+### Choosing the server
+
+`kb` resolves the server once, at startup: a positional argument, then the
+`KNOMIT_SERVER` environment variable, then the desktop lockfile, then
+`http://localhost:19278`. The address may be `http://host:port`,
+`https://host:port`, `unix:///abs/path.sock`, or `npipe:////./pipe/<name>` on
+Windows. To point at a remote server, put it last in `args`:
+
+```jsonc
+"args": ["--repo", "work", "https://knomit.example.com"]
+```
+
+For a server that needs sign-in, run `kb login <base-url>` once in a terminal;
+the token is stored under the knomit home and sent on every `kb` request. See
+[Authentication](/docs/auth/).
+
+## What Cowork sees
+
+Cowork gets the server's MCP tools, twelve of them on a read-write server; see
+[MCP tools](/docs/mcp-tools/). On a scoped connection `knomit_repos` returns the
+binding and its mount table (name, repo id, branch, `read` or `read+write` role,
+and the `src://` source slug where one is set), which tells a session what it is
+actually pointed at.
 
 <Aside type="note">
 Unlike the [Claude Code integration](/docs/claude-code/), Cowork does **not** use
-the `knomit-bridge claude init` scaffolding — there are no project skills or
-hooks, it is purely the MCP server wiring. The bridge does not auto-recover a
-session if the server dies; the client owns restart. It resolves the base URL
-once at startup — positional argument, then `server.json`, then the default —
-so a server that comes back on a different port needs the bridge restarted too.
+`kb claude init`: there are no project skills, hooks or `CLAUDE.md` block, only
+the MCP server wiring. A knowledge base can still ship its own skills, which the
+server offers as MCP prompts and through `knomit_skill`.
+
+The bridge does not reconnect or retry if the server dies; the client owns
+restart. A server that comes back on a different address needs the bridge
+restarted too. If the bridge's version differs from the server's, it writes one
+line to stderr naming both, and carries on.
 </Aside>

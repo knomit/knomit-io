@@ -67,8 +67,8 @@ export default defineConfig({
       // themselves "Page — subtitle". Same separator on both halves of the site
       // so a SERP listing doesn't read as two different properties.
       titleDelimiter: '—',
-      description: 'Git-backed knowledge for AI agents. Knowledge + commit.',
-      tagline: 'Git-backed knowledge for AI agents.',
+      description: 'A distributed, decentralized knowledge distillation factory: many agents and knowledge bases accumulate, distill and use what any one learns.',
+      tagline: 'A distributed, decentralized knowledge distillation factory.',
       logo: {
         src: './src/assets/logo.svg',
         alt: 'knomit',
@@ -120,6 +120,16 @@ export default defineConfig({
           ],
         },
         {
+          label: 'Coordinate',
+          items: [
+            { label: 'Experiments', slug: 'docs/experiments' },
+            { label: 'Triggers & recipes', slug: 'docs/triggers' },
+            { label: 'Sync, consensus & conflicts', slug: 'docs/sync-and-consensus' },
+            { label: 'Fleet', slug: 'docs/fleet' },
+            { label: 'Templates & playbooks', slug: 'docs/templates' },
+          ],
+        },
+        {
           label: 'Publish',
           items: [{ label: 'OKF export', slug: 'docs/okf' }],
         },
@@ -128,6 +138,7 @@ export default defineConfig({
           items: [
             { label: 'Claude Code', slug: 'docs/claude-code' },
             { label: 'Claude Cowork', slug: 'docs/claude-cowork' },
+            { label: 'Antigravity', slug: 'docs/antigravity' },
           ],
         },
         {
@@ -135,6 +146,7 @@ export default defineConfig({
           items: [
             { label: 'Configuration', slug: 'docs/configuration' },
             { label: 'Remote sync', slug: 'docs/remote-sync' },
+            { label: 'Authentication & permissions', slug: 'docs/auth' },
             { label: 'Observability', slug: 'docs/observability' },
             { label: 'Deployment', slug: 'docs/deployment' },
           ],

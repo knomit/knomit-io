@@ -1,0 +1,232 @@
+---
+title: Authentication & permissions
+description: "Who may call a knomit instance and what they may do: kernel-vouched local sockets, mTLS certificates between instances, OAuth for clients, and grants."
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+A knomit instance is reached three ways: by local clients on the same machine,
+by other knomit instances in its [fleet](/docs/fleet/), and by remote MCP
+clients. Each way has its own credential, and all three end in the same place:
+one **principal** per request, checked against one set of **permissions**. For how this fits the rest of the model, see
+[Concepts](/docs/concepts/).
+
+## Principals and permissions
+
+A principal is written `<kind>:<id>@<via>`:
+
+| Principal | Example | Vouched for by |
+|-----------|---------|----------------|
+| a local client | `bridge:uid:501@socket` (Windows: `bridge:sid:<SID>@pipe`) | the operating system kernel |
+| another instance | `instance:<64-hex fingerprint>@cert` | its fleet certificate, over mutual TLS |
+| an operator | `operator:<64-hex fingerprint>@cert` | an operator certificate |
+| an OAuth client | `host:<subject>@token` | a bearer token this instance issued |
+| plain loopback TCP | `anonymous@none` | nothing; it holds `[auth].loopback_default` |
+
+Six permissions exist. This is where each one is enforced at the current
+release:
+
+| Permission | Enforced on |
+|------------|-------------|
+| `read` | The OAuth listener (every request needs it); held implicitly by every enrolled instance certificate. |
+| `write` | Every mutating REST request, and every MCP write tool (`knomit_learn`, `knomit_update`, `knomit_retract`, `knomit_review`, `knomit_hypothesize`, `knomit_experiment`). A caller without it does not see those tools in `tools/list`. |
+| `push:own` | `git push` to `/git` (receive-pack), together with the rule that an instance pushes only its own agent branch. Held implicitly by every enrolled instance certificate. |
+| `operator` | Merging a peer's pushed branch: `POST /api/v1/repos/{repo}/branches/{branch}/merge`, the web UI's Pushed branches panel. |
+| `admin` | Approving OAuth requests from the web UI's Authorizations tab. |
+| `merge:main` | Defined and accepted in grants and token scopes; no route checks it. |
+
+The check is default-deny: no principal, no grant, or a store error refuses.
+A refusal is HTTP 403 with the title `Authentication required` (no principal)
+or `Permission denied` (the principal lacks the permission). An unknown
+permission name in configuration is a startup error.
+
+### Grants
+
+Grants live in the instance's `control.db`, managed with `knomit grants`:
+
+```sh
+knomit grants add instance:<64-hex fingerprint>@cert write
+knomit grants list
+knomit grants revoke instance:<64-hex fingerprint>@cert write
+```
+
+A revoked grant stays in the table as history; `list` shows live and revoked
+rows. A certificate principal must use the full 64-hex fingerprint. `read` is
+not revocable for an enrolled instance (it comes with the certificate; remove
+the instance with `knomit identity revoke`), and the anonymous principal takes
+no rows: its permissions are `[auth].loopback_default`. `knomit grants` works
+on `control.db` directly, so it runs beside a live server, but the server must
+have started once to create the table.
+
+## Local clients
+
+The server listens on a **Unix socket** in its data root
+(`<KNOMIT_HOME>/knomit.sock`, mode 0600), and the kernel reports the
+connecting process's user id. Nothing is stored, presented or forgeable. If
+that path is too long for the platform, the socket moves to
+`/tmp/knomit-<uid>/<hash>.sock` in a directory that must be private to the
+user. On **Windows** the same role is played by a named pipe,
+`\\.\pipe\knomit-<hash>`; the client verifies the pipe's owner before it sends
+anything, so a squatting process is detected rather than talked to. Set
+`socket` in `knomit.toml` or `KNOMIT_SOCKET` to move it.
+
+At boot the server grants its own user (the socket or pipe principal) every
+permission in `[auth].loopback_default`, once; a permission you revoke later is
+not granted again. The MCP bridge `kb`, `knomit fleet` and `knomit oauth`
+reach the server this way. `KNOMIT_SERVER` names the address `kb` uses (an
+`http(s)://`, `unix://` or `npipe://` URL); see
+[Triggers & recipes](/docs/triggers/#do-run-and-recipes) for how recipe
+sessions get it.
+
+**Plain loopback TCP** (the web UI on `http://localhost:19278`) keeps working
+as the anonymous principal with `[auth].loopback_default`:
+
+```toml
+[auth]
+require = false        # true: refuse any request with no verified principal
+loopback_default = ["read", "write", "push:own", "operator", "admin"]
+loopback_hosts = []    # extra Host names a same-host proxy may use
+```
+
+An empty `loopback_default = []` means the anonymous principal holds nothing.
+A loopback request whose `Host` header names another machine gets 421, unless
+the name is in `loopback_hosts`; a state-changing request from another
+origin's web page gets 403.
+
+## Certificates between instances
+
+Instances authenticate to each other with **mutual TLS**, using certificates
+signed by an offline fleet root that the operator keeps. The certificate
+binds the instance's existing Ed25519 key; the master never generates or sees
+instance keys.
+
+<Steps>
+
+1. **On the operator's machine** (never on a fleet instance), create the root:
+
+   ```sh
+   knomit identity init-master --dir ~/fleet-master --cn knomit-master-you \
+     --passphrase-file ~/.fleet-pass
+   ```
+
+   The directory holds the passphrase-encrypted `root.key`, `root.crt`, the
+   CRL and a log of issued certificates.
+
+2. **Enroll each instance** from its public key
+   (`<KNOMIT_HOME>/id_ed25519.pub`):
+
+   ```sh
+   knomit identity enroll --dir ~/fleet-master --pubkey id_ed25519.pub \
+     --passphrase-file ~/.fleet-pass --out host1.bundle
+   ```
+
+   `--role operator` issues an operator certificate instead. Certificates are
+   valid for 90 days by default (`--validity`).
+
+3. **Install the bundle on the instance**, confirming the root's fingerprint
+   that the operator gave you out of band:
+
+   ```sh
+   knomit identity install --bundle host1.bundle --root <64-hex root fingerprint>
+   ```
+
+   The fingerprint is the SHA-256 of the root key's SSH encoding, not
+   openssl's certificate fingerprint. `knomit identity show` prints the
+   instance's fingerprint, certificate and CRL state.
+
+4. **Open the TLS listener** by setting an address; with no address it stays closed:
+
+   ```toml
+   [tls]
+   addr = "0.0.0.0:19279"
+   ```
+
+</Steps>
+
+The TLS listener is separate from the plain one and never anonymous: TLS 1.3,
+a client certificate required, every certificate checked against the root and
+the CRL. On the operator's machine, `knomit identity revoke --dir <master dir>`
+with `--serial <hex>` or `--fingerprint <64 hex>` reissues the CRL; copy
+`crl.pem` into every instance's `[tls].dir` (a CRL is a file, never stored in
+a repo). Established connections are re-checked at least every 10 seconds and
+whenever the certificate, CRL or root changes, so a revocation cuts them. The desktop app opens the same listener
+and has an enrollment screen under Settings → Fleet identity.
+
+An enrolled instance reaches another with a `knomit+https://<host>:<port>/git/<repo>`
+origin, which authenticates with its certificate. A chained instance
+certificate holds `read` and `push:own` and nothing else; anything more is a
+grant.
+
+## OAuth for clients
+
+For MCP clients that cannot hold a certificate or reach the socket, the
+instance can be its own OAuth 2.1 authorization server. It is off unless both
+keys are set:
+
+```toml
+[oauth]
+issuer = "https://knomit.example.com"   # https; http only for localhost
+addr = "127.0.0.1:19280"
+access_ttl = "2h"
+refresh_ttl = "336h"                    # 14 days, from first issuance
+default_client = true                   # the built-in `kb` client
+
+[[oauth.client]]
+id = "my-agent"
+name = "My agent"
+redirect_uris = ["https://agent.example.com/callback"]
+```
+
+This opens a third listener that serves the OAuth endpoints and the API and MCP
+tree behind bearer tokens; it serves no `/git` and no web UI. Bearer tokens are
+judged only there. The server publishes RFC 8414 and RFC 9728 metadata and
+requires PKCE (S256). Clients are the built-in `kb` client, the
+`[[oauth.client]]` entries, and clients identified by a metadata-document URL
+(CIMD). Tokens are opaque and stored only as hashes. A token's scope ceiling is
+drawn from `read`, `write`, `push:own`, `merge:main` and `operator`, never
+`admin`.
+
+**Logging in.** `kb login <base-url>` runs the flow and saves the token for
+that server; `kb logout <base-url>` removes it.
+
+**Approving.** An authorization request is parked (up to 10 minutes) until
+someone decides it, in one of three ways:
+
+- **On the instance:** `knomit oauth pending` lists waiting requests;
+  `knomit oauth approve <id> --as <subject> [--scopes read,write]` approves one
+  as `host:<subject>@token`; `knomit oauth deny <id>` refuses it. The web UI's
+  **Authorizations** tab does the same on loopback (it needs `admin`).
+- **With the master key, from another machine:**
+  `knomit oauth approve <id> --sign <issuer-url> --dir <master dir> --instance <fingerprint> --as <subject>`
+  signs a statement that `approve --signed <file>` delivers.
+- **Through GitHub:** `[oauth.idp]` with `provider = "github"`, a `client_id`,
+  a `client_secret_file`, and `allowed_subjects` entries of the form
+  `github-<numeric id>`. `knomit oauth idp resolve github <login>` turns a
+  login into that entry.
+
+A refresh is refused once the approval it rests on no longer stands.
+
+## The trust model
+
+knomit builds capabilities and records what happened; it does not try to make
+a compromised host or operator harmless.
+
+- **Repository access is the trust boundary.** Whoever can merge into a
+  knowledge base's `main` decides its ontology, its `verify_signatures`
+  setting, the recipes its instances run and the skills they serve.
+- **Trust is transitive through accepted merges.** If you trust instance A and
+  A merged B's commits, you trust them; the [chain of trust](/docs/fleet/#the-chain-of-trust)
+  is how a re-clone adopts them without a waiver.
+- **Breaches are investigated afterwards.** Every authored commit is signed, and
+  `knomit verify audit` lists everything a key signed.
+
+### `.knomit/` changes through git only
+
+The system half of a repo (`.knomit/`: the ontology, triggers, recipes,
+skills, guidance, templates) is closed to every fact tool: MCP, REST and
+experiment resolutions all refuse to write it, whatever permission the caller
+holds. Agents can read a file there by its exact path with `knomit_explain`.
+It changes through git: a commit that reaches the repo's consensus branch
+through the repo's own review, such as a merged pull request on a forge.
+Ontology settings, skills, recipes and guidance take effect from the consensus
+branch's tip.

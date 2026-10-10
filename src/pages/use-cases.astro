@@ -6,106 +6,126 @@ import { GITHUB_URL, DEMO_LIVE } from '../lib/site';
 
 const groups = [
   {
-    eyebrow: 'For developers & their coding agents',
-    lead: 'Knowledge that lives where the work happens.',
-    cases: [
-      {
-        icon: 'ontology',
-        title: 'Codebase tribal knowledge',
-        body: 'Invariants, gotchas, and design rationale that never make it into comments. Your coding agent — and your teammates — read them before touching an area, and write new ones when they discover something non-obvious.',
-        tag: 'invariants · gotchas · decisions — in the repo',
-        link: { href: '/compare/', label: 'Versus the memory tool you use now' },
-      },
-      {
-        icon: 'provenance',
-        title: 'Agents that document their own decisions',
-        body: 'When an agent makes a call — picks an approach, rejects an alternative, resolves a tradeoff — it records it as a typed, signed fact. Not memory: actionable knowledge. The next agent reads the rationale instead of re-deriving it, and you can trace exactly what was known when any choice was made.',
-        tag: 'self-documenting · signed · traceable',
-        link: { href: '/docs/claude-code/', label: 'Wire it into Claude Code' },
-      },
-      {
-        icon: 'discovery',
-        title: 'Surface hidden invariants before they bite',
-        body: 'Run review or hypothesize at higher effort to discover emergent keystones — the load-bearing premises that underwrite facts across your codebase but were never written down. knomit ranks them by blast radius: how much breaks if the premise is false.',
-        tag: 'discovery · keystones · blast radius',
-      },
-    ],
-  },
-  {
     eyebrow: 'For researchers & analysts',
-    lead: 'A corpus that sharpens itself.',
+    lead: 'A corpus that gets sharper with every review pass, about any field.',
     cases: [
       {
         icon: 'search',
         title: 'Research & intelligence monitoring',
-        body: 'Point agents at sources; they learn typed facts continuously. Synthesis distills patterns and higher-order insight as the corpus grows — the knowledge base sharpens with every cycle.',
-        tag: 'continuous learning · synthesis · compounding insight',
-        link: DEMO_LIVE ? { href: '/explore/', label: 'Open the live demo' } : undefined,
+        body: 'Point agents at sources and they write what they find as typed facts with the URL that backs each one. The public agentic-engineering knowledge base works this way: hundreds of web-sourced facts on agent security, evaluation, reliability and MCP. A second public knowledge base covers AI and cybersecurity.',
+        tag: 'web-sourced · typed · refs to every source',
+        link: DEMO_LIVE ? { href: '/explore/', label: 'Browse the agentic-engineering KB' } : undefined,
       },
       {
         icon: 'discovery',
         title: 'Hypothesis-driven research',
-        body: 'Observations distill into syntheses; syntheses extend into falsifiable hypotheses with settlement criteria. When evidence arrives, the hypothesis transitions to observation — and git records the exact moment the loop closed.',
-        tag: 'observe → synthesize → hypothesize → confirm',
+        body: 'Observations distill into syntheses; syntheses extend into falsifiable hypotheses with the criteria that would settle them. When the evidence arrives, the outcome is recorded as a commit, so you can see exactly when a question was closed.',
+        tag: 'observe → synthesize → hypothesize → settle',
         link: { href: '/concepts/#synthesis', label: 'Synthesis & hypotheses' },
       },
       {
-        icon: 'evolve',
-        title: 'Knowledge that compounds',
-        body: 'Facts beget facts; confidence rises and falls; query the graph as-of any point in time — so the corpus gets sharper over time, not just bigger.',
-        tag: 'confidence moves · query as-of any commit',
-        link: { href: '/concepts/#temporal', label: 'The temporal graph' },
+        icon: 'cluster',
+        title: 'Patterns across subjects',
+        body: 'Facts can name their motif, the general mechanism or failure shape they instantiate. An analyst can then ask for every fact, in any knowledge base a lens mounts, that follows the same pattern as the one in front of them, whatever its subject.',
+        tag: 'motifs · lenses · cross-subject',
+        link: { href: '/docs/lenses/', label: 'Lenses' },
       },
     ],
   },
   {
-    eyebrow: 'For fleets & open networks',
-    lead: 'Many minds, one converging truth.',
+    eyebrow: 'For teams',
+    lead: 'One body of knowledge that people and agents build together.',
     cases: [
       {
         icon: 'consensus',
         title: 'Distributed team knowledge',
-        body: 'One source of truth that humans and agents build together. Because facts are plain markdown in git, you review knowledge in pull requests and trust provenance instead of folklore.',
+        body: 'Each person and each agent writes on its own branch; facts reach main by review or by automatic merge. Because facts are plain markdown in git, you can review knowledge in pull requests and check where a claim came from instead of trusting whoever said it last.',
         tag: 'author together · review like code',
-        link: { href: '/concepts/#branches', label: 'Peers, branches & consensus' },
+        link: { href: '/docs/sync-and-consensus/', label: 'Sync, consensus and conflicts' },
       },
       {
-        icon: 'cluster',
-        title: 'Competitive agent benchmarking',
-        body: 'Spin a fleet at one task; each agent self-documents its approach and findings on its own branch; all converge to a shared repo. Synthesis distills where approaches agreed, where confidence diverged, and what only one agent found — a knowledge graph of why, not just a leaderboard.',
-        tag: 'fleet · per-branch findings · distilled comparison',
-        link: { href: '/docs/claude-cowork/', label: 'Running a fleet in Claude Cowork' },
+        icon: 'provenance',
+        title: 'Decisions that keep their reasons',
+        body: 'When an agent or a colleague resolves a tradeoff, it records the options, the rationale and the choice as a typed, signed fact. The next participant reads why instead of re-deriving it, and can see exactly what was known when the choice was made.',
+        tag: 'decisions · rationale · signed',
       },
       {
         icon: 'distributed',
         title: 'Open knowledge networks',
-        body: 'A public knomit repo anyone contributes to via pull request — a shared commons with full provenance, where deduplication means the network pays each learning cost once.',
-        tag: 'public repo · PR contributions · paid once',
+        body: 'A public knomit repository anyone can contribute to by pull request, or subscribe to read-only. Every fact keeps its provenance, and deduplication means the network pays for each piece of learning once.',
+        tag: 'public repo · subscribe · paid once',
       },
       {
         icon: 'markdown',
         title: 'Publish knowledge as an open standard',
-        body: 'Export the whole base to Open Knowledge Format — Google Cloud\'s open spec — and push it to any git host. Consumers read plain markdown with standard frontmatter, with no knomit anywhere in the picture. Your private, agent-shaped base stays private; what you publish is portable and belongs to no vendor.',
+        body: 'Export the whole base to Open Knowledge Format — Google Cloud\'s open spec — and push it to any git host. Consumers read plain markdown with standard frontmatter, with no knomit anywhere in the picture. Your agent-shaped base stays where it is; what you publish is portable and belongs to no vendor.',
         tag: 'OKF 0.2 · conformance-validated · one git URL',
         link: { href: '/okf/', label: 'How OKF export works' },
       },
     ],
   },
   {
-    eyebrow: 'For decentralized & edge deployment',
-    lead: 'It\'s just git — so it goes anywhere, and composes any way.',
+    eyebrow: 'For operators',
+    lead: 'Several machines, one piece of work, one converging truth.',
     cases: [
       {
+        icon: 'evolve',
+        title: 'Coordinated work across machines',
+        body: 'A mission repository holds the tasks and the coordination signals; the knowledge the work produces goes to a separate target knowledge base. Triggers on each machine claim tasks as they appear, a recipe starts an agent session to work each one, and the results reach the target’s main by consensus, each commit signed by the machine that made it. The mission template ships these pieces ready to adapt.',
+        tag: 'mission repo · target KB · triggers · signed consensus',
+        link: { href: '/docs/triggers/', label: 'Triggers and recipes' },
+      },
+      {
+        icon: 'cluster',
+        title: 'A fleet of instances',
+        body: 'Register each instance with a fleet repository whose member records are the admitted set. Instances host repositories for each other over mutual TLS, sync in real time, and with verification on accept into main only commits signed by an active member’s current key.',
+        tag: 'fleet repo · mTLS hosting · verified acceptance',
+        link: { href: '/docs/fleet/', label: 'Fleets' },
+      },
+      {
+        icon: 'consensus',
+        title: 'Competitive agent runs',
+        body: 'Point several agents at one task. Each records its approach and findings on its own branch, and all of it converges in one repository. Review then distills where the approaches agreed, where their confidence diverged, and what only one agent found: an account of why, not just a leaderboard.',
+        tag: 'per-branch findings · distilled comparison',
+      },
+      {
         icon: 'mcp',
-        title: 'Knowledge processing pipelines',
-        body: 'Instances compose. One instance points at a repo hosted by another, so you can wire a DAG: a raw-ingestion node feeds a distillation node feeds a consensus node. An ETL pipeline for facts, where every stage is itself a queryable knomit.',
-        tag: 'compose instances · ingest → distill → consensus',
+        title: 'Staged processing with triggers',
+        body: 'A trigger on one knowledge base can run a recipe when facts land there, and the recipe can start an agent session that reads them and writes what it concludes into a separate target knowledge base. Each knowledge base in the chain can be queried on its own, and a lens can read several as one.',
+        tag: 'triggers · recipes · target KB',
+        link: { href: '/docs/triggers/', label: 'Triggers and recipes' },
       },
       {
         icon: 'fact',
         title: 'Offline-first & edge agents',
-        body: 'Every peer holds the entire knowledge base locally as a git repo. An agent in the field, airgapped, or simply disconnected has full recall and keeps learning on its branch — then syncs when it reconnects. The network is for consensus, not for access.',
+        body: 'Every instance holds its knowledge bases locally as git repositories. An agent in the field, airgapped, or simply disconnected keeps full recall and keeps learning on its branch, then syncs when it reconnects. The network is for consensus, not for access.',
         tag: 'local-first · works disconnected · syncs later',
+      },
+    ],
+  },
+  {
+    eyebrow: 'For developers & their coding agents',
+    lead: 'A codebase is one more domain.',
+    cases: [
+      {
+        icon: 'ontology',
+        title: 'Codebase tribal knowledge',
+        body: 'Invariants, gotchas, and design rationale that never make it into comments. Your coding agent — and your teammates — read them before touching an area, and write new ones when they discover something non-obvious. Facts can pin the exact source they describe, so a stale one shows.',
+        tag: 'invariants · gotchas · decisions',
+        link: { href: '/docs/claude-code/', label: 'Wire it into Claude Code' },
+      },
+      {
+        icon: 'temporal',
+        title: 'Facts that wait for the merge',
+        body: 'Facts about code going out in a pull request can be written in an experiment named after the branch. If the change merges, the experiment commits; if it is abandoned, the facts roll back with it and never reach anyone else.',
+        tag: 'experiments · commit or roll back',
+        link: { href: '/docs/experiments/', label: 'Experiments' },
+      },
+      {
+        icon: 'discovery',
+        title: 'Surface hidden invariants before they bite',
+        body: 'Run hypothesize at medium or high effort to discover emergent keystones: the load-bearing premises that underwrite facts across your codebase but were never written down. knomit ranks them by blast radius, how much breaks if the premise is false.',
+        tag: 'discovery · keystones · blast radius',
       },
     ],
   },
@@ -113,16 +133,16 @@ const groups = [
 ---
 
 <BaseLayout
-  title="Use cases — memory for AI agents & coding assistants"
-  description="Twelve things developers and agents can build on a git-native, fact-based knowledge base: research fleets, open networks, OKF publishing, and edge deployment."
+  title="Use cases — a knowledge distillation factory for agents, teams and research"
+  description="Use cases for a knowledge distillation factory: research and analysis corpora, team knowledge, coordinated work across machines, codebases, and OKF publishing."
 >
   <section class="k-section uc-hero k-grid-bg">
     <div class="k-container">
       <SectionHeading
         as="h1"
         eyebrow="Use cases"
-        title="Where shared, proven knowledge pays off."
-        lead="The same git-native substrate serves a solo developer, a research fleet, and a whole network of people and agents. A pool of what people build with it."
+        title="Where shared, distilled knowledge pays off."
+        lead="The same fabric serves an analyst with a research corpus, a team, an operator running work across several machines, and a developer with a codebase. Here is what people build with it."
       />
     </div>
   </section>
@@ -160,10 +180,11 @@ const groups = [
   <section class="k-section">
     <div class="k-container uc-cta">
       <h2>Have a use case of your own?</h2>
-      <p class="k-lead">It's open source. Clone it, point your peers at it, and see.</p>
+      <p class="k-lead">It's source-available and free to self-host. Start a knowledge base from a template, point your agents at it, and see.</p>
       <div class="uc-cta__actions">
         <a href={GITHUB_URL} class="k-btn" rel="noopener">View on GitHub</a>
         <a href="/docs/quick-start/" class="k-btn k-btn--ghost">Quick start</a>
+        <a href="/docs/templates/" class="k-btn k-btn--ghost">Templates</a>
       </div>
     </div>
   </section>

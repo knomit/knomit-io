@@ -3,9 +3,12 @@
  * Branch-per-agent, drawn with both merge directions.
  *
  * Two agents on two machines each own one long-lived branch and are its only
- * writer. Consensus lives on `main`: branches merge up into it by review, and
- * it merges back down into each branch, local edits winning any overlap.
- * Branch names and hosts are placeholders.
+ * writer. Consensus lives on `main`: branches merge up into it by review, CI,
+ * or the host's automatic merge (`consensus: auto`: the host merges a pushed
+ * branch into its own agent branch and `main` fast-forwards to it), and it
+ * merges back down into each branch, with the repository's `conflicts` policy
+ * settling any overlap (when `conflicts` is unset and consensus is not `auto`,
+ * a peer's sync keeps its own side). Branch names and hosts are placeholders.
  *
  * Layout note: lane names are right-aligned so the whole left half stays a
  * clear corridor for the arrows; `main` is the heaviest stroke because its
@@ -21,7 +24,7 @@ const { class: className = '' } = Astro.props;
   <svg
     viewBox="0 0 440 272"
     role="img"
-    aria-label="Two agents on different machines each commit only to their own git branch; both branches merge up into the shared main branch, and main merges back down into each branch with local edits winning."
+    aria-label="Two agents on different machines each commit only to their own git branch; both branches merge up into the shared main branch by a reviewed merge or the host's automatic merge, and main merges back down into each branch, with the repository's conflicts policy settling any overlap."
     xmlns="http://www.w3.org/2000/svg"
   >
     <!-- main: the consensus trunk -->
@@ -55,9 +58,9 @@ const { class: className = '' } = Astro.props;
 
     <!-- what the two directions are -->
     <path d="M32 218 V232" stroke="var(--k-brand)" stroke-width="2" marker-end="url(#ab-down)" />
-    <text x="52" y="234" class="ab-key">main → agent: fetch + merge, local wins</text>
+    <text x="52" y="234" class="ab-key">main → agent: fetch + merge, conflicts per policy</text>
     <path d="M32 264 V248" stroke="var(--k-ref)" stroke-width="2" marker-end="url(#ab-up-a)" />
-    <text x="52" y="262" class="ab-key">agent → main: pull-request merge</text>
+    <text x="52" y="262" class="ab-key">agent → main: reviewed or automatic merge</text>
 
     <defs>
       <marker id="ab-down" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto">

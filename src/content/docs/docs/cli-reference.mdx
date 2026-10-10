@@ -1,24 +1,47 @@
 ---
 title: CLI reference
-description: Every subcommand and flag for knomit (server & admin), knomit-bridge (MCP proxy & Claude integration), knomit-okf (OKF export), and knomit-desktop.
+description: Every subcommand and flag for knomit (server and admin), kb (MCP proxy and agent integration), knomit-okf (OKF export) and knomit-desktop.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-Four binaries expose a command line: `knomit` (server + admin), `knomit-bridge`
-(MCP proxy + Claude integration), `knomit-okf` ([OKF export](/docs/okf/)), and
-`knomit-desktop` (the app). All four print the same build string, but the
-accepted spelling differs: `knomit` and `knomit-bridge` take only the bare
-`version` subcommand — `--version` is an unknown flag on both. `knomit-okf` and
+Four binaries expose a command line: `knomit` (server + admin), `kb` (MCP proxy
++ agent-host integration), `knomit-okf` ([OKF export](/docs/okf/)), and
+`knomit-desktop` (the app). All four print the same build version (`knomit-okf` prefixes it with its name), but the
+accepted spelling differs: `knomit` and `kb` take only the bare `version`
+subcommand — `--version` is an unknown flag on both. `knomit-okf` and
 `knomit-desktop` accept `version`, `--version` and `-version`.
 
 ## `knomit` — server & admin
 
+```
+knomit
+  serve         start the server
+  verify        integrity check; also `verify ci`, `verify audit`, `verify accept`
+  fleet         status, register, unregister
+  identity      init-master, enroll, install, revoke, show
+  grants        add, revoke, list
+  oauth         pending, approve, deny, idp resolve github
+  warm-models   pre-download the embedding model
+  version       print the build version
+```
+
+`fleet`, and `oauth pending`/`approve`/`deny` on the instance itself, talk to
+a **running** server over its local authenticated socket (a named pipe on
+Windows), so they fail with a clear message when no server is up or no local
+listener is configured. `grants` opens `control.db` directly and works beside a
+live server.
+
 ### `knomit serve` — start the HTTP server
 
-Boots the app, opens all repos, and listens on `{host}:{port}` (or a Unix
-socket). Serves REST `/api/v1`, the MCP endpoint, the web UI, and — if enabled —
-git smart-HTTP. Graceful shutdown on SIGTERM.
+Boots the app, opens all repos, and listens on `{host}:{port}`. When it can, it
+also serves on a local authenticated listener (a unix socket, by default `knomit.sock` in the data root,
+or a named pipe on Windows), where the operating system reports the caller's
+identity; and, when configured, an mTLS listener for enrolled instances
+(`[tls].addr`, once a certificate is installed) and an OAuth listener
+(`[oauth].issuer` and `[oauth].addr`). Serves REST `/api/v1`, the
+MCP endpoints, the web UI, and — if enabled — git smart-HTTP. Graceful shutdown
+on SIGTERM. At startup it logs the address to give `kb` as `KNOMIT_SERVER`.
 
 | Flag | Type | Default | Meaning |
 |------|------|---------|---------|
@@ -31,7 +54,9 @@ git smart-HTTP. Graceful shutdown on SIGTERM.
 
 Log **level** and **format** (`console`/`json`) are set through config, not flags —
 `KNOMIT_LOG_LEVEL` / `KNOMIT_LOG_FORMAT` (or the `[log]` TOML section). The
-`--log-*` flags above override only the rotating file sink.
+`--log-*` flags above override only the rotating file sink. The data root comes
+from `KNOMIT_HOME`, which must be an absolute path, and `knomit.toml` is read from
+that data root. See [Configuration](/docs/configuration/).
 
 Set `KNOMIT_RUNTIME_ADDR` (e.g. `localhost:6060`) to enable the gated **runtime
 diagnostics port** — pprof, Prometheus `/metrics`, expvar, and live process
@@ -42,9 +67,8 @@ controls. See [Observability](/docs/observability/).
 Walks the git object chain, SQLite tables, and search index, reporting structural
 issues. Exit codes: `0` clean (warnings do not fail the run), `1` integrity
 errors found, `2` verify itself could not run — bad flags, unknown repo, boot
-failure. The difference between `1` and `2` is the contract: a script that reads
-"the tool could not run" as "the repo is damaged" pages someone at 3am over a
-typo in a flag.
+failure. The split between `1` and `2` lets a script tell a damaged repository from a
+command that could not run.
 
 | Flag | Type | Default | Meaning |
 |------|------|---------|---------|
@@ -52,7 +76,7 @@ typo in a flag.
 | `--all` | bool | `false` | Verify all **active** repos. An archived repo is not opened and cannot be verified; the run names any it skipped |
 | `--deep` | bool | `false` | Parse every fact (slower, stricter) |
 | `--json` | bool | `false` | Emit the report(s) as JSON instead of text |
-| `--max-issues` | int | `100` | Cap issues printed per repo in **text** output (`0` = all). The per-category summary is always complete, and `--json` is never truncated — a truncated machine-readable report would look complete and not be. Ordering puts errors ahead of warnings, so truncation can only drop the least severe |
+| `--max-issues` | int | `100` | Cap issues printed per repo in **text** output (`0` = all). The per-category summary is always complete, and `--json` is never truncated. Errors are sorted ahead of warnings, so truncation drops the least severe first |
 | `--all-branches` | bool | `false` | Parity-check every `refs/heads/*` ref, not just the branches the index maintains |
 | `--prune-generated-refs` | bool | `false` | **Writes.** Deletes the generated `okf/*` refs left by the removed server-side export, and their markers — nothing else. Verify is otherwise strictly read-only |
 
@@ -60,8 +84,7 @@ typo in a flag.
 It is read-only, but it is also a **snapshot**: it takes the read lock on every
 branch it checks up front and holds all of them until it finishes. That is what
 makes the report internally consistent, and it means the run blocks every writer
-on those branches for its whole duration. Budget for it, or stop the agent —
-this is not a cheap probe to fire at a busy one.
+on those branches for its whole duration. Budget for it, or stop the agent first.
 </Aside>
 
 Only branches the index maintains are parity-checked. Other refs under
@@ -70,21 +93,137 @@ behind by a removed feature — have no SQLite rows *by design*. They are named 
 "not indexed" in the report header rather than reported as thousands of errors;
 `--all-branches` opts back in.
 
-### `knomit migrate-registry` — deprecated
+#### `knomit verify ci` — gate a candidate branch
 
-Converts a home shape that only exists on installations predating the
-`control.db` repo registry. A home created by a current build never needs it,
-and a converted one never needs it again.
+Checks a candidate branch before it is merged into a knowledge base's consensus
+branch. It reads the `verify_signatures` setting at the upstream's tip first:
+when verification is off or absent it exits `0` at once and touches nothing else.
+When it is on (`log` or `enforce`), it loads the member records of a [fleet](/docs/fleet/)
+repository checkout and checks every commit the candidate adds: it is signed,
+its author's agent id has exactly one member record, the signing key is that
+record's current key and no other record's, and the agent is active. An unsigned
+merge passes only if it adds nothing beyond its parents. It reads only the two git
+checkouts: no running server, no knomit home, no `control.db`. So it runs in CI.
 
-<Aside type="danger" title="Migrate now if you still have an unconverted home">
-This command **will be removed**. Once it is gone, the only supported path off
-the legacy shape is to re-clone each knowledge base from its remote — and a repo
-whose remote was never recorded anywhere else cannot be recovered that way.
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `--dir` | `.` | The knowledge base checkout |
+| `--upstream` | the branch origin's HEAD (`refs/remotes/origin/HEAD`) | The upstream revision the candidate would merge into. In a CI checkout set it with `git remote set-head origin --auto`; without it, and without this flag, the gate cannot run |
+| `--candidate` | `HEAD` | The candidate revision (the agent branch tip) |
+| `--fleet` | — | The fleet repository checkout; needed only when verification is on |
+| `--fleet-rev` | `HEAD` | The fleet revision holding the accepted member records |
+| `--fleet-root` | `kb` | The fleet repository's fact root |
+| `--json` | `false` | Emit the verdict as JSON |
 
-A legacy home makes the server refuse to boot, and the refusal names this
-command, which is why it stays listed in `knomit --help` rather than being
-hidden. A banner prints before the plan on every run, `--dry-run` included.
-</Aside>
+Exit codes: `0` mergeable (verification off, a clean range, or failures in `log`
+mode, which are only reported), `1` blocked (failures in `enforce` mode), `2`
+could not run (a missing or unreadable fleet while verification is on, a checkout
+whose ontology is not the fleet preset, an unknown `verify_signatures` value).
+
+#### `knomit verify audit` — re-check a branch's history
+
+Walks the whole history of a branch and resolves every commit's signer against
+**every version** of the fleet's member records. A departed agent, or a key since
+rotated away, is attributed to its agent. Findings are commits that are
+unsigned, signed by a key that was never on a member record, signed by a key of
+another agent than the author claims, or signed by a key whose agent was revoked.
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `--dir` | `.` | The knowledge base checkout |
+| `--branch` | `HEAD` | The revision whose whole history is audited |
+| `--fleet` | — | The fleet repository checkout. **Required** |
+| `--fleet-rev` | `HEAD` | The fleet revision to read the member history from |
+| `--fleet-root` | `kb` | The fleet repository's fact root |
+| `--key` | — | List every commit signed by this key (full fingerprint or a prefix) |
+| `--json` | `false` | Emit the report as JSON |
+
+Exit codes: `0` clean, `1` findings, `2` could not run.
+
+#### `knomit verify accept <commit>` — waive the own-branch check
+
+Records, on this instance, a waiver for one commit on origin's copy of this
+instance's own agent branch. A clone refuses that branch when it holds commits
+this instance did not sign (for example commits from before signing existed) and
+lists them; accept each one, then clone again. The waiver lives in this
+instance's control database, so it works before the repository exists. It waives
+nothing else: `verify ci` never reads it. Without `--repo` the waiver applies to
+that commit in any repository, since commits are content-addressed.
+
+| Flag | Default | Meaning |
+|------|---------|---------|
+| `--repo` | — | Scope the waiver to this repository |
+| `--note` | — | Why this commit is accepted (kept with the waiver) |
+| `--list` | `false` | List every waiver on this instance instead of adding one |
+
+### `knomit fleet` — join or leave a fleet
+
+An instance is standalone until it registers with a [fleet](/docs/fleet/): a
+knomit repository whose ontology is the `fleet` preset. Registering mounts that
+repository, writes this instance's member record on its agent branch and pushes
+it; a person accepts by merging that branch into the fleet's consensus branch.
+Unregistering pushes a "left" record first and unmounts the fleet repository only
+once that push lands. These commands call the running server.
+
+| Command | Meaning |
+|---------|---------|
+| `knomit fleet status` | The fleet state, this agent's record state, and the last error |
+| `knomit fleet register <fleet-repo-url> [--token <t>] [--auth-method <m>]` | Join a fleet, or refresh this instance's record in it. `--token` is the access token for the fleet repository's origin; `--auth-method` defaults to one inferred from the URL |
+| `knomit fleet unregister` | Leave the fleet |
+
+### `knomit identity` — instance certificates
+
+The certificate tooling for [authentication](/docs/auth/). The *master* commands
+run on an operator's machine against a directory that never lives on a fleet
+machine; the *instance* commands run on each instance against its own home. The
+master signs an instance's **existing** public key, so there is no signing
+request. The root passphrase is read from a file or standard input; there is no
+interactive prompt.
+
+| Command | Side | Meaning |
+|---------|------|---------|
+| `knomit identity init-master --dir <dir> --cn <name> --passphrase-file <f>` | master | Create the fleet root (`root.key`, `root.crt`, `crl.pem`, `issued.jsonl`). `--validity` sets the root's lifetime (default `87600h`), `--crl-validity` the first CRL's `NextUpdate` (default `720h`) |
+| `knomit identity enroll --dir <dir> --pubkey <file-or-line> --passphrase-file <f>` | master | Sign an instance's public key into a certificate bundle. `--host` sets the host label (default from the key's `knomit@<host>` comment), `--role instance\|operator` (default `instance`), `--out` writes the bundle to a file instead of stdout, `--validity` sets its lifetime (default `2160h`) |
+| `knomit identity install [--bundle <file>]` | instance | Install an enrollment bundle on this instance (default: standard input). `--root <64-hex>` confirms the fleet root fingerprint given out of band; `--yes` trusts the bundle's root without confirming; `--replace-root` accepts a bundle from a different root and moves the instance to another fleet |
+| `knomit identity revoke --dir <dir> (--serial <hex> \| --fingerprint <64-hex>) --passphrase-file <f>` | master | Revoke a certificate (or every certificate issued for a fingerprint) and reissue the CRL. `--reason` is recorded; `--crl-validity` as above |
+| `knomit identity show` | instance | This instance's fingerprint, certificate and CRL state |
+
+### `knomit grants` — per-principal permissions
+
+Adds, revokes and lists the permissions held by a principal on this instance. A
+principal is written `kind:id@via`, such as `instance:<64-hex fingerprint>@cert`;
+a certificate principal needs the full 64-hex fingerprint. The permissions are
+`read`, `write`, `push:own`, `merge:main`, `operator` and `admin`.
+`grants` opens `control.db` directly and never migrates it: if the database or
+its `grants` table does not exist yet, start `knomit serve` once.
+
+| Command | Meaning |
+|---------|---------|
+| `knomit grants add <principal> <permission> [--by <who>]` | Grant a permission. `--by` is recorded in the row (default `$USER`) |
+| `knomit grants revoke <principal> <permission>` | Revoke it. The row stays as history |
+| `knomit grants list [<principal>]` | List rows, live and revoked |
+
+`read` for an enrolled instance is implicit and cannot be revoked here; remove an
+instance with `knomit identity revoke`. See [Authentication & permissions](/docs/auth/).
+
+### `knomit oauth` — approve OAuth clients
+
+Lists, approves and denies the authorization requests that OAuth clients (such as
+`kb login`) have parked on this instance. On the instance, these commands use the
+local authenticated socket.
+
+| Command | Meaning |
+|---------|---------|
+| `knomit oauth pending` | List the requests waiting for a decision |
+| `knomit oauth approve <id> --as <subject>` | Approve a request; the token acts as `host:<subject>@token`. `--scopes read,write` sets the token's ceiling (default: what the client asked for, limited to `read` and `write`; `read` if it asked for neither; never `admin`). `--signed <file\|->` delivers a signed statement to its issuer, and `--issuer <url>` delivers it there instead of to the issuer the statement names |
+| `knomit oauth deny <id>` | Deny a request; the client is told `access_denied` |
+| `knomit oauth idp resolve github <login>` | Print the allow-list entry (`github-<numeric id>`) for a GitHub login, for `[oauth.idp].allowed_subjects`. Needs no server or token |
+
+`approve` and `deny` can also be signed with the fleet master key from another
+machine: `--sign <issuer-url>` with `--dir <master-dir>`, `--instance
+<fingerprint>` and `--passphrase-file <f>` prints the request for you to read and
+then a signed statement, and `--yes` skips the confirmation when the passphrase
+comes from a file.
 
 ### `knomit warm-models` — pre-download the embedding model
 
@@ -99,33 +238,77 @@ the server or initializing ONNX. Used at Docker build time.
 
 Prints the full version string (`<semver>.<sha>`).
 
-## `knomit-bridge` — MCP proxy & Claude integration
+## `kb` — MCP proxy and agent integration
 
-Three modes: the default (no subcommand) stdio MCP proxy, the `claude`
-subcommands, and `version`.
+`kb` is the bridge executable. It has a default mode, a stdio MCP proxy, and
+subcommands that scaffold agent-host integrations, run their hooks, sign in to an
+OAuth listener, create a repo from a template, and print the version.
+
+```
+kb [--repo <name> | --lens <name>] [--log <path>] [server]
+kb claude init [-repo <name> | -lens <name>]
+kb claude hook <event>
+kb antigravity init [-repo <name> | -lens <name>]       (alias: agy)
+kb antigravity hook pre-invocation
+kb login [--no-browser] <base-url>
+kb logout <base-url>
+kb repo create <new-repo> --template <repo>/<name> [server]
+kb version
+```
+
+Flags accept both `-flag value` and `--flag value`. `--log <path>` is accepted
+before any subcommand.
 
 ### Default mode — stdio ↔ HTTP MCP proxy
 
 Reads JSON-RPC from stdin, POSTs to the server's MCP endpoint, writes responses
-to stdout. This is what an MCP client launches. In repo mode it discovers the
-agent branch via `GET /api/v1/repos/{repo}`, then targets
-`{base-url}/api/v1/repos/{repo}/branches/{branch}/mcp` (the branch `/` is
-URL-encoded as `:`). In lens mode it skips branch discovery entirely and targets
-`{base-url}/api/v1/lenses/{lens}/mcp` — a lens resolves each mount's branch
-server-side. It maintains the `Mcp-Session-Id` header and handles SSE responses.
+to stdout. This is what an MCP client launches. It maintains the `Mcp-Session-Id`
+header and handles SSE responses. The mode is chosen by the flags:
 
 | Flag / arg | Default | Meaning |
 |------------|---------|---------|
-| `--repo` | — | Repository name. **Exactly one of `--repo` or `--lens` is required** — knomit has no default repo to fall back to |
-| `--lens` | — | [Lens](/docs/lenses/) name; connects to the lens MCP endpoint. Mutually exclusive with `--repo` — passing both is a fatal error |
-| `[base-url]` (positional) | `http://localhost:19278` | Server base URL |
-| `--log` | `/tmp/knomit-bridge.log` | Bridge log file (4 MB rotation, 3 backups, 7 days) |
+| `--repo` | — | Repository name. Discovers the agent branch via `GET /api/v1/repos/{repo}`, then targets `…/repos/{repo}/branches/{branch}/mcp` (the branch `/` URL-encoded as `:`) |
+| `--lens` | — | [Lens](/docs/lenses/) name; targets `…/lenses/{lens}/mcp`, skipping branch discovery. Mutually exclusive with `--repo` |
+| *(neither)* | — | The **unscoped** endpoint `…/api/v1/mcp`. The agent binds with `knomit_bind` and passes the returned handle on every call. See [MCP tools](/docs/mcp-tools/#the-endpoints) |
+| `--log` | `<os temp dir>/knomit-bridge.log` | Bridge log file (4 MB rotation, 3 backups, 7 days) |
+| `[server]` (positional) | see below | The server to talk to |
 
-The base URL resolves in this order: the positional argument, then the
-`server.json` lockfile, then `http://localhost:19278`. `KNOMIT_BASE_URL` does
-**not** apply here — it is read only by the `claude` subcommands. Pass the base
-URL positionally to override discovery. `KNOMIT_MCP_DEBUG=1` raises the log
-level to debug.
+A flag given with an empty value (`--repo ""`) exits with status 2: it never
+falls into unscoped mode. The log file keeps the name `knomit-bridge.log`;
+`knomit-bridge` survives only as the program's descriptive name (the log file,
+the `User-Agent`, error prefixes). `KNOMIT_MCP_DEBUG` set to any non-empty value
+raises the log level to debug.
+
+**Which server.** `kb` talks to one server for everything it does — discovery,
+the proxied traffic, the closing `DELETE`, and every hook. The first match wins:
+
+1. the positional `server` argument (the proxy only; hooks take none),
+2. `KNOMIT_SERVER`,
+3. the desktop app's lockfile `server.json`
+   (`~/Library/Application Support/knomit/` on macOS, `$XDG_STATE_HOME/knomit/` on
+   Linux, falling back to `~/.local/state/knomit/`, and `%LOCALAPPDATA%\knomit\`
+   on Windows),
+4. `http://localhost:19278`.
+
+The argument and `KNOMIT_SERVER` take `http://host:port`, `https://host:port`,
+`unix:///abs/path/to/knomit.sock`, or on Windows `npipe:////./pipe/<name>` —
+`scheme://host:port` only, with no path, query or credentials. A value that is
+not one of these forms stops `kb` with an error naming where it came from. A
+**named** server (the argument or the variable) is used exactly as given: a named
+socket never falls back to TCP. Only levels 3 and 4 try this machine's local
+socket before TCP. `KNOMIT_HOME` does **not** choose the server; with several
+instances on one machine, copy the address the one you mean logs at startup. A
+recipe's `exec` child is started with `KNOMIT_SERVER` already set. The target is
+resolved once at startup, so restart the MCP client if the server moves.
+
+**What it tells the server.** Every proxied request, and the closing `DELETE`, carries `User-Agent:
+knomit-bridge/<version>` and an `X-Knomit-Client` header describing the client
+process (a per-process id, transport, pid, parent app, host, user, working
+directory, branch and version). It is self-declared and used only to describe
+sessions in the web UI, never to authenticate them. When stdin closes, `kb` sends
+one `DELETE` with its session id and exits. After connecting, it compares its
+build to the server's and writes one line to stderr if they differ; it is silent
+on any failure.
 
 <Aside type="caution">
 `--source` and `--profile` were removed. A `.mcp.json` that still passes them
@@ -133,34 +316,76 @@ fails with `flag provided but not defined: -source`. Delete both arguments. The
 MCP profile is now a per-repo server setting, not a client flag.
 </Aside>
 
-### `knomit-bridge claude init` — scaffold Claude Code integration
+### `kb claude init` — scaffold Claude Code integration
 
 Renders embedded templates into the current directory. See
 [Claude Code integration](/docs/claude-code/) for the full file list.
 
 | Flag | Default | Meaning |
 |------|---------|---------|
-| `--repo` | cwd basename | knomit repo name |
-| `--lens` | — | [Lens](/docs/lenses/) name; writes a lens-scoped `.mcp.json`. Mutually exclusive with `--repo` |
+| `-repo` | — | knomit repo name; writes a repo-scoped `.mcp.json` entry |
+| `-lens` | — | [Lens](/docs/lenses/) name; writes a lens-scoped entry. Mutually exclusive with `-repo` |
 
-Whichever name is used is validated against the server's grammar
-(`[a-z0-9_-]+`) before any file is written, so an invalid value is rejected
-rather than baked into a broken `.mcp.json`. It is also capped at **27
-characters** — the `mcpServers` key is derived from it as `knomit-repo-<repo>`
-or `knomit-lens-<lens>`, and Claude Code builds tool names as `mcp__<key>__<tool>`
-against a 64-character API limit. A name that would overflow is rejected here
-rather than producing an entry whose tools silently cannot be called.
+With neither flag, `init` writes an **unbound** entry whose `args` are empty, so
+`kb` connects to the unscoped endpoint and the agent binds with `knomit_bind`.
+If `.mcp.json` already has a knomit entry naming one scope, a flagless init keeps it.
+The file set is eleven `/knomit-…` skills under `.claude/skills/` (owned and
+overwritten on every run) and three files that are merged in place:
+`.mcp.json` (the entry under the derived key), `.claude/settings.json` (any
+missing hook is appended; the rest of the file is untouched) and `CLAUDE.md` (the
+region between the `knomit:integration` markers, currently `v5`, is replaced, or
+the block is appended). A re-run with nothing to change leaves the three merged files byte-identical
+and says nothing about them; the eleven skills are rewritten every time and
+listed as `Restored:`. A companion file (`.mcp.json.knomit`,
+`CLAUDE.md.knomit-block`) is written only when a merge cannot decide, and an
+unparseable `.claude/settings.json` stops `init` with the file named.
 
-The generated file contains `"args": ["--repo", "<name>"]`, or
-`"args": ["--lens", "<name>"]` in lens mode, under that derived key. See
+A given name is validated against the server's grammar (lowercase letters,
+digits, hyphen and underscore) before any file is written, and is capped at
+**27 characters**: the `mcpServers` key is derived from it as `knomit-repo-<repo>`
+or `knomit-lens-<lens>` (an unbound entry uses `knomit-repo-` plus the directory
+name, shortened to fit), and Claude Code builds tool names as
+`mcp__<key>__<tool>` against a 64-character API limit. See
 [the `.mcp.json` key](/docs/claude-code/#the-mcpjson-key-is-derived-from-the-scope)
 for why it is no longer the constant `knomit`, and why a project should carry
 only one knomit scope.
 
-### `knomit-bridge claude hook <event>` — run an editor hook
+### `kb claude hook <event>` — run an editor hook
 
 Invoked by Claude Code's hook config; reads stdin, writes guidance to stdout.
-Valid events: `session-start`, `post-edit`, `post-ask`, `pre-compact`.
+Valid events: `session-start`, `post-edit`, `post-ask`, `pre-compact` and
+`memory-guard`. The hooks read their binding from the `.mcp.json` entry's `args`
+the way `kb` runs them.
+
+### `kb antigravity init` and `kb antigravity hook`
+
+`kb antigravity init [-repo <name> | -lens <name>]` (alias `agy`) writes one
+plugin directory, `.agents/plugins/knomit/`, with the MCP config, a
+`PreInvocation` hook, a rules file and the same skills. Everything in it is
+owned by the integration and overwritten on re-run. `kb antigravity hook
+pre-invocation` is the hook it registers. See [Antigravity](/docs/antigravity/).
+
+### `kb login` and `kb logout`
+
+`kb login [--no-browser] <base-url>` authorizes `kb` against a knomit OAuth
+listener: it opens a browser (or prints the authorization URL with
+`--no-browser`) and waits for an operator to approve the request, in the web UI
+or with `knomit oauth approve`. The token is stored under the knomit home for
+that host and sent on every later `kb` request to it; nothing is written to
+`.mcp.json`. `kb logout <base-url>` revokes and forgets it. See
+[Authentication & permissions](/docs/auth/).
+
+### `kb repo create` — create a repo from a template
+
+`kb repo create <new-repo> --template <repo>/<name> [server]` creates a repo on
+the server from a [template](/docs/templates/) held by one of its mounted repos
+(a `POST /api/v1/repos` with `mode: template`) and waits for the create job to
+end. Both halves of `--template` are required; there is no default source. Flags
+may come before or after the positional arguments.
+
+### `kb version`
+
+Prints the build version, offline.
 
 ## `knomit-okf` — OKF export
 
@@ -188,7 +413,7 @@ Go's `flag` package stops parsing at the first non-flag argument, so
 
 | Flag | Type | Default | Meaning |
 |------|------|---------|---------|
-| `-b` | string | source's advertised HEAD | Source branch to export. A knomit server's HEAD is usually the *agent* branch — pass `-b main` for consensus. |
+| `-b` | string | source's advertised HEAD | Source branch to export. A knomit server's HEAD names its consensus branch, so omitting `-b` exports consensus; pass another branch to export it instead |
 | `--publish-source` | bool | `false` | Record the KB URL in `.knomit-okf.yaml` so a stranger who clones the published repo can sync it |
 
 ### `knomit-okf sync` — re-export and commit
@@ -208,9 +433,9 @@ Go's `flag` package stops parsing at the first non-flag argument, so
 
 ### Authentication flags
 
-Accepted by all three commands. A knomit server's git endpoint is
-unauthenticated and needs none. A flag that does not match the URL's transport is
-rejected outright rather than ignored.
+Accepted by all three commands. A knomit server's git endpoint serves fetches
+without credentials, so an export from one needs none. A flag that does not match
+the URL's transport is rejected outright rather than ignored.
 
 | Flag | Env fallback | Transport | Meaning |
 |------|--------------|-----------|---------|
@@ -227,9 +452,11 @@ Prints `knomit-okf <semver>.<sha>`. Accepts `version`, `--version`, or
 
 ## `knomit-desktop` — tray/desktop app
 
-No arguments boots the app (picks a free loopback port, defaulting to `19278`,
-boots the server in-process, opens the webview, writes `server.json`). The system
-tray is created on every platform, Linux included. `version` is the only argument
+No arguments boots the app: it binds the configured loopback port (default
+`19278`, falling back to a free one if that is taken), boots the server
+in-process, writes `server.json` and puts an icon in the system tray, on every
+platform, Linux included. The window stays hidden until you choose **Open
+Knomit** from the tray menu. `version` is the only argument
 the binary inspects; anything else is ignored and the app boots normally.
 
 | Arg | Meaning |
@@ -239,5 +466,6 @@ the binary inspects; anything else is ignored and the app boots normally.
 
 Logs go to stderr and a rotating file under the platform logs dir
 (`~/Library/Logs/knomit` on macOS, `$XDG_STATE_HOME/knomit` — default
-`~/.local/state/knomit` — on Linux). See
+`~/.local/state/knomit` — on Linux, `%LOCALAPPDATA%\knomit` on Windows). The
+server's own log is also streamed in the web UI under Manage. See
 [Desktop app](/docs/desktop/) for how it differs from a bare `knomit serve`.

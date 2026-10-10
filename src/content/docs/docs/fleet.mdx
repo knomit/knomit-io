@@ -1,0 +1,242 @@
+---
+title: Fleet
+description: "A closed set of knomit instances sharing knowledge bases: the fleet repository of member records, signed commits verified once at acceptance, and peer hosting."
+---
+
+import { Aside, Steps } from '@astrojs/starlight/components';
+
+A **fleet** is a closed set of knomit instances that share knowledge bases.
+Its membership is itself a knowledge base: the **fleet repository**, which
+holds one member record per instance. Who may sign a knowledge base's commits
+is decided by those records and nothing else; no key list, certificate or root
+key lives in any knowledge base or commit.
+
+A fleet is optional. A single instance, or several instances syncing through
+a forge with verification off, need none of this. It becomes useful when you
+want a knowledge base to accept only commits signed by known members, or when
+one instance hosts a repo that its peers push to. For where this fits in the
+fabric, see [Concepts](/docs/concepts/).
+
+## Identity
+
+Every instance has an Ed25519 key (`<KNOMIT_HOME>/id_ed25519`, or
+`[remote].ssh_key`). It signs every commit the instance authors, and its
+fingerprint names the agent branch, `agent/<host>-<fp8>`.
+
+On first boot the instance derives its **agent id** from that branch name and
+**persists** it in `control.db`. From then on the id never changes, even if the
+hostname or the key does. The id is opaque: nothing parses a fingerprint out of
+it. Commits are authored as `<agent-id>+<operation>@agents.knomit.io`, and the
+agent id in that address is how a verifier finds the signer's member record. `knomit fleet status` and `GET /api/v1/fleet` show the id as
+`agent_id`.
+
+Instance **certificates** for mutual TLS between instances are a separate
+thing, managed with `knomit identity`; see
+[Authentication & permissions](/docs/auth/#certificates-between-instances).
+
+## The fleet repository
+
+A fleet repository is a knowledge base whose ontology is knomit's built-in
+`fleet` preset. It has one topic, `members`, and a member record is a
+`pragmatic` `policy` fact at `kb/members/<agent-id>/`. Its body starts with
+`field: value` lines:
+
+| Field | Holds |
+|-------|-------|
+| `agent` | The agent id. |
+| `state` | `active`, `left` or `revoked`. |
+| `key` | The instance's **current** signing key, one `ssh-ed25519` line. |
+| `host`, `branch` | Its hostname and agent branch. |
+| `addresses` | URLs peers can reach it at, copied from the operator's `external_addresses` in `knomit.toml`. |
+| `git` | `/git` when the instance serves git and is not read-only. |
+| `capabilities` | What the host reports: `os`, `arch`, `version`, `read_only`. |
+
+A record holds current values only. Earlier keys and states are earlier
+versions of the same fact, readable with `knomit_explain`, and records are
+never deleted: leaving or revoking is a change of `state`. An instance mounts
+at most one fleet repository, recognised by its ontology alone.
+
+At every boot a registered instance compares its own record with its current
+config and binary and, if anything changed, writes one update on its agent
+branch. It never changes its own `state`. The update reaches the fleet's
+`main` the way the record did: through a merge.
+
+### Creating one
+
+Create the fleet repository from the `fleet` template in the playbooks repo
+([Templates & playbooks](/docs/templates/)), in mode `initialize`, on a git
+repository every instance can reach and push its agent branch to. Its branch
+must have a commit and no knomit ontology:
+
+```sh
+curl -X POST http://localhost:19278/api/v1/repos \
+  -H 'Content-Type: application/json' \
+  -d '{"name":"fleet","mode":"initialize",
+       "origin":{"url":"git@github.com:you/fleet.git","branch":"main"},
+       "template":{"repo":"knomit-playbooks","name":"fleet"}}'
+```
+
+The fleet template is refused in local mode `template`, and on an instance
+that already has a fleet. Once a person merges the creating instance's agent
+branch into the fleet's `main`, other instances can join.
+
+### Joining and leaving
+
+<Steps>
+
+1. On each instance, register with the fleet repository's URL:
+
+   ```sh
+   knomit fleet register git@github.com:you/fleet.git
+   ```
+
+   The instance clones the fleet repository, checks that its ontology is the
+   `fleet` preset, writes its own `active` record on its agent branch, and
+   pushes. `--token` and `--auth-method` supply credentials for the origin.
+
+2. A person **accepts** the instance by merging its agent branch into the
+   fleet's `main`. Before that merge its record reads `pending`. Admission is that
+   merge, and whoever may merge into the fleet's `main` decides who is in.
+
+3. `knomit fleet status` shows the instance's fleet state
+   (`standalone`, `registering`, `registered`, `unregistering`), its record's
+   state at the fleet's `main`, and the last error.
+
+</Steps>
+
+`knomit fleet unregister` writes a `left` record and pushes it. The fleet
+repository is unmounted only after that push succeeds; while it is pending the sync loop
+retries it, and a new registration is refused. The fleet repository cannot be
+deleted by name while the instance is registered.
+
+`knomit fleet` is a thin client of the running server over its local socket,
+like the REST API it calls:
+
+| Route | Does |
+|-------|------|
+| `GET /api/v1/fleet` | State, fleet repo and URL, `agent_id`, record state, own record and whether it is current, last error, notices. |
+| `PUT /api/v1/fleet` | Register: `{url, auth_method?, auth_token?}`. 200 when registered, 202 while the push is pending. |
+| `DELETE /api/v1/fleet` | Unregister. 200 when done, 202 while pushing. |
+| `GET /api/v1/fleet/members` | Every member record at the fleet's `main`. |
+
+In the [web UI](/docs/web-ui/), **Manage → Fleet** shows the same state, the
+member list, a form to register, and an unregister button.
+
+## Signing and verification
+
+Every commit an instance authors is signed before it is stored, and with no
+signer the write is refused. The only unsigned commits are a new repository's
+init commits. Whether a knowledge base **checks** those signatures is a
+root attribute of its ontology:
+
+```yaml
+attributes:
+  verify_signatures: off    # off (default) | log | enforce
+```
+
+Anyone who can merge into that knowledge base's `main` can change it.
+
+Commits are verified **once, when they are accepted** into a knowledge base's
+`main`, the way git hosts verify a change when it is merged. Fetches, syncs and
+merges between agent branches do not re-verify, and history already in `main`
+is never re-checked. When verification is on, each commit being accepted must:
+
+- carry a valid SSH signature;
+- have an author whose agent id has exactly one member record;
+- be signed by that record's current key, which no other record holds;
+- belong to a record whose state is `active`.
+
+An unsigned merge commit passes only if it adds nothing beyond its parents.
+`enforce` refuses on the first failure; `log` reports and accepts.
+
+### Where the check runs
+
+- **On a forge**, as a CI job before the step that merges an agent branch.
+  knomit ships a workflow template, `tools/ci/verify-signatures.yml`, that
+  checks out the fleet repository (repository variable `KNOMIT_FLEET_URL`,
+  optional secret `KNOMIT_FLEET_TOKEN`) and runs `knomit verify ci` against it; by hand that is:
+
+  ```sh
+  knomit verify ci --candidate <agent branch> --fleet <fleet checkout>
+  ```
+
+  It reads `verify_signatures` at the upstream tip first; when it is `off` it
+  exits 0 without touching the fleet. Exit 1 means `enforce` refused a commit,
+  exit 2 that the check could not run.
+
+- **On a knomit host**, at the push: see
+  [Hosting a repo for peers](#hosting-a-repo-for-peers).
+
+`knomit verify audit --fleet <dir> [--key <fp>]` is for forensics: it walks a
+whole branch against **every** version of the member records and lists
+unsigned commits and commits signed by an unknown, foreign or revoked key; with
+`--key` it lists everything one key signed.
+
+### The own-branch check
+
+One check is always on, whatever `verify_signatures` says. When an instance
+clones a repo whose origin already holds a copy of **its own** agent branch, it
+adopts that copy only if every commit beyond `main` was signed by one of its
+own keys, is reachable through the second parent of a merge it signed itself
+(below), or was waived on this instance with
+`knomit verify accept <commit> [--repo NAME] [--note TEXT]`
+(`--list` shows the waivers). Otherwise the create fails and names each commit;
+nothing is discarded.
+
+## Hosting a repo for peers
+
+A knomit instance can be the origin for a repo, so a mission can run with no
+forge at all. Peers clone it over `knomit+https://<host>:<tls port>/git/<repo>`
+and push back to the same URL.
+
+**Who may push.** Only an instance authenticated by its fleet certificate over
+mutual TLS ([Authentication & permissions](/docs/auth/)). Every chained
+instance certificate holds `push:own`; bearer tokens never reach `/git`, and a
+subscription accepts no pushes. A push must update exactly one ref, under
+`refs/heads/agent/`, whose name ends in the pusher's own certificate
+fingerprint, and never the host's own agent branch. Deleting a branch is
+refused; a peer may force-update its own.
+
+**Signatures at the push** follow the host's `verify_signatures`, read at the
+host's `main`: `off` accepts, `log` accepts and logs refusals, `enforce` refuses
+the push naming the commit.
+
+**On the host** a pushed branch is readable (REST, MCP, the branch list) but
+never writable, fires no trigger, and is not forwarded by the host's own origin
+push. The push itself never merges anything. Merging is done by:
+
+- **`consensus: auto`**, on a host with no origin: every pushed branch is
+  merged automatically
+  ([Sync, consensus & conflicts](/docs/sync-and-consensus/#consensus-auto)); or
+- **the operator**, from **Manage → repo → Pushed branches**, one row per
+  peer branch with a Merge button.
+
+The operator's merge writes one host-signed merge commit
+`[host tip, peer tip]` into the **host's own agent branch**, never into `main`
+and never a fast-forward, of exactly the tip shown on the page (a branch that
+moved meanwhile is refused). `main` then follows: by the local reconcile when
+the host has no origin, or through the host's own sync and the forge when it
+has one. With a `conflicts` setting the merge settles conflicts by it. What is
+left is refused and shown with both versions of each fact; the operator then
+keeps the host's version or takes the peer's for the **whole** set, or cancels.
+
+The REST routes are `GET /api/v1/repos/{repo}/pushed-branches` and
+`POST /api/v1/repos/{repo}/branches/{branch}/merge` with
+`{"expected_tip": "<40 hex>", "resolution": "host" | "peer"}`. The merge
+requires the `operator` permission. A peer's certificate does not carry it
+(only a grant on this host can add it), so a peer cannot merge itself in.
+
+### The chain of trust
+
+The operator's merge is an act of trust, and knomit carries that trust
+forward. When the host's own agent branch is later re-cloned, the own-branch
+check adopts the peer commits that came in through the second parent of a merge
+the host signed, with no `knomit verify accept` and no warning. If you trust
+instance A, and A accepted B's commits, you trust them.
+
+<Aside type="note" title="Capabilities first, forensics after">
+The fleet features build capabilities; they do not harden hosts or operators.
+Repository access is the trust boundary, trust passes through accepted merges,
+and a compromised key is handled after the fact with `knomit verify audit`.
+See [the trust model](/docs/auth/#the-trust-model).
+</Aside>

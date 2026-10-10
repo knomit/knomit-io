@@ -131,7 +131,7 @@ test('/security renders and covers signing, encryption, and local-first', async 
   const res = await page.request.get('/security/');
   expect(res.status()).toBe(200);
   await page.goto('/security/');
-  for (const term of [/Ed25519/i, /encrypt/i, /local/i, /open source/i]) {
+  for (const term of [/Ed25519/i, /encrypt/i, /local/i, /source-available/i]) {
     await expect(page.getByText(term).first()).toBeVisible();
   }
 });
@@ -149,7 +149,7 @@ test.describe('sitemap', () => {
     // /explore was excluded while the live KB browser was gated behind a
     // teaser; it shipped as a real, crawlable page (astro.config.mjs's
     // sitemap filter was dropped), so it belongs in the sitemap now.
-    for (const p of ['/faq/', '/compare/', '/security/', '/explore/']) {
+    for (const p of ['/faq/', '/compare/', '/security/', '/explore/', '/docs/experiments/', '/docs/triggers/', '/docs/sync-and-consensus/', '/docs/fleet/', '/docs/auth/', '/docs/templates/', '/docs/antigravity/']) {
       expect(body, `sitemap missing ${p}`).toContain(p);
     }
   });

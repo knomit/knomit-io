@@ -1,15 +1,16 @@
 ---
 title: MCP tools
-description: The knomit MCP tool set, the branch-scoped endpoint, session instructions, and the stdio bridge — with full per-tool parameters.
+description: The twelve knomit MCP tools with full parameters, the scoped and unscoped endpoints, binding handles, skills as prompts, and the kb bridge.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
 
-knomit is MCP-native. A peer connects over the Model Context Protocol and gets a
-small, sharp tool set whose descriptions carry the guidance a model needs to call
-them correctly — the descriptions are written as prompt engineering for the
+knomit is MCP-native. An agent connects over the Model Context Protocol and
+gets a compact tool set whose descriptions carry the guidance a model needs to
+call them correctly — the descriptions are written as prompt engineering for the
 calling agent, not as human reference, so no prompt scaffolding is needed to use
-the tools well.
+the tools well. The same tools serve every participant in the fabric, whatever
+the knowledge base holds and whatever kind of agent connects.
 
 Knowing *when* to reach for them is a separate problem, and one the tool
 descriptions cannot solve: a tool description is only read once the model has
@@ -18,16 +19,20 @@ already decided to look at that tool. That is what
 
 ## The tools
 
-| Tool | What it does |
-|------|--------------|
-| `knomit_learn` | Write one or more facts to the knowledge base in a single commit. Deduplicates within a category automatically. |
-| `knomit_query` | Search by free text, entity, domain, path, or confidence threshold. `sort=recent` browses by recency; results are paginated. |
-| `knomit_explain` | Traverse a fact's versioned provenance graph via its refs (paginated BFS), anchored at a commit or at HEAD. |
-| `knomit_update` | Revise an existing fact's fields. |
-| `knomit_retract` | Remove a fact. Git history retains the provenance. |
-| `knomit_review` | Interactive session to review and maintain the knowledge base (prune, distill, reflect). |
-| `knomit_hypothesize` | Generate falsifiable hypotheses from synthesis facts. |
-| `knomit_repos` | List the repos (mounts) behind this endpoint: name, stable repo id, branch, and role. |
+| Tool | Writes? | What it does |
+|------|---------|--------------|
+| `knomit_learn` | yes | Write one or more facts in a single commit, and optionally retract others in the same commit. Refuses a fact that shares a subject with an existing one and merges near-duplicates automatically. |
+| `knomit_query` | no | Search by free text, entity, domain, path, type, origin, motif, expiry, context or confidence. `sort=recent` browses by recency; results are paginated. |
+| `knomit_explain` | no | Traverse a fact's versioned provenance graph via its refs, anchored at a commit or at HEAD. Also reads an artifact, or a `.knomit/` system file by its exact path. |
+| `knomit_changes` | no | List the net added, modified and deleted fact paths under a folder since a bookmark commit. |
+| `knomit_skill` | no | List this repo's skills, or read one with its bundled files. |
+| `knomit_update` | yes | Revise an existing fact's fields, or edit its body in place with `ops`. |
+| `knomit_retract` | yes | Remove a fact. Git history retains the provenance. |
+| `knomit_hypothesize` | yes | Generate falsifiable hypotheses from synthesis facts. |
+| `knomit_review` | yes | Interactive session to review and maintain the knowledge base (prune, distill, reflect). |
+| `knomit_experiment` | yes | Work on an isolated `exp/<name>` branch: list, open, commit, roll back or sync. |
+| `knomit_repos` | no | List every repo and lens the server serves, and what a binding handle points at. |
+| `knomit_bind` | no | On the unscoped endpoint, bind a repo or lens by name and receive the `binding` handle every other tool requires. |
 
 <Aside type="tip" title="Learn before you write; explain before you trust">
 `knomit_query` surfaces what's already known so an agent builds on it instead of
@@ -37,15 +42,17 @@ pointed to, so the graph you inspect is the one that existed when the claim was
 made.
 </Aside>
 
-## Read-only mode
+## Read-only mode and permissions
 
 Each tool is registered with a `write` flag, and a read-only server drops every
-tool carrying it. Three tools survive: `knomit_query`, `knomit_explain`, and
-`knomit_repos`. The other five — `knomit_learn`, `knomit_update`,
-`knomit_retract`, `knomit_review`, `knomit_hypothesize` — are never added to
-the server, so they do not appear in `tools/list` at all rather than failing at
-call time. `knomit_review` and `knomit_hypothesize` count as writes because
-both commit facts.
+tool carrying it. Six tools survive: `knomit_query`, `knomit_explain`,
+`knomit_changes`, `knomit_skill`, `knomit_repos` and `knomit_bind`. The other
+six — `knomit_learn`, `knomit_update`, `knomit_retract`, `knomit_hypothesize`,
+`knomit_review` and `knomit_experiment` — are never added to the server, so they
+do not appear in `tools/list` at all rather than failing at call time.
+`knomit_review` and `knomit_hypothesize` count as writes because both commit
+facts, and `knomit_experiment` because opening, committing and rolling back
+change branches.
 
 Read-only is set by `KNOMIT_READ_ONLY` (or `read_only` in `knomit.toml`) and is
 **startup-only** — it is read once when the server is constructed and cannot be
@@ -53,10 +60,18 @@ toggled at runtime. The MCP dispatch routes are exempt from the HTTP method
 gate, because MCP reads arrive as `POST`s; tool filtering is what enforces
 read-only-ness here. See [Deployment](/docs/deployment/) for the operator view.
 
-## The endpoint
+On a server that is not read-only, the six write tools are still gated per
+caller: `tools/list` hides them from a principal that does not hold the `write`
+permission, and a call from one returns the tool error *permission denied:
+&lt;tool&gt; requires write; principal &lt;principal&gt; does not hold it*. A binding to a subscription — a read-only follower
+of a remote branch — refuses writes as well. See
+[Authentication & permissions](/docs/auth/).
 
-The MCP endpoint is **branch-scoped** — each agent reads and writes its own
-branch:
+## The endpoints
+
+There are three kinds of MCP mount, all under `/api/v1`.
+
+**Branch-scoped.** Each agent reads and writes its own branch of one repo:
 
 ```
 POST /api/v1/repos/{repo}/branches/{branch}/mcp
@@ -64,47 +79,99 @@ POST /api/v1/repos/{repo}/branches/{branch}/mcp
 
 The agent branch is logged on startup (`branch=agent/hostname-abc123`) and is
 also available via `GET /api/v1/repos/{repo}` (the `agent_branch` field). Branch
-names use `:` in place of `/` in URL path segments
-(e.g. `agent:hostname-abc123`).
+names use `:` in place of `/` in URL path segments (for example
+`agent:hostname-abc123`). The same form addresses an experiment:
+`…/branches/exp:<name>/mcp` serves `exp/<name>`.
 
-A [lens](/docs/lenses/) — one write repo federated with N read mounts — has its
-own endpoint and no branch segment, because each mount resolves its own branch:
+**Lens.** A [lens](/docs/lenses/) — one write repo federated with N read
+mounts — has its own endpoint and no branch segment, because each mount
+resolves its own branch. An experiment on a lens has its own path, and only the
+write repo moves:
 
 ```
 POST /api/v1/lenses/{lens}/mcp
+POST /api/v1/lenses/{lens}/experiments/{name}/mcp
 ```
 
-A `?profile=` query parameter on either endpoint is deprecated: the value is
-logged at debug level and discarded.
+**Unscoped.** Nothing is chosen by the URL:
+
+```
+POST /api/v1/mcp
+```
+
+On the unscoped mount the agent picks a repo or lens with `knomit_bind`, which
+returns an opaque `binding` handle, and passes that handle as the `binding`
+argument on every other tool. Binding is per call, not per connection or per
+`Mcp-Session-Id`: some hosts share one connection across several independent
+jobs, so anything keyed on the connection would let one job redirect another's
+reads and writes. Each handle names the base it was minted for, and the model
+cannot invent a working one.
+
+- Every call to `knomit_bind` mints a fresh handle and leaves earlier handles
+  valid. There is no unbind. A handle is stored server-side by the repo's
+  identity (so a rename does not strand it) and purged once it has gone unused
+  for `session.client_retention` (168 hours by default).
+- Any tool other than `knomit_bind` and `knomit_repos` called without a handle,
+  or with one the server never minted, fails with a tool error that names
+  `knomit_bind`; a handle whose repo or lens has since gone fails with the
+  reason it no longer resolves. `knomit_repos` works without a handle, and given a stale one it
+  reports `bound.status: "unresolvable"` instead of failing.
+- On a branch-scoped or lens endpoint the base comes from the URL, so a
+  `binding` argument is refused on presence (even an empty one), and
+  `knomit_bind` always fails there.
+
+A `?profile=` query parameter on any endpoint is deprecated: the value is logged
+at debug level and discarded.
 
 ## Session instructions
 
 There is a **single MCP server instance**, shared across every repo and lens;
-each tool handler resolves the target binding from the request context. The
-instructions sent to the calling model are computed **per session** from that
-binding via an `AfterInitialize` hook, so the model is told the exact topics and
-categories the repo accepts. The topic list it receives is the repo's
-[ontology](/docs/ontologies/#how-the-ontology-reaches-the-agent), each topic
-carried by its `description` — which makes those descriptions prompt text rather
-than documentation.
+each tool handler resolves the target binding from the request. The instructions
+sent to the calling model are computed **per binding**, so the model is told the
+exact topics and categories the repo accepts. The topic list it receives is the
+repo's [ontology](/docs/ontologies/#how-the-ontology-reaches-the-agent), each
+topic carried by its `description` — which makes those descriptions prompt text
+rather than documentation.
 
-For a lens binding, the instructions also carry a lens addendum: the mounts
-table, the `kb://` path convention, and read coverage per mount. A single-repo
-binding emits no addendum, so those sessions are byte-identical to before
-lenses existed.
+- On a branch-scoped or lens endpoint, the instructions arrive at `initialize`.
+  For a lens they also carry an addendum: the mounts table, the `kb://` path
+  convention, and read coverage per mount. A single-repo binding emits no
+  addendum.
+- On the unscoped endpoint, `initialize` cannot know the base yet, so it says to
+  start with `knomit_repos` and `knomit_bind`. MCP cannot re-send instructions
+  mid-session, so the result of `knomit_bind` carries the bound base's
+  instructions along with the handle and the mounts table, and the agent treats
+  them as session instructions.
+
+## Skills as prompts
+
+A repo can keep skills — instructions on how to do things there — in
+`.knomit/skills/<name>/SKILL.md`. A skill's frontmatter carries a `name` equal to
+its folder (kebab-case) and a non-empty `description`; the Markdown body follows,
+and any other files in the folder are its bundled files. Skills are read from
+the tip of the repo's **consensus branch**, so a skill edited on an agent branch
+is served only once it has been merged there. A binding serves the skills of its
+write repo only: a lens serves none of its read members' skills.
+
+They reach an agent two ways. As **MCP prompts**, one per skill, with one
+optional argument `args` that replaces `$ARGUMENTS` in the body, or is appended
+when the body has none; prompts are
+served on branch-scoped and lens endpoints. And through the **`knomit_skill`**
+tool, which also works on the unscoped endpoint, where a prompt request carries
+no handle.
 
 ## The stdio bridge
 
-stdio-only MCP clients (Claude Code, Claude Desktop, Claude Cowork, VS Code,
-Cursor, …) use `knomit-bridge`, the stdio↔HTTP adapter built by `make build`. It
-auto-discovers the agent branch from the running server, so you never look it up
-by hand:
+stdio-only MCP clients (Claude Code, Claude Desktop, Claude Cowork, Antigravity,
+VS Code, Cursor, …) use `kb`, the stdio↔HTTP adapter built by `make build`. It
+finds the server, discovers the agent branch for `--repo`, and forwards each
+JSON-RPC message untouched:
 
 ```json
 {
   "mcpServers": {
-    "knomit": {
-      "command": "dist/knomit-bridge",
+    "knomit-repo-core": {
+      "command": "kb",
       "args": ["--repo", "core"]
     }
   }
@@ -113,11 +180,13 @@ by hand:
 
 `--lens <name>` connects to a lens endpoint instead; it is mutually exclusive
 with `--repo` and skips branch discovery, since each mount resolves its own
-branch server-side.
+branch server-side. With neither flag, `kb` connects to the unscoped endpoint
+and the agent binds with `knomit_bind`. The bridge does not interpret tool
+arguments, so a `binding` handle passes through it unchanged.
 
 See the [Quick start](/docs/quick-start/) for the full connection walkthrough and
-the streamable-HTTP alternative, and the [CLI reference](/docs/cli-reference/) for
-every bridge flag.
+the streamable-HTTP alternative, and the [CLI reference](/docs/cli-reference/)
+for every bridge flag.
 
 ## Tool reference
 
@@ -127,42 +196,167 @@ model, not human documentation. The reference below paraphrases intent; the live
 schema is always authoritative.
 </Aside>
 
+### Arguments common to the tools
+
+| Param | Applies to | Notes |
+|-------|-----------|-------|
+| `binding` | every tool except `knomit_bind` | The opaque handle returned by `knomit_bind`. **Required** on the unscoped endpoint, **optional** on `knomit_repos`, and **refused** on a branch-scoped or lens endpoint. Pass it verbatim: it is random, it is not the repo or lens name, and an invented one is rejected. |
+| `moment_name` | `knomit_learn`, `knomit_update`, `knomit_retract` | A short, one-line label for the write. It becomes part of the commit message. A newline is refused; use `trace` for `Key: value` entries. |
+| `trace` | the six write tools | An object of string values written as trailers on every commit the call makes, so the writes of one task can be found later with `git log --grep`. See below. |
+
+**`trace`.** Pass the same object on every write for a task; knomit stores
+nothing between calls, so a write without it is untraced. Names beginning with
+`Knomit-` are knomit's own: pass only `Knomit-Trace` (one line, at most 256
+bytes), `Knomit-Cause` (a full lowercase commit hash) and `Knomit-Run`
+(`run-` followed by 32 lowercase hex), exactly as you were given them, never
+`Knomit-Trigger` or any other. Any other key is letters, digits and hyphens,
+starting with a letter or digit, at most 32 characters; its value is one line of
+at most 128 bytes with no leading or trailing spaces; at most 8 such keys; two
+keys that differ only in case are refused. Any entry outside these rules refuses
+the whole call and nothing is written. A write made by a trigger script or recipe
+is stamped by knomit itself, and a `trace` there is refused. See
+[the causal trace](/docs/triggers/#causal-trace).
+
+### `knomit_bind` — bind a repo or lens
+
+Only meaningful on the unscoped endpoint; on a branch-scoped or lens endpoint it
+always fails. Binds a repo or lens by name (`knomit_repos` lists the names) and
+returns the handle, the mounts table and the knowledge base's instructions. It
+takes no `binding` argument of its own, and one is refused.
+
+| Param | Type | Notes |
+|-------|------|-------|
+| `repo` | string | Name of the repo to bind. Mutually exclusive with `lens` |
+| `lens` | string | Name of the lens to bind. Mutually exclusive with `repo` |
+| `experiment` | string | Optional. **Resume** an existing experiment so the new handle starts inside it. It does not create one; use `knomit_experiment` with `action: open` for that. This is how an agent that no longer has its old handle, for example after reconnecting, gets back into an experiment |
+
+Exactly one of `repo` and `lens` is required. Writes go to the repo's agent
+branch (or to the experiment, if one is resumed). A subscribed repo binds at the
+branch it follows and refuses writes. The handle selects the knowledge base and
+carries no review state: `knomit_review` and `knomit_hypothesize` continuations
+need their own `session_id`.
+
+### `knomit_repos` — list what the server serves
+
+The one tool that works without a handle. Call it first on the unscoped
+endpoint to learn the names `knomit_bind` accepts; pass `binding` to have the
+result also describe what that handle names, or why it no longer resolves. The
+only parameter is the optional `binding`.
+
+The result has a fixed shape per state:
+
+| Key | Notes |
+|-----|-------|
+| `repos` | Always present. One row per repo: `name`, `id` (the 12-hex root-commit id used in `kb://<id>/…` paths; absent for a repo with no open store), `mode` (`writable`, `read-only` or `subscribe`), `agent_branch`, `read_branch`, `ontology_root`, `profile`; an unavailable repo carries `status: "unavailable"` with `reason` and `detail` |
+| `lenses` | One row per lens: `name`, `description`, `write` and `mounts` (each with `repo`, `branch` and, when its store is unavailable, `unavailable: true`). If the lens registry cannot be read, the key is replaced by `lenses_error`, so an agent never reads "no lenses" from a failed lookup |
+| `bound` | Present only when the call carries a handle (or sits on a branch-scoped endpoint). `name` is the bound repo or lens, and `mounts` is the mount table below. A handle that no longer resolves reports `status: "unresolvable"` with the `error`; `lapsed_experiment` names an experiment the caller was working in that no longer exists, in which case the call ran on the ordinary write branch |
+
+Mount rows:
+
+```json
+{
+  "bound": {
+    "name": "core",
+    "mounts": [
+      {"name": "core", "id": "a1b2c3d4e5f6", "branch": "main",
+       "role": "read+write", "write_branch": "agent/hostname-abc123"},
+      {"name": "vendor-kb", "id": "0f9e8d7c6b5a", "branch": "main", "role": "read"}
+    ]
+  }
+}
+```
+
+| Field | Notes |
+|-------|-------|
+| `name` | Repo name |
+| `id` | 12-hex prefix of the repo's root commit — the same id that appears in `kb://<id>/…` paths |
+| `branch` | The branch this mount is **read** at |
+| `role` | `read+write` on the write mount when writes are permitted; `read` otherwise |
+| `source` | Source slug, when the mount has one |
+| `write_branch` | Present only on the `read+write` row — where writes actually commit, which may differ from `branch` |
+| `mode` | `subscribe` for a read-only follower of a remote branch; absent otherwise |
+| `experiment` | The experiment this mount is writing inside, when it is in one |
+
+A mount's source slug is not what a `src://` ref carries: those are keyed by the
+source repo's own root commit. The key `binding` always means the opaque handle;
+the repo or lens name is `name`.
+
 ### `knomit_learn` — write facts
 
-Write one or more facts in a single git commit.
+Write one or more facts in a single git commit. A fact that shares a subject
+with an existing one (similar text **and** a shared entity) is refused with the
+candidates listed; update the existing fact, or resubmit with `distinct_from`
+naming the paths you have checked. A near-duplicate in the same category is
+merged into the existing fact automatically — the response says so, and for two
+hypotheses says which prediction was dropped. A topic can switch both of these
+off with the ontology attribute `learn_dedup: off`.
 
 | Param | Type | Req | Default | Notes |
 |-------|------|-----|---------|-------|
 | `moment_name` | string | ✓ | | Short label for this learning moment (becomes part of the commit) |
-| `facts` | array | ✓ | | One or more fact objects (below) |
+| `facts` | array | ✓ | | One or more fact objects (below). The array is required; it may be empty only when `retract` is given |
+| `retract` | string[] | | | Fact paths to retract in the **same commit** as the facts written: an atomic move. See below |
+| `trace` | object | | | See above |
+| `binding` | string | | | See above |
 
-Each fact object:
+Each fact object accepts exactly these keys; an unknown key is refused:
 
 | Field | Type | Req | Default | Notes |
 |-------|------|-----|---------|-------|
-| `topic` | string | ✓* | | Top-level [ontology](/docs/ontologies/) topic. A closed set — an undeclared topic is rejected |
-| `category` | string | ✓* | | Category path within the topic (e.g. `languages/go/concurrency`). Not a closed set — declared children guide placement, but [anything below a topic is accepted](/docs/ontologies/#how-paths-are-validated) |
-| `path` | string | ✓* | | **Private state only.** An explicit repo-relative path under `.knomit/<area>/`, used instead of `topic`/`category` — see [private state](#private-state) |
-| `title` | string | ✓ | | Short descriptive title |
-| `body` | string | ✓ | | Fact body, natural language |
+| `topic` | string | ✓† | | Top-level [ontology](/docs/ontologies/) topic. A closed set — an undeclared topic is rejected |
+| `category` | string | ✓† | | Category path within the topic (e.g. `languages/go/concurrency`). Not a closed set — declared children guide placement, but [anything below a topic is accepted](/docs/ontologies/#how-paths-are-validated) |
+| `path` | string | ✓† | | **Artifacts only.** An explicit repo path under `artifacts/<area>/` for an agent's working file that is not knowledge — see [Private state](#private-state) |
+| `title` | string | ✓ | | Short descriptive title. A blank title is refused |
+| `body` | string | ✓ | | Fact body, natural language. State compound conditions in full, include the consequence a consumer should act on, and for rules name the foreseeable misreading |
 | `kind` | string | | `epistemic` | `epistemic` (descriptive) or `pragmatic` (prescriptive) |
 | `type` | string | | `observation` | Leaf type — depends on `kind` (see below). A JSON-schema `enum`, so a typo'd type is rejected at the protocol layer |
 | `origin` | string | | | `authored` · `distilled` · `discovered`. Omit for a fact you write yourself — `authored` is the default for every type **except** `synthesis`, where omitting `origin` means `distilled`, so set it explicitly on a synthesis fact you wrote. Immutable after the write |
 | `domain` | string[] | | | Cross-cutting domain tags |
-| `entities` | string[] | | | Entities the fact mentions |
 | `confidence` | number | | `0.7` | 0.0–1.0 |
-| `sources` | integer | | `1` | Independent sources |
-| `refs` | string[] | | | External URLs or source refs |
+| `sources` | integer | | `1` | Independent corroborations |
+| `entities` | string[] | | | Entities the fact mentions |
+| `motifs` | string[] | | | 0–3 motifs: general regularities this fact is an instance of. Each is a 2–4 word kebab-case noun phrase naming a mechanism, failure shape or pattern that a fact about a completely different subject could also carry. Not the fact's subject (that is `entities`) or area (that is `domain`). An empty list is a correct answer |
+| `expires` | string | | | RFC 3339 timestamp with an offset, such as `2026-10-01T00:00:00Z`. Past it, the fact is marked expired in query results and `knomit_query` can find it. **knomit never deletes, hides or retracts a fact because it expired**; you or a person decide. Absent means never expires. Date-only values are refused. Times are stored in UTC |
+| `context` | object | | | A map of short typed labels (strings, numbers or booleans) that let a fact be found by something other than its subject, such as `{"task": "t-17"}`. The keys a fact may carry are declared per topic in the ontology; an undeclared key, a wrong type or a missing required key refuses the whole call. Keys are snake_case, at most 32 characters, at most 16 per fact; a string value is one line of at most 128 bytes unless the declaration allows up to 256. Not allowed with `path`. Find facts by it with `knomit_query`'s `context` filter |
+| `distinct_from` | string[] | | | Paths of existing facts you have **read** and judged to be about a different subject. For this call only, it stops the automatic dedup merge from folding the fact into those paths and lets the fact past the same-subject refusal. Use it after a refusal, or to write a counter-hypothesis beside the hypothesis it opposes. It is not stored, and a later `knomit_review` may still merge the two. Every path must exist on the branch |
+| `refs` | string[] | | | References, in five forms (below) |
 
-\* Either `topic` **and** `category`, or `path` — never both. Supplying `path`
+† Either `topic` **and** `category`, or `path` — never both. Supplying `path`
 alongside either is an error, not a precedence rule.
+
+**Ref forms.** (1) A fact in this repo: its bare path `kb/<topic>/…/<id>.md`,
+exactly as `knomit_query` returns it; the server rewrites it to the canonical
+`kb://<repo-id>/<path>` form. The target must already exist or be written in the
+same call, and all facts in one call may cite each other in any order. Citing a
+fact that will not exist rejects the whole call and names every offending ref.
+(2) A fact in another repo: `kb://<repo-id>/<path>`, copied verbatim from a
+`knomit_query` or `knomit_explain` result. (3) Source code:
+`src://<source-repo-id>/<path>@<commit>:<blob>` with the full 40-hex commit and
+blob, optionally `#L<start>-L<end>`. The id is the **source** repo's root commit,
+not a knomit repo id, and the server holds no source objects, so it cannot verify
+a `src://` ref for you; get all three parts by running git in the checkout you
+cite. A `src://` ref short of this form is refused when added. (4) An external
+URL: `https://…` or `file:///…`. (5) A system file in this repo:
+`.knomit/<path>`, its exact path with case kept, never a directory. It must
+exist at the branch tip or the whole call is refused; `knomit_explain` later
+shows the file as it stood when the fact was written.
 
 **Types** — epistemic: `observation`, `concept`, `process`, `principle`,
 `pattern`, `reference`, `synthesis`, `insight`, `hypothesis`, `methodology`.
-Pragmatic: `policy`, `heuristic`. A single batch may **not** mix observed types
-with inferred types (`hypothesis` / `methodology`). The `kind`, `type`, and
-`origin` vocabularies are generated from one source, so the `learn` schema, the
-`update` schema, and the session instructions cannot disagree.
+Pragmatic: `policy`, `heuristic`, `signal`. A `signal` is coordination content
+consumed once and never weighed for belief — a task, message, acknowledgement or
+membership claim; act on it once and ignore its confidence. A single batch may
+**not** mix observed types with inferred types (`hypothesis` / `methodology`).
+The `kind`, `type` and `origin` vocabularies are generated from one source, so
+the `learn` schema, the `update` schema and the session instructions cannot
+disagree.
+
+**`retract` — an atomic move.** Every path in `retract` must exist on this
+branch at the moment of the write, checked under the branch's write lock; if any
+is already gone, the whole call is refused and nothing is written. A path may not
+be both written and retracted. This is atomic on **this branch only**: two
+agents on two branches can each move the same fact, and nothing in knomit makes
+a move exclusive across agents.
 
 Schema conformance is not the only gate. If the repo's ontology declares
 [validation rules](/docs/ontologies/#validation-rules), each written fact — and
@@ -172,11 +366,13 @@ the same check on the reassembled fact.
 
 ### `knomit_query` — search
 
-Returns lightweight rows (title, type, domain, score, ~400-char snippet) — not
-full bodies. Paginated via an opaque `cursor`. At least one of `text`,
-`entities`, `domain`, `applies_to`, `path`, `type`, `origin`, or
-`min_confidence` is required (unless paging with `cursor`, or using
-`sort=recent`).
+Returns lightweight rows (title, type, domain, score, ~400-character snippet) —
+not full bodies. Paginated via an opaque `cursor`. At least one selecting filter
+is required: `text`, `entities`, `domain`, `applies_to`, `path`, `type`,
+`origin`, `motifs`, `min_confidence`, `context`, or any of the expiry filters —
+unless paging with `cursor`, or using `sort=recent`. Argument keys are not
+checked: a misspelled filter is ignored, not refused. A fact past its `expires` is marked `"expired": true`; nothing is hidden
+by default.
 
 | Param | Type | Notes |
 |-------|------|-------|
@@ -185,49 +381,106 @@ full bodies. Paginated via an opaque `cursor`. At least one of `text`,
 | `domain` | string[] | Domain tags |
 | `applies_to` | string[] | Ancestor-or-equal domain match (scope includes these) |
 | `domain_exact` | bool | Exact canonical tag match only (default false) |
-| `path` | string | Path prefix |
-| `type` | string[] | Filter to epistemic types |
+| `path` | string | Path prefix. Only facts are searched: a path with a dot segment (`.knomit/`) is refused, and `artifacts/` returns nothing; read an artifact by its exact path with `knomit_explain` |
+| `type` | string[] | Filter to these types |
 | `origin` | string[] | `authored` · `distilled` · `discovered` |
+| `motifs` | string[] | Facts that instantiate these motifs, whatever their subject. Through a lens the mounts share one motif vocabulary, so a term reaches every spelling any mount groups with it |
+| `motif_match` | string | How strictly `motifs` must match: `exact` (default; the same motif however it is spelled), `stem`, `token-2`, `token-1` (the noisiest). `soft` appears in the schema but is refused with an explanation. Only meaningful alongside `motifs` |
+| `expired` | bool | `true`: only facts whose `expires` is at or before now. `false`: only facts not expired, which **includes** facts with no `expires`. "Now" is the server clock, fixed once per query |
+| `expires_before` | string | RFC 3339 timestamp: only facts whose `expires` is strictly before it. Excludes facts with no `expires` |
+| `expires_after` | string | RFC 3339 timestamp: only facts whose `expires` is strictly after it. Excludes facts with no `expires`. "Expiring within a window" is `expires_after=<now>` plus `expires_before=<now + window>` |
+| `context` | object | Key/value pairs, **all** of which must match exactly. Values are strings, numbers or booleans, compared by canonical text. With `text`, the filter applies after the semantic nearest-neighbour window, so it can return fewer matches than exist; without `text` it is exact |
 | `min_confidence` | number | 0–1 |
-| `min_similarity` | number | Cosine floor for text search; 0 = model's calibrated recall floor |
-| `sort` | string | `relevance` (default) or `recent` (browse, needs no other filter) |
-| `limit` | number | Default 20, max 100 (snippet mode); 3/5 with `include_body` |
-| `max_results` | number | Maximum total results materialised across all pages (snapshot depth). Default 500; higher values are clamped to 500. Page size is `limit`, not this. A value ≤ 0 is an error |
+| `min_similarity` | number | Raw cosine floor for text search, in [0, 1]; out-of-range values are rejected. `0` uses the active embedding model's calibrated recall floor, which is not "no cutoff". The `score` shown on results is cosine×100; do not pass it back |
+| `sort` | string | `relevance` (default) or `recent` (most recently committed; browse with no other filter) |
+| `limit` | number | Page size. Default 20, max 100 (snippet mode); default 3, max 5 with `include_body` |
+| `max_results` | number | Maximum total results materialised across all pages (snapshot depth). Default 500; higher values are clamped to 500. Page size is `limit`, not this |
 | `include_body` | bool | Full bodies (small pages only) |
-| `cursor` | string | Page token; freezes filters |
+| `cursor` | string | Page token; freezes the filters, so pass it alone (only `limit` and `include_body` still apply) |
 
 ### `knomit_explain` — walk provenance
 
 Explains a fact by walking its **versioned** provenance graph, anchored at a
-commit. The root fact is returned in full (with revision `history`); every
-referenced fact is returned as a lean summary read **at the exact version the
-referrer pointed to**. Summaries may be flagged `deleted` (retracted since) or
-`superseded` (newer at HEAD).
+commit. The root fact is returned in full, with its `history`: the commits that
+changed its content, merge-delivered writes included, newest first, each with
+its `action` and a confidence and content diff. Every referenced fact is returned
+as a lean summary read **at the exact version the referrer pointed to**.
+Summaries may be flagged `deleted` (retracted since) or `superseded` (newer at
+HEAD).
 
 | Param | Type | Req | Notes |
 |-------|------|-----|-------|
-| `file` | string | ✓ | Fact path — bare (`kb/technology/go/abc123.md`) for the write repo, or qualified (`kb://<id12>/kb/…`) for a fact on a read mount |
+| `file` | string | ✓ | A fact path under `kb/` — bare (`kb/technology/go/abc123.md`) for the write repo, or qualified (`kb://<id12>/kb/…`) for a fact on a read mount — an artifact under `artifacts/<area>/`, or a system file under `.knomit/` by its exact path (`.knomit/ontology.yaml`), case kept |
 | `commit` | string | | Anchor commit; omit for HEAD. Drill into a summary by re-calling with its `path` + `commit` |
 | `cursor` | string | | Session id to page the walk |
+| `history_cursor` | string | | The `history.history_cursor` from a previous explain of this `file`, to get the next page of its history. Pass it with the same `file` and without `commit` or `cursor`. Those calls return history only; do not page history by passing an older revision as `commit` |
+
+A **system file** explained directly comes back as one node of kind
+`system_file` with its `blob`, `size` and raw `content` (`encoding: base64` when
+it is not UTF-8; over 256 KiB it carries `content_truncated: true` and no
+content), and no history or children. A fact's refs to `.knomit/` files appear
+in its walk as `system_file` summary nodes pinned at the fact's commit; explain
+one with its `path` **and** `commit` to read it. A file node is `deleted: true`
+when the file is gone at the tip, or when no file existed at that path at the
+fact's commit. A symlink is never followed and counts as no file.
 
 `knomit_explain` never fans out across mounts: the fact's own path fixes the
-mount, and the whole provenance walk stays inside it. A `kb://` ref is
-classified as **External**, not a local fact edge — it carries no evidence
-weight and creates no local provenance edge.
+mount, and the whole provenance walk stays inside it. A `kb://` ref to the
+fact's own repo is a local edge and is walked like a bare path; a `kb://` ref to
+another repo is listed under `external` and is not walked.
+
+### `knomit_changes` — what changed since a bookmark
+
+Compares a folder at the commit `since` with the folder now and returns each fact
+path under it as `added`, `modified` or `deleted`, plus `head` (the commit it
+compared against) and `bookmark`. No timestamp is read: the answer depends only
+on the two commits. It is the polling primitive for a coordination agent that
+watches a task pool or inbox. See [Reading what changed](/docs/sync-and-consensus/#reading-what-changed)
+and [Triggers & recipes](/docs/triggers/).
+
+| Param | Type | Notes |
+|-------|------|-------|
+| `repo` | string | The repo to read: its 12-hex id from `knomit_repos` (not its name), mounted in your binding. Omit for the repo you write to |
+| `branch` | string | The branch to read there (`main`, `agent/<id>`, `exp/<name>`). Omit for the branch your binding reads that repo at, normally your agent branch or your experiment, so your own writes appear immediately. Do not combine with `consensus` |
+| `consensus` | bool | `true`: read the repo's consensus branch, whatever it is named: the shared history every synced machine agrees on. Coordination agents reading a pool another machine also reads should pass this. Do not combine with `branch` |
+| `prefix` | string | The folder relative to the repo's ontology root, such as `tasks/research`. Case-insensitive; leading and trailing `/` ignored; no `.md`. Omit for the whole root. A folder that did not exist at `since`, or no longer exists, reads as empty |
+| `since` | string | Your bookmark: the `bookmark` a previous call returned (`<repo12>:<commit40>`), or a bare 40-hex commit of the repo being read. Omit to list the folder as it is now (every row `added`), which is also the recovery when you lose a bookmark |
+| `limit` | number | Page size (default and maximum 100) |
+| `cursor` | string | Page token from a previous response. Pass it alone: it carries the repo, branch, prefix and `since` of the comparison |
+
+**Keep the bookmark yourself.** Store `bookmark` in your own state and pass it as
+`since` next time, with the same `repo` and branch arguments; knomit writes
+nothing for you. The difference is **net**: something added and removed between
+two reads is not reported, and a rename is a `deleted` row plus an `added` row.
+If `since` is not behind the current head (a bookmark from a machine further
+ahead, or from another branch) the call refuses with a named error rather than
+reporting false deletions: retry after sync, or omit `since`. Rows from the repo
+you write to are bare paths; rows from any other repo are `kb://<id>/…` paths,
+ready for `knomit_explain`. Rows are sorted by path; when `has_more` is true,
+pass the returned `cursor` for the next page, which compares the same two
+commits.
 
 ### `knomit_update` — revise a fact in place
 
 | Param | Type | Req | Notes |
 |-------|------|-----|-------|
 | `file` | string | ✓ | Fact path |
-| `moment_name` | string | ✓ | Label for the update |
-| `updates` | object | ✓ | Only the fields to change |
+| `moment_name` | string | ✓ | Label for the update, one line. Recorded in the commit message as `update(<label>): <fact title>` |
+| `updates` | object | | Only the fields to change |
+| `ops` | array | | Edit the body in place instead of resending it (below). Send `ops` or `updates`, or both; `ops` may be combined with every other `updates` field but not with `updates.body` |
+| `if_commit` | string | | Optimistic guard (below) |
+| `trace` | object | | See above |
+| `binding` | string | | See above |
 
 `updates` fields: `title`, `body`, `kind`, `type`, `confidence`, `sources`,
-`domain` (replaces), `entities` (replaces), `refs` (**replaces**).
-`type` carries the same `enum` as `knomit_learn`, but the update schema
-deliberately declares no defaults — an omitted field means "leave it alone", not
-"reset it". `origin` is not updatable.
+`domain` (replaces), `entities` (replaces), `motifs` (replaces), `refs`
+(**replaces**), `expires` (an empty string **clears** it; omit to leave it) and
+`context` (an object **replaces** the whole map, so send every key the fact
+should keep; `{}` clears it; omit to leave it). `type` carries the same `enum` as
+`knomit_learn`, but the update schema deliberately declares no defaults — an
+omitted field means "leave it alone", not "reset it". `origin` and the
+topic/category path are immutable and not accepted: fixing either takes
+`knomit_retract` plus a fresh `knomit_learn`.
 
 `refs` replaces the **entire** list — it is not appended to. Every ref you leave
 out of the array is dropped from the fact. To add or refresh one ref, read the
@@ -235,15 +488,38 @@ fact's current refs first and resend the full merged list. Omit `refs` entirely
 to leave the existing refs untouched. `domain` and `entities` behave the same
 way.
 
+**`ops`** — each op is `{"op": "str_replace", "old_str": …, "new_str": …}` (the
+`old_str` must occur **exactly once** in the body, byte for byte; an empty
+`new_str` deletes it) or `{"op": "append", "text": …}` (adds a new paragraph at
+the end). Ops apply in order, each to the body the previous op produced, and all
+land as **one** revision or none do; a failure names the op by its zero-based
+index. Matching is exact — no regex, no whitespace or Unicode normalisation — and
+on zero matches the error gives the longest prefix of `old_str` that does occur
+and the first differing character on each side, so a smart quote or
+non-breaking space can be found. An edit that leaves an unclosed code fence in a
+body whose fences were balanced is refused. The body's leading and trailing
+whitespace is not stored.
+
+**`if_commit`** — pass the full 40-character commit that `knomit_explain`
+returned for the fact. The update proceeds only if the file's bytes at that
+commit equal its bytes now; an unrelated commit in between does not matter.
+Otherwise nothing is written and the error gives `current_commit`, so you can
+read the fact again and rebuild your edit. The check and the write are atomic,
+so two callers holding the same `if_commit` cannot both land. It applies to
+`ops` and to `updates.body` alike.
+
 ### `knomit_retract` — remove a fact
 
 | Param | Type | Req | Notes |
 |-------|------|-----|-------|
 | `file` | string | ✓ | Fact path to retract |
 | `moment_name` | string | ✓ | Label for the retraction |
+| `trace` | object | | See above |
+| `binding` | string | | See above |
 
 Retraction is a commit, not a hard delete — the fact remains in history and
-resolves under commit-anchored reads (e.g. `?fallback=before`).
+resolves under commit-anchored reads (e.g. `?fallback=before`). To retract a
+fact and write its replacement in one commit, use `retract` on `knomit_learn`.
 
 Both `knomit_update` and `knomit_retract` reject a `kb://<read-mount-id>/…`
 path: *read-only mount: repo X is not this binding's write repo — facts there
@@ -251,26 +527,28 @@ can only be changed through their own endpoint*.
 
 ### Every write says where it landed
 
-The write destination is a property of the **connection** — fixed when the
-bridge starts, resolved from the request, and deliberately not expressible as a
-tool argument. (A `repo:` argument would relocate the choice into model output,
-where a model invents a plausible value rather than asking.) The cost of that
-design is that a fact written to an unintended repo used to return success
-identical to one written to the intended repo.
-
-So `knomit_learn`, `knomit_update` and `knomit_retract` each stamp the
-destination onto their result:
+On a branch-scoped or lens endpoint the write destination is fixed by the URL.
+On the unscoped endpoint it is chosen by the `binding` handle on each call —
+which is an argument, but an opaque one: the model cannot name a repo, only
+carry the handle it was given, so it cannot invent a plausible destination. In
+both cases a fact written to an unintended repo used to return success identical
+to one written to the intended repo, so `knomit_learn`, `knomit_update` and
+`knomit_retract` each stamp the destination onto their result:
 
 ```json
 {
-  "commits": [{"file": "kb/gotchas/x/1a2b3c4d.md", "hash": "abc1234"}],
+  "commits": [
+    {"file": "kb/gotchas/x/1a2b3c4d.md", "hash": "abc1234"},
+    {"file": "kb/gotchas/x/5e6f7a8b.md", "hash": "abc1234"}
+  ],
   "written_to": {
     "repo": "knomit-kb",
     "repo_id": "3ec012f5b4d2",
-    "branch": "agent/main",
+    "branch": "agent/hostname-abc12345",
     "lens": "knomit-dev"
   },
-  "summary": "wrote 2 facts to repo \"knomit-kb\" (3ec012f5b4d2) on branch \"agent/main\" — the write repo of lens \"knomit-dev\""
+  "summary": "wrote 2 facts to repo \"knomit-kb\" (3ec012f5b4d2) on branch \"agent/hostname-abc12345\" — the write repo of lens \"knomit-dev\"",
+  "operation": "learn"
 }
 ```
 
@@ -278,17 +556,18 @@ destination onto their result:
   writes to exactly one member, so naming the lens would misdescribe where the
   bytes are. `lens` is reported alongside as the reason that repo was chosen,
   and is omitted on a repo-bound binding rather than carried as an empty field.
+- `branch` is the branch the write actually landed on, so a session inside an
+  [experiment](/docs/experiments/) sees `exp/<name>` here, not the agent branch.
 - `repo_id` is the 12-hex root-commit id — the same identifier that appears in
   `kb://<id>/…` paths and the `knomit_repos` mount table. It is what makes the
   stamp discriminating: a repo *name* is per-machine, mutable, and unique only
   among one server's active repos, so two connected knomit servers each holding
-  a repo called `knomit` on `agent/main` would otherwise render byte-identically
+  a repo called `knomit` on the same agent branch name would otherwise render byte-identically
   and the stamp would detect nothing. It is omitted when the store is
   unavailable and the identity is genuinely unknown.
 - The prose `summary` is not redundant with the struct — a caller reacts to
   prose, and the point of stamping is that a wrong destination gets *noticed* in
-  the same turn it happens. The id rides in the sentence for the same reason it
-  is in the struct.
+  the same turn it happens.
 
 `knomit_update` and `knomit_retract` carry the same two fields alongside their
 own `file` and `commit`.
@@ -297,43 +576,110 @@ own `file` and `commit`.
 
 Facts are knowledge. A periodic job's bookkeeping is machinery, and putting it
 in `kb/` means it gets indexed, embedded, ranked in `knomit_query`, browsed in
-the UI, exported by OKF and swept by synthesis.
+the UI, exported by OKF and swept by synthesis. A repo therefore has two other
+roots next to `kb/`:
 
-`knomit_learn` therefore accepts an explicit `path` instead of
-`topic`/`category`, and `knomit_update`, `knomit_retract` and the equivalent
-`PUT`/`DELETE /facts/{path}` accept the same paths:
+- **`artifacts/<area>/<name>…`** is where an agent keeps working files that are
+  not knowledge. It is written with `knomit_learn` (its `path` field instead of
+  `topic`/`category`), `knomit_update` and `knomit_retract`, and read back by its
+  exact path with `knomit_explain`. The path must be at least one folder deep,
+  with no empty segment, no segment beginning with a dot, and no `..`.
+  Artifacts are never indexed, queried, shown in the UI, exported, or visible
+  to triggers. `knomit_learn` with a `path` fails if the path already exists; use
+  `knomit_update` to write a new revision. `<area>` is any name the caller
+  picks — nothing in knomit knows what your areas are called, so a new category
+  of private state needs no release.
+- **`.knomit/`** is the system: the ontology, triggers, recipes, skills and
+  templates. It is **closed to every fact tool** — and so is any path with a
+  segment beginning with a dot — and changes only through git. It is readable by
+  exact path through `knomit_explain`, and a fact may cite one of its files as a
+  ref.
 
-> **Agent-writable** = `.knomit/<area>/…` — at least one subdirectory deep, with
-> `<area>` a dotless directory name, minus a small reserved list.
+[Ontology validation rules](/docs/ontologies/#validation-rules) are skipped for
+artifact writes, root rules included: they have no ontology placement, and
+without the exemption a root rule would let a job create its slot and then
+refuse every update to it.
 
-- It is an **allow-list rooted in ownership**, not a deny-list of foreign dot
-  directories. A deny-list fails open: the moment a KB repo grows `.vscode/`,
-  knomit would be authorized to write another tool's territory.
-- `<area>` is any name the caller picks — nothing in knomit knows what your
-  areas are called, so a new category of private state needs no release.
-- Loose files at the root of `.knomit/` are knomit's own config (the
-  [ontology](/docs/ontologies/)) and stay refused. `<area>` must be dotless so
-  that a server-owned file's name cannot be reused as a directory.
-- A writable private path is **still private**: excluded from discovery at every
-  walker. That is the whole point — job state stays invisible to readers while
-  remaining writable by its job.
-- [Ontology validation rules](/docs/ontologies/#validation-rules) are skipped
-  for these writes, root rules included. Private state has no ontology placement,
-  and without the exemption a root rule would let a job create its slot and then
-  refuse every update to it.
+### `knomit_experiment` — an isolated branch
 
-<Aside type="caution">
-`knomit_retract` and `DELETE /facts/{path}` **gained** this guard — previously
-they accepted any private path that create and update refused. A delete is a
-write, and it is now judged by the same rule.
-</Aside>
+Work on an isolated branch of the knowledge base, and land it, or throw it away,
+as a unit. `open` forks `exp/<name>` from the agent branch and **moves this
+session onto it**: every later call — learn, update, retract, query, review —
+reads and writes the experiment until you commit or roll back. `commit` merges it
+into the agent branch and deletes it. `rollback` throws the work away. `list`
+shows this repo's experiments and marks the one you are in. Experiments are
+local: never pushed, never fetched, never visible to a peer. An experiment with
+no commits for `[experiments].expiry_days` (30 by default; `0` disables it) is
+rolled back automatically. See [Experiments](/docs/experiments/).
+
+| Param | Type | Req | Notes |
+|-------|------|-----|-------|
+| `action` | string | ✓ | `list`, `open`, `commit`, `rollback` or `sync` |
+| `name` | string | | Experiment name: kebab-case, unique in this repo. Required for `open`; for `commit`, `rollback` and `sync` it defaults to the experiment you are in |
+| `description` | string | | What the experiment is for. Used only by `open`; stored locally, never committed to git. Re-opening with a new description replaces it, with none keeps it |
+| `resolutions` | object | | Only for `commit`, and only after one was refused: how to settle each conflicting path, keyed by the fact path exactly as the refusal listed it. See below |
+| `trace` | object | | Stamped on the one commit an action can make (`commit`'s or `sync`'s merge commit). Validated on every action |
+| `binding` | string | | See above |
+
+`sync` brings the agent branch's changes onto the experiment; where both changed
+a fact, the agent branch's version wins, and you stay inside the experiment.
+
+**Conflicts.** If both sides changed the same path, the repo's `conflicts`
+setting (read at its consensus branch; under `consensus: auto` an absent
+setting means `facts: merge` and `state: consensus`) settles what it can, with the agent
+branch as the consensus side, and the summary names each settled path and any
+version it **dropped**. Whatever the setting leaves unsettled — every conflict,
+when the repo has no setting and is not `consensus: auto` — makes the commit **refused**: nothing changes,
+and the tool error lists the conflicting paths with **three commits** for each:
+the fork point, the experiment's version and the agent branch's version. Read the
+fact at all three with `knomit_explain` (`file`, `commit`), decide per path, and
+retry `commit` with `resolutions`. Each value is `"ours"`, `"theirs"`, or an
+object `{"body": "<full merged fact text>"}` for content that is neither. Every
+path in the refusal needs an entry; a path that did not conflict is an error.
+Entries override the `conflicts` setting for the paths you name, and it still
+settles the rest.
+
+**Ours and theirs are the opposite of git's.** `commit` merges the experiment
+*into* the agent branch, so the experiment is the merge source. From inside the
+experiment, `"ours"` is the experiment's version and `"theirs"` is the agent
+branch's. When the merge is obvious — a fact you wrote this session, or two
+edits that plainly compose — resolve it yourself. When the two versions disagree
+about a claim rather than its wording, or the other version is someone else's
+work, show the person ours, theirs and your proposed merge, and commit with their
+picks.
+
+### `knomit_skill` — read the repo's skills
+
+Without `name`, lists the skills of the binding's write repo, each with its name
+and a description of when to use it. With `name`, returns that skill's full
+instructions (`body`) and its bundled files: text files are inlined up to 256 KiB
+in total, and binaries and overflow are listed by path only. `$ARGUMENTS` in the
+body stands for whatever you were asked to apply the skill to. Skills are read
+from the tip of the consensus branch. Use it when told to follow, use or run a
+skill by name, or when looking for how a task is done in this repo before
+improvising one. See [Skills as prompts](#skills-as-prompts) and
+[Templates & playbooks](/docs/templates/#the-program-knomit-skill).
+
+| Param | Type | Notes |
+|-------|------|-------|
+| `name` | string | The skill's name (kebab-case, such as `work-task`). Omit to list |
+| `binding` | string | See above |
 
 ### `knomit_review` — maintain the KB
 
 Prune redundant facts, distill clusters into synthesis facts, and reflect on
 hypothesis transitions to record methodology. **Does not** generate new
-hypotheses. A session loop: call with no args to start, then with `session_id` +
-`response` (your JSON decisions for the previous work item) to continue.
+hypotheses. A session loop: call with no args to start — which opens a session,
+or resumes the one already in progress on this knowledge base (the result then
+has `resumed: true`) — then continue with `session_id`, `item_id` and `response`
+(your JSON decisions for the previous work item). `session_id` is required on
+every call after the first, and `item_id` with every response; `session_id` alone
+returns the current item, and the result's `next` line names what to do. The
+binding selects the knowledge base; it does not identify the review session.
+Stop when the result has `done: true`: the session is finished, and calling with
+its id again is an error. A start may return `done: true` immediately when there
+is nothing to review, which is a normal outcome. The tool also supports
+task-augmented calls for clients that poll for completion.
 See [Synthesis & hypotheses](/docs/synthesis/) and [Emergent discovery](/docs/discovery/).
 
 | Param | Type | Notes |
@@ -342,10 +688,13 @@ See [Synthesis & hypotheses](/docs/synthesis/) and [Emergent discovery](/docs/di
 | `response` | string | JSON decisions for the previous work item |
 | `page` | number | Fetch another page of the **current** item without answering it. Omit when submitting a `response`; paging advances nothing, so pages may be re-fetched freely |
 | `completion_token` | string | Echo back the token from the **final** page of a multi-page item. Required to answer one — see below. Single-page items carry no token |
-| `item_id` | number | Echo back `item.id` from the work item you are answering, so the server can reject a stale answer. Optional and additive — omitting it keeps the old "answer whatever is current" behaviour. It matters because applying a distill item enqueues RAPTOR follow-up items, so the current item can change between render and answer |
+| `item_id` | number | Echo back `item.id` from the work item you are answering. Required with every response, so an answer can only apply to the item it was written for |
+| `takeover` | bool | Start only: abandon the review session already in progress on this branch and start a new one. Needed only when a start is refused because a live session was opened with a different scope or effort |
 | `effort` | string | `normal` (default) · `medium` · `high` — medium/high engage the bridge discovery engine |
 | `domain` | string[] | Scope filter on the seed pool (empty = whole corpus) |
 | `entities` | string[] | Scope filter on the seed pool |
+| `trace` | object | See above |
+| `binding` | string | See above |
 
 <Aside type="caution" title="A paged item must be read before it can be answered">
 A work item whose facts exceed one tool result arrives split across pages. If a
@@ -364,40 +713,18 @@ item stays available, so the recovery is to page properly and resubmit. See
 Generate new `hypothesis` facts from synthesis facts on the agent branch.
 **Distinct from `review`** and only to be invoked on explicit user request (never
 as an auto-follow-up). Per work item the model decides whether to write a
-hypothesis; skipping is the expected outcome for most.
+hypothesis; skipping is the expected outcome for most. A session loop like
+review: call with no arguments to start, continue with `session_id`, `item_id`
+and `response`, and stop at `done: true`.
 
 | Param | Type | Notes |
 |-------|------|-------|
-| `session_id` | string | Omit to start |
+| `session_id` | string | Omit to start. Required on every call after the first |
 | `response` | string | Acknowledgement for the previous work item |
-| `item_id` | number | Echo back `item.id` from the work item you are answering, so the server can reject a stale answer. Optional and additive |
+| `current` | bool | With `session_id` and no `response`: return the current item again without answering it (it may advance the session when nothing is outstanding) |
+| `item_id` | number | Echo back `item.id` from the work item you are answering, so the server can reject a stale answer. Optional but strongly recommended |
 | `effort` | string | `normal` (default) · `medium` · `high` — medium/high engage the backward (keystone) bridge engine |
 | `domain` | string[] | Scope filter (empty = whole corpus) |
 | `entities` | string[] | Scope filter |
-
-### `knomit_repos` — list the mounts behind this endpoint
-
-Read-only and parameterless. Returns the binding and one row per mount:
-
-```json
-{
-  "binding": "core",
-  "mounts": [
-    {"name": "core", "id": "a1b2c3d4e5f6", "branch": "main",
-     "role": "read+write", "write_branch": "agent/hostname-abc123"},
-    {"name": "vendor-kb", "id": "0f9e8d7c6b5a", "branch": "main", "role": "read"}
-  ]
-}
-```
-
-| Field | Notes |
-|-------|-------|
-| `name` | Repo name |
-| `id` | 12-hex prefix of the repo's root commit — the same id that appears in `kb://<id>/…` paths |
-| `branch` | The branch this mount is **read** at |
-| `role` | `read+write` on the write mount when writes are permitted; `read` otherwise |
-| `source` | Source slug, when the mount has one |
-| `write_branch` | Present only on the `read+write` row — where writes actually commit, which may differ from `branch` |
-
-This is how a session discovers its source slug and its repo ids; it replaces
-the bridge's removed `--source` flag.
+| `trace` | object | See above |
+| `binding` | string | See above |

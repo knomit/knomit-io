@@ -5,62 +5,118 @@ import FragmentedKnowledge from '../components/FragmentedKnowledge.astro';
 import SectionHeading from '../components/SectionHeading.astro';
 import FactCard from '../components/FactCard.astro';
 import FeatureGrid from '../components/FeatureGrid.astro';
-import Steps from '../components/Steps.astro';
 import BlogCard from '../components/BlogCard.astro';
 import Icon from '../components/Icon.astro';
-import { GITHUB_URL, SITE_DESCRIPTION_SHORT } from '../lib/site';
+import { GITHUB_URL, SITE_DESCRIPTION_SHORT, DEMO_LIVE } from '../lib/site';
 import { getPublishedPosts, postHref } from '../lib/blog';
 import { HOME_FAQ_ITEMS } from '../lib/faq';
 
 const posts = (await getPublishedPosts()).slice(0, 3);
 
-// The nine characteristics worth highlighting — each a distinct differentiator
-// rooted in a knomit-kb designer principle. Renders as a 3×3 grid.
-const pillars = [
+// The page follows the fabric statement (kb principle "knowledge distillation
+// fabric"): the problem, then the factory's three verbs — accumulate, distill,
+// use — then git as the mechanism. Every card below is a capability that
+// exists in knomit dev; the goal itself is not claimed as shipped.
+
+// ACCUMULATE: how what one agent learns gets into the shared corpus.
+const accumulate = [
   {
     icon: 'fact',
-    title: 'Facts, not documents',
-    body: 'Concise, atomic claims — observations, principles, invariants, decisions — not chunked text in a vector store.',
-  },
-  {
-    icon: 'kinds',
-    title: 'Typed by how it’s used',
-    body: 'Every fact is epistemic (what is) or pragmatic (what to do), each carrying a confidence you can weigh — and that rises and falls.',
-  },
-  {
-    icon: 'dedup',
-    title: 'Never learned twice',
-    body: 'Similar inputs subsume into one fact with many references. And what one peer learns, every peer inherits by pulling main — no re-deriving what the network already knows.',
+    title: 'Typed facts, not documents',
+    body: 'An agent writes what it learned as one atomic claim in plain markdown, with a kind, a type, a confidence, an ontology path and refs. A near-duplicate folds into the fact that already exists instead of becoming a second copy.',
   },
   {
     icon: 'provenance',
-    title: 'Provable provenance',
-    body: 'Every fact is a signed commit you can trace, cross-reference, and corroborate — where a claim came from, who asserted it, and how it changed. Cryptographic, not hand-waved.',
+    title: 'Signed, on the agent’s own branch',
+    body: 'Every write is one signed git commit on the writing agent’s branch, never on main. The agent’s id is assigned when its instance first starts and kept from then on, so everything it asserted stays attributable to it.',
   },
   {
-    icon: 'temporal',
-    title: 'A graph you read as-of',
-    body: 'Git versions the whole graph by commit. Follow a fact’s references as the world was when it was learned — not as it is now — and watch confidence move over time.',
-  },
-  {
-    icon: 'discovery',
-    title: 'Discovers what no one wrote down',
-    body: 'Synthesis distills higher-order facts; hypotheses extend them. And an effort dial finds emergent keystones — load-bearing facts that bridge clusters similarity-only retrieval can’t connect. Knowledge that generates new knowledge.',
-  },
-  {
-    icon: 'cluster',
-    title: 'Self-describing & clustered',
-    body: 'Every fact declares its ontology, domains, and entities — and clusters by meaning and by classification, so you see the shape of everything you know.',
-  },
-  {
-    icon: 'mcp',
-    title: 'MCP-native, in the loop',
-    body: 'Drops into Claude Code, your editor, or any agent over MCP. The same tools let a model recall before it acts and learn as it works — no prompt scaffolding.',
+    icon: 'distributed',
+    title: 'Sync on an interval or in real time',
+    body: 'Instances fetch, merge and push on a schedule, or in real time when a repository asks for it, behind circuit breakers. A knomit instance can host a repository itself: peers push their agent branches to it over mutual TLS.',
   },
   {
     icon: 'consensus',
-    title: 'Autonomy with consensus — it’s just git',
-    body: 'Each peer works on its own branch; facts are approved and merged into main, the consensus. It’s a plain git repo — review like code, host it anywhere.',
+    title: 'Consensus on main',
+    body: 'Facts reach main through a reviewed merge, or automatically: with consensus set to auto, the hosting instance merges every branch a peer pushes. Where two agents edited the same fact, the merge can settle it field by field, and records how.',
+  },
+  {
+    icon: 'cluster',
+    title: 'A fleet of machines',
+    body: 'Instances register with a fleet repository whose member records are the admitted set. With verification on, a commit is accepted into main only when an active member signed it with its current key.',
+  },
+  {
+    icon: 'ontology',
+    title: 'Any domain, many knowledge bases',
+    body: 'One instance serves many knowledge bases, each with its own ontology: a codebase, a research field, a market, a mission. The same fact model holds all of them.',
+  },
+];
+
+// DISTILL: what keeps accumulation from becoming a bigger pile.
+const distill = [
+  {
+    icon: 'dedup',
+    title: 'Review: prune, distill, reflect',
+    body: 'A review pass merges what is redundant and retires what is stale, distills syntheses that no single source states, and reflects on the method that produced them. Each distilled fact cites the facts it came from.',
+  },
+  {
+    icon: 'discovery',
+    title: 'Hypotheses you can settle',
+    body: 'Hypothesize extends syntheses forward into falsifiable predictions with the criteria that would settle them. When the evidence arrives, the outcome is a commit like any other.',
+  },
+  {
+    icon: 'evolve',
+    title: 'Discovery of unwritten keystones',
+    body: 'An effort dial on review and hypothesize starts from bridges: facts that share a domain or entity but sit in different similarity clusters. It proposes the keystone those bridges imply and marks it as discovered.',
+  },
+  {
+    icon: 'cluster',
+    title: 'Motifs across subjects',
+    body: 'A fact can name its motif: the general mechanism or failure shape it instantiates, independent of its subject. Facts about unrelated subjects that follow the same pattern can then be found together, across every knowledge base a lens mounts.',
+  },
+  {
+    icon: 'kinds',
+    title: 'Guidance per corpus',
+    body: 'An ontology can carry guidance for review and hypothesize, for the whole knowledge base or one topic, so a security corpus and a codebase are distilled by their own standards.',
+  },
+  {
+    icon: 'consensus',
+    title: 'Disagreements settled, not lost',
+    body: 'When two agents changed the same fact, the repository’s conflicts setting, on by default under consensus: auto, merges it field by field: each side’s independent edits are kept, and a field both changed is settled by confidence, then by sources. The version it set aside stays readable in the merge’s history.',
+  },
+];
+
+// USE: how distilled knowledge flows back into work.
+const use = [
+  {
+    icon: 'mcp',
+    title: 'Query and explain over MCP',
+    body: 'Twelve MCP tools for any MCP client: query by text, entity, domain, type or motif; explain a fact by walking its provenance as of any commit; follow what changed since a bookmark. Integrations exist for Claude Code, Antigravity and Claude Desktop.',
+  },
+  {
+    icon: 'search',
+    title: 'Lenses',
+    body: 'A lens mounts several knowledge bases, including ones that sync from other machines, and queries them as one. Writes through a lens go to the one repository it names for writing.',
+  },
+  {
+    icon: 'markdown',
+    title: 'Skills and templates',
+    body: 'A knowledge base can carry its own skills, served to agents as MCP prompts. New knowledge bases start from templates (general, coding, mission, fleet) kept in a playbooks repository you subscribe to.',
+  },
+  {
+    icon: 'evolve',
+    title: 'Triggers and recipes',
+    body: 'A topic can declare triggers that fire when facts are learned, updated, retracted or fall due. A trigger can run a script, push at once, or run a recipe: a script kept on main or on the machine that can start a process, such as an agent session.',
+  },
+  {
+    icon: 'temporal',
+    title: 'Experiments',
+    body: 'An agent can open an experiment: a local branch forked from its own, where it learns and reviews as usual. Commit merges the whole thing back; rollback discards it. Experiments are never pushed.',
+  },
+  {
+    icon: 'api',
+    title: 'Web UI and REST',
+    body: 'People read the same corpus agents do: browse the ontology, search, read a fact as it stood at any commit, and merge pushed branches in the web UI, or script it over a HAL+JSON REST API.',
   },
 ];
 
@@ -74,52 +130,32 @@ const factTraits = [
   { icon: 'markdown', text: 'One claim, in plain markdown — human- and machine-writable, diffable in git.' },
 ];
 
-const steps = [
-  {
-    n: '01',
-    title: 'Assert a fact, in the flow of work',
-    body: 'Learning isn’t a side chore. Through MCP — wired into Claude Code, your editor, or any agent — a peer asserts a typed claim as part of its normal execution: it learns while it works. Humans assert the same way, by editing markdown.',
-    code: 'knomit_learn (MCP)  ·  Claude Code · editor · agent loop',
-    more: { href: '/docs/mcp-tools/', label: 'See the MCP tools' },
-  },
-  {
-    n: '02',
-    title: 'It’s a signed commit on a versioned graph',
-    body: 'Each write is one atomic, signed git commit on the peer’s own branch — never on main directly. Commits chain into a versioned, time-based graph: every fact is pinned to the exact moment, and the exact state of the world, in which it was learned.',
-    code: 'commit a1ef27c  ·  signed (Ed25519)  ·  branch agent/…',
-  },
-  {
-    n: '03',
-    title: 'Reach consensus — it’s just git',
-    body: 'No peer merges another’s branch. Facts are reviewed, approved, and merged into main — the consensus. Because the store is a plain git repo, you can keep it local or push to a git host like GitHub: a decentralized, always-on, secured remote with pull-request review and merge built in. Each peer then pulls main and merges it locally.',
-    code: 'git: local repo or remote (GitHub) → PR review → merge to main',
-  },
-  {
-    n: '04',
-    title: 'Travel the graph — and discover what it implies',
-    body: 'Because the graph is versioned by commit, knomit_explain follows every reference as the world was when the fact was learned. Synthesis distills new facts, hypotheses extend them forward, and the discovery effort dial surfaces emergent keystones the bridges between clusters reveal.',
-    code: 'knomit_explain (as-of commit) · synthesis · hypothesis · discovery',
-  },
+// Git as the mechanism. Wording follows the knomit README's table.
+const gitOps = [
+  { op: 'commit', means: 'a signed assertion of belief' },
+  { op: 'branch', means: 'an agent’s identity' },
+  { op: 'merge', means: 'consensus' },
+  { op: 'conflict', means: 'a disagreement surfaced to be settled' },
+  { op: 'log', means: 'the timeline of what the fabric believed, and when' },
 ];
 ---
 
 <BaseLayout
-  title="knomit — Git-backed long-term memory for AI coding agents"
+  title="knomit — a distributed knowledge distillation factory for agents"
   description={SITE_DESCRIPTION_SHORT}
 >
   <!-- Hero -->
   <section class="hero k-grid-bg">
     <div class="k-container hero__inner">
       <div class="hero__copy">
-        <p class="k-eyebrow">Distributed knowledge · Knowledge + commit</p>
-        <h1 class="hero__title">Learn it once.<br />Everywhere knows.</h1>
+        <p class="k-eyebrow">Knowledge distillation factory · Knowledge + commit</p>
+        <h1 class="hero__title">Learn it once.<br />Every agent can use it.</h1>
         <p class="k-lead hero__lead">
-          <strong>knomit is git-backed knowledge for AI agents</strong> — a
-          distributed knowledge base built from concise, typed
-          <strong>facts</strong>, not ingested documents. Each fact carries
-          confidence, provenance, and refs to others; facts evolve, and discovery
-          gives birth to new ones. Every peer — human or agent — learns on its own
-          branch and converges on a shared <code>main</code>.
+          <strong>knomit is a distributed, decentralized knowledge distillation
+          factory.</strong> It connects many agents and many knowledge bases so
+          that what any one of them learns is accumulated, distilled and put to
+          use by all of them. Learning is paid for once across the network,
+          instead of once per agent.
         </p>
         {/* Two actions, deliberately. The hero column is ~520px, so a third
             button wraps to a second row and the primary action stops reading
@@ -134,7 +170,7 @@ const steps = [
           </a>
         </div>
         <p class="hero__sub k-mono k-muted">
-          facts, not documents · signed commits · converge on main
+          accumulate · distill · use — typed facts, signed commits, git
         </p>
       </div>
       <div class="hero__art">
@@ -143,14 +179,109 @@ const steps = [
     </div>
   </section>
 
-  <!-- Facts, not documents (foundational) -->
+  <!-- Problem -->
+  <section class="k-section problem-section">
+    <div class="k-container">
+      <div class="problem-head">
+        <div class="k-prose">
+          <SectionHeading
+            eyebrow="The problem"
+            title="What one agent learns, the next one pays for again."
+            lead="Knowledge that costs real tokens, time and judgment to produce is kept per agent, per session, per store. Every agent starts from nothing, re-derives what others already worked out, and loses it when the session ends."
+          />
+        </div>
+        <div class="problem-head__art k-reveal">
+          <FragmentedKnowledge />
+        </div>
+      </div>
+      <p class="problem-group k-mono">Across agents</p>
+      <div class="problems">
+        <div class="problem k-reveal">
+          <h3>Every agent starts cold</h3>
+          <p class="k-text-2">
+            A research agent, a coding agent and an analyst working the same
+            field each rebuild the same understanding, and each pays for it in
+            full.
+          </p>
+        </div>
+        <div class="problem k-reveal">
+          <h3>Memory stays private</h3>
+          <p class="k-text-2">
+            What an assistant remembers lives in its own silo. Another agent,
+            another machine or a colleague cannot inherit it, check it or correct
+            it.
+          </p>
+        </div>
+        <div class="problem k-reveal">
+          <h3>Decisions go unrecorded</h3>
+          <p class="k-text-2">
+            Why an approach was chosen, and why another was dropped, ends with
+            the session, so the dead end is explored again from scratch.
+          </p>
+        </div>
+      </div>
+
+      <p class="problem-group k-mono">In the stores</p>
+      <div class="problems">
+        <div class="problem k-reveal">
+          <h3>Text, not comprehension</h3>
+          <p class="k-text-2">
+            RAG and its relatives embed whole documents as they are. They store
+            the text, not the claims inside it, so there is nothing classified to
+            reason over.
+          </p>
+        </div>
+        <div class="problem k-reveal">
+          <h3>Duplicated, not unified</h3>
+          <p class="k-text-2">
+            Two documents that say nearly the same thing are stored twice, as
+            redundant chunks that drift apart, not as one fact with two
+            references.
+          </p>
+        </div>
+        <div class="problem k-reveal">
+          <h3>No way to explain it</h3>
+          <p class="k-text-2">
+            There is no cross-reference, no corroboration, no confidence, and no
+            way to see how a claim came to be believed.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Accumulate -->
+  <section class="k-section phase">
+    <div class="k-container">
+      <SectionHeading
+        eyebrow="1 · Accumulate"
+        title="What any agent learns reaches every agent."
+        lead="Each agent writes to its own branch; instances sync, host each other’s repositories and converge on one main. The corpus gathers one best statement of each claim rather than a pile of copies."
+        align="center"
+      />
+      <p class="phase__example k-text-2">
+        <span class="k-mono">Example</span> In the public agentic-engineering
+        knowledge base, the fact on the July 2026 Hugging Face intrusion has 13
+        signed versions: it was updated in place as fuller accounts were
+        published, and every earlier version is still readable.
+        {DEMO_LIVE && <a href="/explore/">See it in the explorer</a>}
+      </p>
+      <FeatureGrid features={accumulate} />
+      <p class="phase__more">
+        <a href="/docs/sync-and-consensus/">Sync, consensus and conflicts <Icon name="arrow" size={16} /></a>
+        <a href="/docs/fleet/">Fleets <Icon name="arrow" size={16} /></a>
+      </p>
+    </div>
+  </section>
+
+  <!-- What is accumulated: facts, not documents -->
   <section class="k-section facts">
     <div class="k-container facts__grid">
       <div class="facts__copy">
         <SectionHeading
-          eyebrow="Facts, not documents"
+          eyebrow="What is accumulated"
           title="Anatomy of a fact."
-          lead="knomit is not chunk-and-embed. Knowledge is captured as facts — atomic claims in plain markdown. Here's what one is made of."
+          lead="knomit is not chunk-and-embed. Knowledge is captured as facts: atomic claims in plain markdown. Here is what one is made of."
         />
         <ul class="facts__list">
           {
@@ -168,114 +299,83 @@ const steps = [
     </div>
   </section>
 
-  <!-- Problem -->
-  <section class="k-section problem-section">
-    <div class="k-container">
-      <div class="problem-head">
-        <div class="k-prose">
-          <SectionHeading
-            eyebrow="The problem"
-            title="Other systems store text — not understanding."
-            lead="Ingest a document and you've stored its words, not what's true in it. Two similar documents become two copies instead of one set of facts — and you can't explain, corroborate, or trace any of it."
-          />
-        </div>
-        <div class="problem-head__art k-reveal">
-          <FragmentedKnowledge />
-        </div>
-      </div>
-      <p class="problem-group k-mono">In your documents</p>
-      <div class="problems">
-        <div class="problem k-reveal">
-          <h3>Text, not comprehension</h3>
-          <p class="k-text-2">
-            RAG and friends embed whole documents as-is. You store the text, not
-            the facts inside it — no concise, classified claims you can reason over.
-          </p>
-        </div>
-        <div class="problem k-reveal">
-          <h3>Duplicated, not unified</h3>
-          <p class="k-text-2">
-            Two documents that say nearly the same thing get stored twice — not as
-            one fact with multiple references, just redundant chunks that drift.
-          </p>
-        </div>
-        <div class="problem k-reveal">
-          <h3>No way to explain it</h3>
-          <p class="k-text-2">
-            The document is used as-is: no cross-reference, no corroboration, no
-            confidence, no going back in time to see how a claim evolved.
-          </p>
-        </div>
-      </div>
-
-      <p class="problem-group k-mono">In your codebase</p>
-      <div class="problems">
-        <div class="problem k-reveal">
-          <h3>Principles get lost</h3>
-          <p class="k-text-2">
-            Design intent lives in someone's head, not the repo — so agents and
-            teammates slowly drift from how things are meant to work.
-          </p>
-        </div>
-        <div class="problem k-reveal">
-          <h3>Invariants stay hidden</h3>
-          <p class="k-text-2">
-            The load-bearing rules aren't written where the work happens, so the
-            same mistakes get made again and again.
-          </p>
-        </div>
-        <div class="problem k-reveal">
-          <h3>Decisions aren't kept</h3>
-          <p class="k-text-2">
-            Why an approach was tried and dropped goes unrecorded — so dead-end
-            experiments get repeated from scratch.
-          </p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- How it works -->
-  <section class="k-section">
+  <!-- Distill -->
+  <section class="k-section phase">
     <div class="k-container">
       <SectionHeading
-        eyebrow="How it works"
-        title="A learning loop that closes."
-        lead="Asserted, proven, agreed, recalled — the loop runs inside your normal workflow, not beside it."
+        eyebrow="2 · Distill"
+        title="Accumulation alone is a bigger pile."
+        lead="Review passes, run by an agent or by a session a trigger starts, merge what is redundant, derive conclusions no single source states, and surface where facts about unrelated subjects follow the same pattern."
         align="center"
       />
-      <div class="howit">
-        <Steps steps={steps} />
-      </div>
-      <div class="loop k-reveal">
-        <span class="loop__icon" aria-hidden="true">
-          <Icon name="evolve" size={20} />
-        </span>
-        <div>
-          <h3 class="loop__title">The loop closes</h3>
-          <p class="k-text-2 loop__body">
-            The same MCP tools and skills that let your model <em>act</em> let it
-            <em>introspect</em> on what it knows — recall before it works, learn as
-            it goes. Every pass leaves the knowledge base sharper than it found it.
-          </p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Pillars -->
-  <section class="k-section features">
-    <div class="k-container">
-      <SectionHeading
-        eyebrow="Why knomit"
-        title="What production knowledge needs."
-        lead="Decisions are only as good as the facts behind them. knomit is built so those facts are accurate, traceable, and actionable — across every peer."
-        align="center"
-      />
-      <FeatureGrid features={pillars} />
-      <p class="features__more">
-        <a href="/use-cases/">And what people build with it <Icon name="arrow" size={16} /></a>
+      <p class="phase__example k-text-2">
+        <span class="k-mono">Example</span> In the same knowledge base, a review
+        pass read guardrail write-ups from four vendors and wrote a synthesis
+        none of them states: a model-based check reduces friction but is never a
+        boundary. It cites the seven facts it came from.
+        {DEMO_LIVE && <a href="/explore/">Read the synthesis</a>}
       </p>
+      <FeatureGrid features={distill} />
+      <p class="phase__more">
+        <a href="/docs/synthesis/">Synthesis <Icon name="arrow" size={16} /></a>
+        <a href="/docs/discovery/">Discovery <Icon name="arrow" size={16} /></a>
+      </p>
+    </div>
+  </section>
+
+  <!-- Use -->
+  <section class="k-section phase">
+    <div class="k-container">
+      <SectionHeading
+        eyebrow="3 · Use"
+        title="Distilled knowledge goes back to work."
+        lead="It flows into agents’ working context and into the decisions of the people beside them, and a trigger on a new fact can start the next piece of work. Every fact keeps its provenance, its confidence and the history of how it came to be believed."
+        align="center"
+      />
+      <p class="phase__example k-text-2">
+        <span class="k-mono">Example</span> An agent that calls explain on that
+        synthesis gets its seven sources back, each at the version the
+        synthesis was written from, and can check the conclusion before acting
+        on it.
+      </p>
+      <FeatureGrid features={use} />
+      <p class="phase__more">
+        <a href="/docs/mcp-tools/">MCP tools <Icon name="arrow" size={16} /></a>
+        <a href="/docs/triggers/">Triggers and recipes <Icon name="arrow" size={16} /></a>
+        <a href="/docs/experiments/">Experiments <Icon name="arrow" size={16} /></a>
+        <a href="/use-cases/">Use cases <Icon name="arrow" size={16} /></a>
+      </p>
+    </div>
+  </section>
+
+  <!-- Mechanism: git operations mean what they say -->
+  <section class="k-section mech">
+    <div class="k-container mech__grid">
+      <div class="mech__copy">
+        <SectionHeading
+          eyebrow="The mechanism"
+          title="Knowledge + commit."
+          lead="The substrate is git, and knomit uses each git operation for what it means. Because the meaning is kept, the git tooling you already have works on the corpus unchanged: a pull request against kb/ is a review of beliefs."
+        />
+        <p class="k-text-2 mech__note">
+          Git is the only source of truth. Indexes, embeddings and search are
+          caches that can be rebuilt from it.
+        </p>
+      </div>
+      <table class="mech__table k-reveal">
+        <caption class="k-mono">git → knomit</caption>
+        <thead>
+          <tr><th scope="col">Git</th><th scope="col">In knomit</th></tr>
+        </thead>
+        <tbody>
+          {gitOps.map((g) => (
+            <tr>
+              <th scope="row" class="k-mono">{g.op}</th>
+              <td>{g.means}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   </section>
 
@@ -284,10 +384,11 @@ const steps = [
     <div class="k-container">
       <div class="okfband k-reveal">
         <div class="okfband__copy">
-          <p class="k-eyebrow">Interoperable by design</p>
+          <p class="k-eyebrow">Use it outside knomit too</p>
           <h2 class="okfband__title">Publish it as Open Knowledge Format.</h2>
           <p class="k-text-2 okfband__body">
-            A knomit knowledge base is private and agent-shaped.
+            A knomit knowledge base is shaped for agents: branches per author,
+            provenance edges, confidence that moves.
             <strong>knomit-okf</strong> publishes it as a portable
             <a href="/okf/">OKF</a> repository — Google Cloud's open spec — from a
             single git URL. Plain markdown any conformant consumer can read, and
@@ -314,7 +415,7 @@ const steps = [
       <section class="k-section">
         <div class="k-container">
           <div class="blogstrip__head">
-            <SectionHeading eyebrow="From the blog" title="Real-world use cases." />
+            <SectionHeading eyebrow="From the blog" title="How it works, argued in full." />
             <a href="/blog/" class="k-blogstrip__all">All posts <Icon name="arrow" size={16} /></a>
           </div>
           <div class="blogstrip">
@@ -359,14 +460,15 @@ const steps = [
   <section class="k-section">
     <div class="k-container">
       <div class="cta k-reveal">
-        <h2 class="cta__title">One source of truth. Every peer.</h2>
+        <h2 class="cta__title">One body of knowledge for every participant.</h2>
         <p class="k-lead cta__lead">
-          Open source, and it's just git — typed, provenanced facts, versioned
-          through time, that humans and agents converge on. Yours to inspect,
-          diff, and host anywhere.
+          Source-available, and it is git underneath: typed, signed facts that agents
+          and people accumulate, distill and use together. Browse a real
+          knowledge base first, or run your own.
         </p>
         <div class="cta__actions">
-          <a href="/download/" class="k-btn">Download knomit</a>
+          {DEMO_LIVE && <a href="/explore/" class="k-btn">Explore a live knowledge base</a>}
+          <a href="/download/" class={DEMO_LIVE ? 'k-btn k-btn--ghost' : 'k-btn'}>Download knomit</a>
           <a href={GITHUB_URL} class="k-btn k-btn--ghost" rel="noopener">View on GitHub</a>
         </div>
       </div>
@@ -507,94 +609,6 @@ const steps = [
     line-height: 1.55;
   }
 
-  .howit {
-    max-width: 52rem;
-    margin-inline: auto;
-  }
-  .loop {
-    max-width: 52rem;
-    margin: 2.5rem auto 0;
-    display: flex;
-    gap: 1.1rem;
-    align-items: flex-start;
-    padding: 1.5rem 1.75rem;
-    border: 1px solid var(--k-hairline);
-    border-radius: var(--k-radius);
-    background:
-      radial-gradient(120% 160% at 0% 0%, var(--k-brand-glow), transparent 55%),
-      var(--k-surface-1);
-  }
-  .loop__icon {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 42px;
-    height: 42px;
-    flex-shrink: 0;
-    border-radius: 11px;
-    color: var(--k-brand);
-    background: var(--k-brand-glow);
-    border: 1px solid rgba(119, 204, 153, 0.25);
-  }
-  .loop__title {
-    font-size: 1.15rem;
-    margin-bottom: 0.4rem;
-  }
-  .loop__body {
-    line-height: 1.6;
-    font-size: 0.96rem;
-  }
-  .loop__body em {
-    color: var(--k-brand);
-    font-style: normal;
-    font-weight: 600;
-  }
-
-  /* Demo */
-  .demo {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: space-between;
-    gap: 2rem;
-    padding: clamp(2rem, 1rem + 4vw, 3.5rem);
-    border: 1px solid var(--k-hairline);
-    border-radius: var(--k-radius-lg);
-    background-color: var(--k-surface-1);
-  }
-  .demo h2 {
-    font-size: var(--k-step-h2);
-    margin-top: 0.3rem;
-  }
-  .demo__lead {
-    margin: 1rem 0 1.75rem;
-    max-width: 34rem;
-    line-height: 1.6;
-  }
-  .demo__badge {
-    display: flex;
-    flex-direction: column;
-    gap: 0.4rem;
-    padding: 1.1rem 1.4rem;
-    border: 1px dashed var(--k-hairline);
-    border-radius: var(--k-radius);
-    background: var(--k-bg);
-    font-size: 0.82rem;
-    color: var(--k-brand);
-  }
-
-  .features__more {
-    margin-top: 2.25rem;
-    text-align: center;
-  }
-  .features__more a {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.4rem;
-    font-size: 0.95rem;
-    font-weight: 500;
-  }
-
   /* OKF band */
   .okfband {
     display: grid;
@@ -710,6 +724,98 @@ const steps = [
     justify-content: center;
   }
 
+
+  /* Accumulate / Distill / Use */
+  .phase {
+    border-bottom: 1px solid var(--k-hairline-soft);
+  }
+  .phase__example {
+    max-width: 44rem;
+    margin: 0 auto 2.25rem;
+    text-align: center;
+    font-size: 0.95rem;
+    line-height: 1.6;
+  }
+  .phase__example .k-mono {
+    margin-right: 0.4rem;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .phase__more {
+    margin-top: 2.25rem;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.6rem 1.75rem;
+  }
+  .phase__more a {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.95rem;
+    font-weight: 500;
+  }
+
+  /* Mechanism */
+  .mech__grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: clamp(1.5rem, 0.75rem + 3vw, 3rem);
+    align-items: center;
+  }
+  .mech__grid > * {
+    min-width: 0;
+  }
+  .mech__note {
+    font-size: 0.95rem;
+    line-height: 1.6;
+    max-width: 36rem;
+  }
+  .mech__table {
+    width: 100%;
+    border-collapse: collapse;
+    border: 1px solid var(--k-hairline);
+    border-radius: var(--k-radius);
+    background: var(--k-surface-1);
+    font-size: 0.95rem;
+  }
+  .mech__table caption {
+    caption-side: top;
+    text-align: left;
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--k-text-muted);
+    padding-bottom: 0.6rem;
+  }
+  .mech__table th,
+  .mech__table td {
+    text-align: left;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--k-hairline-soft);
+    vertical-align: top;
+  }
+  .mech__table thead th {
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--k-text-muted);
+    font-weight: 600;
+  }
+  .mech__table tbody th {
+    color: var(--k-brand);
+    font-weight: 600;
+    width: 32%;
+  }
+  .mech__table tbody td {
+    color: var(--k-text-2);
+  }
+  .mech__table tbody tr:last-child th,
+  .mech__table tbody tr:last-child td {
+    border-bottom: 0;
+  }
+
   @media (max-width: 880px) {
     /* minmax(0, 1fr), not 1fr. A bare `1fr` is `minmax(auto, 1fr)`, so the
        track can never be narrower than its content's automatic minimum — which
@@ -718,6 +824,7 @@ const steps = [
     .hero__inner,
     .facts__grid,
     .okfband,
+    .mech__grid,
     .problem-head {
       grid-template-columns: minmax(0, 1fr);
     }

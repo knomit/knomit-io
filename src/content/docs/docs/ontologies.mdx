@@ -1,6 +1,6 @@
 ---
 title: Ontologies
-description: Declare the topics a knowledge base accepts, describe them to the agent, and enforce what counts as a well-formed fact — the file format, the path rules, and the validation language.
+description: The ontology file of a knowledge base — topics, validation rules, attributes, context keys and guidance — and how it reaches the agents.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -21,24 +21,48 @@ claim may enter the corpus at all. The ontology is therefore where you encode
 *what counts as a well-formed fact here* — and it is enforced on write, not
 offered as advice.
 
-Most knowledge bases never need a custom one. knomit ships
-[two presets](#the-built-in-presets), and `code` in particular is a working
-answer for any codebase. Read on when you want topics the presets don't have,
-or a standard of evidence they don't enforce.
+Because every agent that writes to a knowledge base reads the same file, the
+ontology is also where a knowledge base sets policy for all of them. It declares
+[attributes](#attributes) that switch store behaviour per topic and for the
+whole repository (signature checks, automatic merges, conflict settlement, sync
+cadence), the [context keys](#context-declarations) facts may carry,
+[guidance](#guidance) for the review and hypothesize prompts, and the
+[triggers](/docs/triggers/) that fire on changes.
+
+Many knowledge bases never need a custom one. knomit ships
+[three presets](#the-built-in-presets), and knowledge bases can publish
+[templates](/docs/templates/) that others are created from. Read on when you
+want topics the presets don't have, or a standard of evidence they don't
+enforce.
 
 ## Where it lives, and when it is read
 
-Inside the knowledge base repo, at `.knomit/ontology.yaml` — a private path, so
-it is configuration rather than a fact, and knomit reads it by name. Facts
-themselves land under the **ontology root**, `kb/` by default and set by
-`ontology_root` in [`knomit.toml`](/docs/configuration/#knomittoml):
+Inside the knowledge base repo, at `.knomit/ontology.yaml`. `.knomit/` is the
+repository's [system root](/docs/concepts/#what-a-knowledge-base-repo-contains):
+configuration rather than facts, read by knomit by name, and closed to every
+fact-tool write. Facts themselves land under the **ontology root**, `kb/` by
+default and set by `ontology_root` in
+[`knomit.toml`](/docs/configuration/#knomittoml):
 
 ```text
 kb/<topic>/<category…>/<uuid8>.md
 ```
 
-The ontology is parsed **once, when the repo is opened** — at server start, or
-when the repo is created or adopted. It is not re-read per request.
+Different parts of the file are read at different moments:
+
+- **Topics, validation rules, node attributes and context declarations** are
+  parsed **once, when the repo is opened**, from this instance's agent branch:
+  at server start, or when the repo is created or adopted. They are not re-read
+  per request.
+- **Root attributes** (`consensus`, `conflicts`, `sync`, `verify_signatures`)
+  and **guidance** are read by the code that uses them, at the tip of the
+  repository's **consensus branch**, so every instance of a knowledge base
+  applies the value its peers agreed on, and a change takes effect on the next
+  round without a restart.
+- **Triggers** are read from the commit the dispatcher is looking at.
+
+A symlinked `.knomit/ontology.yaml` refuses the repo outright: knomit never
+follows symlinks.
 
 <Aside type="caution" title="No ontology, no writes">
 A repository is a knomit knowledge base **if and only if** it has an ontology.
@@ -68,6 +92,13 @@ name: Acme Support Knowledge  # required — human label
 description: >-               # optional
   What the support team knows about customers, policy, and incidents.
 
+attributes:                   # optional — REPOSITORY-level settings
+  consensus: auto
+  conflicts: {facts: merge, state: consensus}
+
+guidance:                     # optional — paths under .knomit/
+  review: guidance/review.md
+
 validations:                  # optional — ROOT rules, run for every fact
   - name: title-states-a-claim
     message: "titles must state a claim, not ask a question"
@@ -85,6 +116,13 @@ topics:                       # required — at least one
         description: Eligibility, limits, approvals
       escalation:
         description: When to escalate, and to whom
+  tickets:
+    description: What happened on individual support tickets
+    attributes:               # optional — inherited by every node below
+      learn_dedup: "off"
+    context:                  # optional — keys a fact here may carry
+      ticket: {type: string, required: true, pattern: "^t-[0-9]+$"}
+      region: {type: enum, values: [eu, us, apac]}
 ```
 
 | Field | Where | Required | Notes |
@@ -93,9 +131,17 @@ topics:                       # required — at least one
 | `name` | root | ✓ | Human label. |
 | `description` | root | — | Not shown to the agent. |
 | `topics` | root | ✓ | Must be non-empty. |
+| `attributes` | root | — | Repository-level settings. See [Attributes](#attributes). |
+| `guidance` | root, and any node | — | Paths of guidance files. See [Guidance](#guidance). |
 | `validations` | root, and any node | — | A list of `{name, message, rule}`. |
 | `description` | node | — | **Top-level topic descriptions are sent to the agent**; child descriptions are not. |
 | `children` | node | — | Recursive, with no depth limit. |
+| `attributes` | node | — | Topic-level settings, inherited downward. See [Attributes](#attributes). |
+| `context` | node | — | Declared context keys, inherited downward. See [Context declarations](#context-declarations). |
+| `triggers` | node | — | Rules fired by changes to facts under the node. See [Triggers & recipes](/docs/triggers/). |
+
+`GET /api/v1/ontologies/schema` returns this reference with every key the
+parser accepts.
 
 **Key naming.** Topic keys and their *direct* children must match
 `^[a-z0-9]+(-[a-z0-9]+)*$` — lowercase kebab-case. A violation is a parse error.
@@ -104,9 +150,11 @@ segment, so an uppercase grandchild key parses cleanly and is then unreachable.
 Keep the whole tree kebab-case.
 
 <Aside type="note" title="Your file is normalised on write">
-At repo creation the YAML is parsed and re-serialised with sorted keys. Comments
-and your original key order are **not** preserved in the stored copy. Keep the
-authored version in your own repo as the source of truth.
+At repo creation from a preset or from inline YAML, the file is parsed and
+re-serialised with sorted keys. Comments and your original key order are **not**
+preserved in the stored copy. Keep the authored version in your own repo as the
+source of truth, or publish it as a [template](/docs/templates/): a template's
+files are copied byte for byte.
 </Aside>
 
 ## How paths are validated
@@ -172,8 +220,11 @@ One global, `fact`:
 | `fact.sources` | number — count of independent corroborations |
 | `fact.origin` | string — `authored` \| `distilled` \| `discovered` |
 | `fact.evidence_weight` | number — provenance mass carried by a derived fact |
+| `fact.motifs` | string[] — the motifs that will be stored (a motif that only restates the fact's own subject is dropped before the rule sees the list) |
+| `fact.expires` | string — the RFC 3339 expiry in UTC, or `""` when the fact has none |
+| `fact.context` | object — the fact's context map, `{}` when it has none, so `fact.context.ticket === 't-17'` never throws |
 
-The last three are the provenance axes, and they are what let an ontology
+`sources`, `origin` and `evidence_weight` are the provenance axes, and they are what let an ontology
 enforce a *standard of evidence* rather than a shape. `sources` counts
 independent corroborations and defaults to 1. `origin` records which pipeline
 minted the fact: `authored` for anything a human or agent asserted, `distilled`
@@ -199,17 +250,18 @@ supplied. Worth knowing before you write a provenance rule:
 
 | Field | On a fresh `knomit_learn` write | On the re-run after a [subsumption](/docs/concepts/#subsumption--never-learned-twice) merge |
 |---|---|---|
-| `sources` | as supplied, default 1 | **summed** — new + existing |
+| `sources` | as supplied, default 1 | existing + incoming **only if the incoming fact is not a hypothesis and cites a ref the existing fact lacks**; otherwise the existing value |
 | `confidence` | as supplied, default 0.7 | **max** of the two |
-| `domain`, `entities` | as supplied | union of both |
-| `origin`, `type`, `kind` | as supplied, resolved | inherited from whichever fact wins the merge |
+| `domain`, `entities`, `motifs` | as supplied | union of both |
+| `origin`, `type`, `kind`, `expires`, `context` | as supplied, resolved | taken whole from whichever fact wins the merge |
 | `evidence_weight` | **always 0** | **always 0** |
 
 Two consequences:
 
-- **`fact.sources >= 2` gates a claim's first write, then passes on every one
-  after it**, because the merge sums. That is usually the semantics you want
-  from a corroboration rule, but it is not a per-write floor.
+- **`fact.sources >= 2` is a floor on what is stored, not on what is
+  re-learned.** A merge raises `sources` only when the incoming fact brings
+  evidence the existing fact does not cite; learning the same claim again from
+  the same refs leaves the count where it was, and the rule judges that count.
 - **`evidence_weight` is only meaningful on `knomit_update`.** On `knomit_learn`
   it is not a caller-supplied field at all — it is computed and stamped after
   validation has already run, so a rule always sees 0 and
@@ -233,11 +285,11 @@ Two consequences:
 - `knomit_learn`, on every fact written — and again on the *merged* fact after a
   subsumption merge.
 - `knomit_update`, on the reassembled fact.
-- **Skipped entirely for private state** — facts written to an explicit
-  `.knomit/<area>/…` path — including root rules. That exemption is deliberate:
-  a background job's bookkeeping has no ontology placement, and without it any
-  root rule would let a job create its state slot and then refuse every update
-  to it.
+- **Skipped entirely for artifacts** — files written to an explicit
+  `artifacts/<area>/<name>` path — including root rules. That exemption is
+  deliberate: an agent's working file has no ontology placement, and without it
+  any root rule would let an agent create its working file and then refuse every
+  update to it. `.knomit/` is not written by the fact tools at all.
 
 ### Rule cookbook
 
@@ -287,6 +339,141 @@ too low"` teaches it nothing. `"policy facts must be written with confidence >=
 0.8 — if you are less sure, file it under gotchas"` tells it what to do instead,
 and the retry succeeds.
 </Aside>
+
+## Attributes
+
+Attributes switch store behaviour. Each key belongs to one scope, and every
+key's set of values is closed: a new behaviour ships as a new key, never as a new
+value of an existing one, so an older knomit never misreads it.
+
+### On a topic
+
+A topic or child node may carry `attributes:`. The nearest declared value wins,
+and every node below inherits it.
+
+| Key | Values | Absent | Effect |
+|---|---|---|---|
+| `learn_dedup` | `"off"`, `"on"` | `on` | `off` makes `knomit_learn` skip both the automatic near-duplicate merge and the same-subject refusal for facts written under the node. `on` behaves as absent and exists so a child can undo a parent's `off`. Review is unaffected. |
+
+Values are the strings `off` and `on`; a YAML boolean is rejected, because
+`learn_dedup: false` reads two opposite ways. Use `off` for a topic whose facts
+are meant to sit side by side even when they read alike, such as the parts of a
+template. A bad value on a topic is a parse error, so the repo opens read-only
+until it is fixed.
+
+### At the root
+
+The root `attributes:` block holds repository policy: one value for the whole
+knowledge base, which every instance that shares it reads at the tip of the
+consensus branch.
+
+| Key | Values | Absent | Effect |
+|---|---|---|---|
+| `verify_signatures` | `off`, `log`, `enforce` | `off` | Whether commits are checked against the [fleet's](/docs/fleet/) member records where they are accepted into this knowledge base. `log` records refusals and accepts; `enforce` refuses. |
+| `consensus` | `off`, `auto` | `off` | `auto`: on a knomit host that owns the knowledge base (no origin), every branch a peer pushes is merged into the host's agent branch as soon as it lands, and the consensus branch follows. `off`: only a human merges. A repo with an origin ignores it; the origin owns the consensus branch. |
+| `conflicts` | mapping: `facts` (`off`, `merge`, `merge:consensus`, `consensus`), `state` (`off`, `consensus`) | `off`; under `consensus: auto`, `facts: merge` and `state: consensus` | What a merge does with a path both sides changed: merge a fact field by field, take the consensus side's value or whole version, or leave the conflict to each merge site's own rule. Every settled conflict is recorded as a commit trailer. |
+| `sync` | mapping: `push`, `pull`, each `realtime` or `interval` | `interval` | `push: realtime` pushes about a second after each commit on this instance's agent branch; `pull: realtime` runs the sync round every `[git].realtime_pull_interval` (3 s by default) instead of at the origin's interval. |
+
+[Sync & consensus](/docs/sync-and-consensus/) explains how `consensus`,
+`conflicts` and `sync` play out between instances.
+
+Root attributes are policy, and the file says so in how it treats mistakes. A
+bad value warns when an existing repo opens (the repo keeps accepting writes) and
+is fatal only for a new ontology; it is never read as a setting. A bad
+`conflicts` or `sync` value reads as off or interval, and a bad
+`verify_signatures` value makes the acceptance check refuse to run rather than
+pass. Set these once, when the knowledge base is created: an instance whose copy
+of the consensus branch lags reads the older value for that round, and nothing
+coordinates a change mid-flight.
+
+A key this knomit does not know is a warning, and it is kept when the file is
+written back, since a newer knomit may have written it. A topic key placed at the
+root, or a root key placed on a topic, is ignored with a warning, and refused in
+a new ontology.
+
+## Context declarations
+
+A fact may carry a `context:` map of short typed labels: the task it belongs to,
+a verdict, a region. Context exists so a fact can be **found** by a property that
+is not its subject, with `knomit_query`'s `context` filter or `context.<key>=`
+on the REST search. Only keys the ontology declares for the fact's topic are
+accepted.
+
+```yaml
+topics:
+  verdicts:
+    description: One agent's judgement of another agent's work
+    context:
+      task:    {type: string, required: true, pattern: "^t-[a-z0-9-]{1,40}$"}
+      verdict: {type: enum, values: [agree, disagree, unsure], required: true}
+      score:   {type: number, min: 0, max: 1}
+```
+
+| Field | Applies to | Meaning |
+|---|---|---|
+| `type` | all | `string`, `number`, `bool`, `enum` or `time`. |
+| `values` | `enum` | The allowed values. |
+| `required` | all | A fact under the topic must carry the key. |
+| `pattern` | `string` | A regular expression the value must match (unanchored). |
+| `min`, `max` | `number` | Inclusive bounds. |
+| `max_len` | `string` | Longest value in bytes, at most 256 (default 128). |
+
+A `context:` block on a topic or any ancestor declares its keys for every node
+below; a child may redeclare a key, and the nearest declaration wins. There is no
+root-level block, and a topic with no declaration anywhere on its walk accepts
+no context at all.
+
+On every write, an undeclared key, a value of the wrong type or a missing
+required key refuses the whole call. Whatever the declarations, a fact carries
+at most 16 keys; a key is lowercase `[a-z][a-z0-9_]*` of at most 32 bytes; a
+string is one line with no control or bidirectional-formatting characters; a
+number is finite; a `time` is RFC 3339 with an offset and is stored in UTC.
+Artifacts, which have no ontology placement, may not carry context.
+
+A bad declaration (an unknown type, an enum without values, a pattern that does
+not compile) warns when an existing repo opens and is fatal for a new ontology.
+The key it declares is then **poisoned**: every value for it is refused with the
+ontology's reason, rather than falling back to a parent's declaration.
+
+## Guidance
+
+`guidance:` lets a knowledge base steer the prompts of
+[`knomit_review` and `knomit_hypothesize`](/docs/synthesis/) for every agent that
+maintains it. It may sit on the root and on any topic node, with two keys,
+`hypothesize` and `review`, and each value is a **path**, never inline text:
+
+```yaml
+guidance:                         # root: every topic
+  hypothesize: guidance/all-hypothesize.md
+topics:
+  forecast:
+    guidance:
+      hypothesize: guidance/forecast-hypothesize.md
+      review: guidance/forecast-review.md
+```
+
+- A value is relative to `.knomit/` and must start with `guidance/`, so
+  `guidance/x.md` names `.knomit/guidance/x.md`. It is one clean line of at most
+  256 bytes: no `..`, no leading `/`, no backslash, no `./` or `//`.
+- A file is at most 16 KiB of UTF-8 with no NUL byte, and must be a regular file
+  (a symlink is skipped). A missing or unusable file is skipped with one warning.
+- A bad value **fails closed**: it resolves to no file and shadows the parent's
+  guidance, so a typo never hands a topic another topic's policy. Problems warn
+  when an existing repo opens and are fatal for a new ontology.
+
+knomit reads the ontology and every guidance file at **one commit, the tip of the
+consensus branch**, never an agent branch or an experiment, and re-reads them on
+the next work item after a change lands, without a restart. A hypothesize item
+gets the root file, then the nearest declaring topic's, then the topic's
+validation rules, under a header naming the branch and commit they were read
+at. A prune, distill or reflect item gets one block per distinct file, placed
+before any fact text.
+
+Guidance is the only way to add instructions to these prompts. Neither tool takes
+an instruction argument, and no fact title, body or context value is ever
+substituted into the guidance text. Since `.knomit/` changes only through git,
+whoever can merge into the knowledge base decides how every agent maintaining it
+reasons.
 
 ## A worked example
 
@@ -385,15 +572,16 @@ substructure.
 
 <Aside type="note" title="Copy meta and principles verbatim">
 The full file also carries `meta` and `principles`, lifted unchanged from the
-`code` preset. `meta/reasoning` is a **hardcoded path** that `knomit_review` and
-`knomit_hypothesize` write [methodology facts](/docs/synthesis/) to, and
-`principles` carries the four rules that make designer intent writable only
+`code` preset. `meta/reasoning` is the path the review prompts tell the model to
+write [methodology facts](/docs/synthesis/) to (`knomit_hypothesize` reads them
+back by type, wherever they live), and `principles` carries the four rules that make designer intent writable only
 through a deliberate flow. Copy both blocks into any custom ontology.
 </Aside>
 
 ## The built-in presets
 
-Two ontologies ship embedded. Both are good starting points to copy and edit.
+Three ontologies ship embedded. `default` and `code` are good starting points to
+copy and edit; `fleet` has one job and is used as it is.
 
 ### `default` — id `general`
 
@@ -404,16 +592,18 @@ three to five children — `technology` has `software`, `hardware`, `networking`
 `data`; `science` has `formal`, `natural`, `applied`. There are no validation
 rules at all; it is deliberately permissive.
 
-Use it for personal knowledge bases, chat-derived knowledge, or anything whose
-subject matter isn't known in advance. It is also what `mode: "preset"` picks
+Use it for knowledge bases whose subject matter isn't known in advance:
+research gathered by several agents, knowledge distilled from conversations, a
+shared reference that many teams read. It is also what `mode: "preset"` picks
 when you omit `ontology_preset` — it is **not** a fallback for a repo whose own
 ontology failed to load, which opens read-only instead.
 
 ### `code` — id `source-code`
 
-Knowledge categories for an agent working in a codebase. The topics are
-**epistemic roles**, not subject areas — which is the real contrast with
-`default`:
+Knowledge categories for the agents and people working on a codebase. The
+topics are **epistemic roles**, not subject areas — which is the real contrast
+with `default`, and the reason the shape carries over to subjects other than
+code:
 
 | Topic | Purpose | Children |
 |---|---|---|
@@ -432,6 +622,22 @@ and `policy`, and `domain` must be non-empty and must not mix `global` with an
 area path. Together they make the topic writable only through the
 [`/knomit-principle` flow](/docs/claude-code/).
 
+### `fleet` — id `fleet`
+
+The ontology of a **fleet repository**: the registry of the agents that may
+contribute to a set of knowledge bases. It has one topic, `members`, with one
+record per agent at `kb/members/<agent-id>/…`, holding the agent's current
+state (`active`, `left` or `revoked`), its current signing key, host and branch.
+Its single rule requires every record to be a pragmatic `policy` fact. Records
+are never deleted: a key rotation or a departure is a new version of the same
+fact, so the history of who could sign what stays readable.
+
+An instance joins by writing its own record on its agent branch; a human accepts
+it by merging that branch into the fleet repository's consensus branch. Other
+knowledge bases that set `verify_signatures` check commits against these
+records. knomit recognises a fleet repository by this ontology, and an instance
+mounts at most one. See [Fleet](/docs/fleet/).
+
 ### Which shape to choose
 
 `default` organises by **subject**. `code` and the research example above
@@ -445,14 +651,19 @@ it.
 
 Presets evolve. On every repo open, knomit checks whether the stored ontology's
 `id` matches an embedded preset — `general` maps to `default`, `source-code` to
-`code`. If it does **and** the stored ontology is a strict subset of that preset,
-the stored file is **overwritten in place** with the newer preset, so repos
-created against an older version pick up added topics automatically. Subset
-comparison matches validations by `name` only, which is how rule wording fixes
-ship this way too.
+`code`, `fleet` to `fleet`. If it does **and** the stored ontology is a strict
+subset of that preset, the stored file is **overwritten in place** with the
+newer preset, so repos created against an older version pick up added topics
+automatically. Subset comparison matches validations by `name` only, which is
+how rule wording fixes ship this way too.
 
 If the stored ontology has *added* anything the preset lacks, it has diverged:
-knomit logs that an upgrade is available and leaves your file alone.
+knomit logs that an upgrade is available, names the reason, and leaves your file
+alone. Adding a topic, a child or a rule diverges; so does any attribute
+(including a root attribute such as `consensus`), trigger, `context`
+declaration or `guidance` block the preset does not carry identically, because
+overwriting the file would erase it. A value that behaves as absent, such as
+`learn_dedup: "on"`, counts as absent.
 
 <Aside type="danger" title="Deletion is not divergence">
 Start from the `code` preset, keep `id: source-code`, delete the topics you
@@ -485,10 +696,12 @@ curl -X POST http://localhost:19278/api/v1/repos \
 
 | `mode` | Remote? | Ontology source |
 |---|---|---|
-| `preset` | local only | `ontology_preset`: `"default"` or `"code"`. Omitted, it uses `default`. |
+| `preset` | local only | `ontology_preset`: `"default"`, `"code"` or `"fleet"`. Omitted, it uses `default`. |
 | `custom` | local only | `ontology_yaml`: the full YAML, inline. |
+| `template` | local only | `template: {repo, name}`: a [template](/docs/templates/) published by a mounted knowledge base. Its `README.md` and `.knomit/` files are copied byte for byte, as one signed commit. |
 | `clone` | remote | Taken from the chosen branch of the origin. Passing `ontology_preset` or `ontology_yaml` is **rejected**, not ignored — a clone would otherwise drop it silently. `409` if that branch has no ontology. |
-| `initialize` | remote | `ontology_preset` or `ontology_yaml` — **required**, since writing it is the act that makes the branch a knowledge base — committed onto knomit's own branch. `409` if that branch already has one. |
+| `initialize` | remote | Exactly one of `ontology_preset`, `ontology_yaml` or `template` — **required**, since writing it is the act that makes the branch a knowledge base — committed onto this instance's agent branch. `409` if that branch already has one. |
+| `subscribe` | remote | Taken from the followed branch. A read-only follower: no agent branch, no writes, never pushes. |
 
 The two remote modes are the two halves of one question about the branch you
 chose — *does it already carry `.knomit/ontology.yaml`?* — answered by
@@ -497,20 +710,20 @@ already a knowledge base and lets its ontology govern; `initialize` **turns**
 a branch that isn't one into one.
 
 <Aside type="tip" title="`initialize` never needs push access to `main`">
-It clones the chosen branch, cuts `agent/<host>` from its tip, commits the
-ontology there, and pushes **that branch alone**. The consensus branch is never
-written, so a protected default branch is not an obstacle — open a merge
-request from `agent/<host>` when the knowledge base should become the project's
-consensus. A remote with no branches at all is refused, with the instruction
+It clones the chosen branch, cuts this instance's agent branch from its tip,
+commits the ontology there, and pushes **that branch alone**. The consensus
+branch is never written, so a protected default branch is not an obstacle —
+open a merge request from the agent branch when the knowledge base should
+become the project's consensus. A remote with no branches at all is refused, with the instruction
 that fixes it: create a `main` first, one commit is enough.
 </Aside>
 
-The response is newline-delimited JSON progress ending in `{"type":"done"}` or
-`{"type":"error"}`. Preflight establishes shape for both remote modes *before*
-the stream opens, so a mismatched mode arrives as a `problem+json` `409` rather
-than as an error line inside a committed `200`. The web UI wraps all four modes
-in a [guided wizard](/docs/web-ui/#creating-a-repository) that derives the mode
-from what it probed, rather than asking you to classify the remote yourself.
+The response is `202 Accepted` with a `Location` header naming the create job,
+which you poll for progress. Preflight establishes shape for the remote modes
+*before* the job starts, so a mismatched mode arrives as a `problem+json` `409`
+rather than as a failed job. The web UI wraps the modes in a
+[guided wizard](/docs/web-ui/#creating-a-repository) that derives the mode from
+what it probed, rather than asking you to classify the remote yourself.
 
 ### Validating a draft before you commit to it
 
@@ -533,22 +746,26 @@ Use this rather than repo creation as your validation step: unlike a create, it
 costs nothing and reports all the problems at once.
 
 <Aside type="caution" title="Changing the ontology of an existing knowledge base">
-There is no API for this, and no way to do it from inside knomit. The fact tools
-deliberately refuse to write `.knomit/ontology.yaml` — it is a loose file at the
-root of knomit's private namespace, which the write gate reserves — and the
-built-in git server exposes fetch only, never push. The file is also read just
-once, when the repo is opened.
+There is no API for this. The fact tools refuse every write under `.knomit/`,
+the ontology included: the system root changes only through git, so a change to
+the rules every agent writes under is reviewed like any other merge into the
+knowledge base. The built-in git endpoint accepts pushes only from enrolled
+peers, and only to the pusher's own agent branch.
 
-So the only route is git from outside: change the file in the repo's **origin**,
-let sync bring it down, and restart the server so the repo is reopened. Treat
-changing a live knowledge base's ontology as a migration, and pick the right one
-at creation time.
+So the route is git: commit the change, let it reach the consensus branch the
+way any merge does, let sync bring it into this instance's agent branch, and
+restart the server so the repo is reopened. Root attributes and guidance are
+read at the consensus branch on use and need no restart; topics, rules and
+context declarations do. Treat changing a live knowledge base's taxonomy as a
+migration, and pick the right one at creation time.
 </Aside>
 
 ## How the ontology reaches the agent
 
-MCP server instructions are generated per session from the write repo's
-ontology. The top-level topic list, with each topic's `description`, is
+MCP server instructions are generated per binding from the write repo's
+ontology: for a URL-scoped endpoint when the session starts, and on the unscoped
+endpoint in the result of `knomit_bind`, which the agent treats as its session
+instructions. The top-level topic list, with each topic's `description`, is
 interpolated straight into the section the model reads before it does anything:
 
 ```text
@@ -573,6 +790,11 @@ That has four practical consequences:
 - Topics feed the [OKF export](/docs/okf/), where the OKF `type` is derived from
   the topic, singularised.
 
+The rest of the ontology reaches the agent at the point of use rather than in
+the instructions: a rule's `message` comes back when a write fails it, a context
+declaration is enforced when a fact carries the key, and guidance appears inside
+the review and hypothesize work items it applies to.
+
 ## Gotchas
 
 1. A missing or unparseable ontology makes the repo **read-only**. It is not
@@ -581,9 +803,10 @@ That has four practical consequences:
    the next repo open. Change the `id`.
 3. `children` are suggestions. The freeform tail means they never restrict what
    gets created; use a `fact.path` rule for a real constraint.
-4. `fact.sources` is **summed on a subsumption merge**, so a corroboration
-   floor gates a claim's first write and passes on every one after it — and
-   `fact.evidence_weight` is **always 0 on `knomit_learn`**, because it is
+4. `fact.sources` grows on a subsumption merge **only when the incoming fact is
+   not a hypothesis and cites a ref the existing fact lacks**, so re-learning a
+   claim from the same evidence does not lift it over a corroboration floor —
+   and `fact.evidence_weight` is **always 0 on `knomit_learn`**, because it is
    stamped after validation.
 5. Only the **first** failing rule is reported per write.
 6. Comments and key order are **not preserved** — the stored file is
@@ -592,5 +815,10 @@ That has four practical consequences:
    aren't lowercase.
 8. Rules are compiled at parse time, so a **syntax error takes down the whole
    ontology**, not just that rule — and then gotcha 1 applies.
-9. Private-state facts bypass ontology validation entirely, root rules included.
+9. Artifacts (`artifacts/<area>/<name>`) bypass ontology validation entirely,
+   root rules included.
 10. Regex rules need doubled backslashes inside a double-quoted YAML scalar.
+11. Root attributes are read at the consensus branch, not at your agent branch:
+    editing one on your branch changes nothing until the edit is merged.
+12. A bad guidance path fails closed: the topic gets no guidance, not its
+    parent's.

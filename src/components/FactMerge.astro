@@ -1,8 +1,10 @@
 ---
 /**
  * What a semantic merge on knowledge does: two near-duplicate facts fold into
- * one. Metadata pools — confidence takes the max, source counts add, domains
- * union — while identity comes from the winner alone. Learning the same thing
+ * one. Metadata pools — confidence takes the max, domains union, and the
+ * incoming source count is added only when the incoming fact is not a
+ * hypothesis and cites a ref the existing fact lacks (here it brings a new
+ * ref) — while identity comes from the winner alone. Learning the same thing
  * twice absorbs; it does not duplicate. Values are illustrative.
  */
 interface Props {
@@ -15,7 +17,7 @@ const { class: className = '' } = Astro.props;
   <svg
     viewBox="0 0 440 360"
     role="img"
-    aria-label="Two near-duplicate facts fold into one: confidence takes the maximum of the two, source counts add together, domains union, and the higher-confidence fact supplies the title and body."
+    aria-label="Two near-duplicate facts fold into one: confidence takes the maximum of the two, the source count grows because the incoming fact cites a new ref, domains union, and the higher-confidence fact supplies the title and body."
     xmlns="http://www.w3.org/2000/svg"
   >
     <!-- the fact already in the corpus -->
@@ -31,6 +33,7 @@ const { class: className = '' } = Astro.props;
     <text x="248" y="80" class="fm-field">confidence: 0.88</text>
     <text x="248" y="104" class="fm-field">sources: 1</text>
     <text x="248" y="128" class="fm-field">domain: [agents]</text>
+    <text x="400" y="52" class="fm-rule" text-anchor="end">+1 new ref</text>
 
     <!-- both fold into one -->
     <path
@@ -54,7 +57,7 @@ const { class: className = '' } = Astro.props;
     <text x="80" y="260" class="fm-field">confidence: 0.88</text>
     <text x="360" y="260" class="fm-rule" text-anchor="end">max</text>
     <text x="80" y="284" class="fm-field">sources: 4</text>
-    <text x="360" y="284" class="fm-rule" text-anchor="end">added</text>
+    <text x="360" y="284" class="fm-rule" text-anchor="end">added: new ref</text>
     <text x="80" y="308" class="fm-field">domain: [git, agents]</text>
     <text x="360" y="308" class="fm-rule" text-anchor="end">union</text>
     <text x="80" y="332" class="fm-field fm-field--soft">title, body: from the winner</text>
@@ -68,7 +71,9 @@ const { class: className = '' } = Astro.props;
   <figcaption>
     Learning the same thing twice folds the incoming fact into the existing
     one. The metadata pools; the identity comes from whichever fact wins on
-    confidence. The corpus gains no duplicate.
+    confidence. The source count grows only when the incoming fact cites
+    evidence the existing one lacks: re-reading the same source is not
+    corroboration. The corpus gains no duplicate.
   </figcaption>
 </figure>
 

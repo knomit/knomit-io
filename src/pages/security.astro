@@ -2,45 +2,107 @@
 import BaseLayout from '../layouts/BaseLayout.astro';
 import SectionHeading from '../components/SectionHeading.astro';
 
-const pillars = [
+// Each pillar states what exists in knomit dev. Grouped by the question a
+// reader brings: who wrote this, who may connect, what can change policy,
+// and what stays on the machine.
+const groups = [
   {
-    title: 'Local-first by default',
-    body: 'knomit runs against a plain git repository on your own machine and searches with a local embedding model (EmbeddingGemma over an ONNX runtime). Reading, writing, and searching facts require no external services and no data leaving your host.',
+    eyebrow: 'Who wrote it',
+    pillars: [
+      {
+        title: 'An identity for every agent',
+        body: 'When an instance first starts it is assigned an opaque agent id, kept for the life of the instance, and an Ed25519 signing key. Every commit it authors is signed. If no signer is available the write is refused: knomit never makes an unsigned commit of its own.',
+      },
+      {
+        title: 'Verified once, at acceptance',
+        body: 'A repository chooses verify_signatures: off, log or enforce (off when absent). When it is on, every commit about to enter main is checked once: by knomit verify ci in a forge’s CI, or when a peer pushes to a knomit host. Its author must have exactly one member record, the record must be active, and the commit must be signed with that record’s current key. Enforce refuses the merge or the push; log reports and lets it through. An unknown value stops the gate rather than reading as off.',
+      },
+      {
+        title: 'The fleet decides who is admitted',
+        body: 'The fleet repository is a knowledge base whose member records list the admitted instances and their current keys. Admitting, rotating or revoking a member is a commit to that repository. knomit verify audit re-checks a branch’s whole history against every version of the records, so a key rotated away is still attributed to its agent.',
+      },
+    ],
   },
   {
-    title: 'Signed, tamper-evident history',
-    body: 'Every write is one atomic, Ed25519-signed git commit. Because the whole knowledge graph is a git history, any change is attributable and verifiable, and the integrity of the store can be checked end to end.',
+    eyebrow: 'Who may connect',
+    pillars: [
+      {
+        title: 'Mutual TLS between instances',
+        body: 'An instance enrolls with a certificate issued from the fleet’s root (knomit identity), and instances talk to each other over mutual TLS. An enrolled instance may push exactly one branch to a host: its own agent branch. Certificates can be revoked.',
+      },
+      {
+        title: 'OAuth for clients',
+        body: 'A server can run an OAuth listener for remote clients. kb login signs a client in from the browser; a pending request is approved or denied by an operator (knomit oauth). A token never holds more than its grant and the ceiling it was issued with.',
+      },
+      {
+        title: 'Grants and permissions, default deny',
+        body: 'Every request resolves to one principal, and one check decides it: no principal, no grant, or a store error all refuse. Permissions cover reading, writing, pushing your own branch, merging pushed branches, and administration. knomit grants adds, revokes and lists them; a revoked grant stays as history.',
+      },
+      {
+        title: 'Kernel-checked local access',
+        body: 'Local clients reach the server over a unix socket (a named pipe on Windows) readable only by its owner. The operating system reports who is connecting, so the bridge needs no token, and a request from a foreign host name on loopback is refused.',
+      },
+    ],
   },
   {
-    title: 'Encrypted remote credentials',
-    body: 'When you sync a repo to a git remote, auth tokens are never stored in plaintext. They are encrypted with AES-256-GCM using a key derived (HKDF-SHA256) from the agent\'s SSH private key, and stored base64-encoded in the machine-local control plane — never in the git-backed knowledge base, so a credential cannot be pushed to a remote by accident. If the key is unreadable, knomit refuses to persist a token rather than writing it in the clear.',
+    eyebrow: 'What can change policy',
+    pillars: [
+      {
+        title: '.knomit/ changes only through git',
+        body: 'The ontology, triggers, recipes and skills live under .knomit/, which every fact-writing tool refuses to touch. They change by commits that reach main the way code does, so an agent cannot rewrite the rules it is judged by. Repository recipes run only from main, and symlinks there are refused.',
+      },
+      {
+        title: 'Source-available and auditable',
+        body: 'The code is public under the Functional Source License (FSL-1.1-ALv2), and every fact is markdown in git. You can read every line of the code, and diff every change to the knowledge.',
+      },
+      {
+        title: 'It is just git — review like code',
+        body: 'Each instance is the sole writer of its own agent branch. Facts reach main through a reviewed merge, or, where a repository sets consensus to auto, through the hosting instance’s automatic merge of pushed branches. You can host a repository on any git host and apply the access controls you already use for code.',
+      },
+    ],
   },
   {
-    title: 'Guarded remotes',
-    body: 'Cloning from a local filesystem path is disabled by default. To allow it, you must explicitly set an allowed root directory; a local origin is accepted only if it resolves to a path inside that root. Network origins always pass. Every clone and fetch path is gated — there is no trusted exemption.',
+    eyebrow: 'What stays on the machine',
+    pillars: [
+      {
+        title: 'Local-first by default',
+        body: 'knomit keeps every knowledge base as a git repository on your own machine, cloneable with ordinary git, and searches with a local embedding model (EmbeddingGemma over an ONNX runtime). Reading, writing and searching facts need no external service. Fact content leaves your host only when you sync it, or when review and hypothesize call a hosted LLM provider; with a local model through Ollama, synthesis stays on the machine too.',
+      },
+      {
+        title: 'Encrypted remote credentials',
+        body: 'When you sync a repo to a git remote, auth tokens are never stored in plaintext. They are encrypted with AES-256-GCM using a key derived (HKDF-SHA256) from the agent\'s SSH private key, and stored in the machine-local control plane — never in the knowledge base, so a credential cannot be pushed to a remote by accident. If the key is unreadable, knomit refuses to persist a token rather than writing it in the clear.',
+      },
+      {
+        title: 'Guarded remotes and verified host keys',
+        body: 'Cloning from a local filesystem path is off unless you name an allowed root directory. SSH remotes are checked against a known_hosts file: an unknown host is pinned on first contact, a changed key fails the sync, and an unreadable known_hosts file is an error, never a fallback to unverified keys.',
+      },
+      {
+        title: 'Exports do not leak their source',
+        body: 'Publishing a knowledge base as an OKF repository never publishes its address. The KB URL lives in a git remote that is not pushed, and the KB\'s own history is fetched to refs outside refs/heads/*, so the default push refspec cannot carry it. Recording the address in the published bundle is opt-in, and credentials are stripped from it first.',
+      },
+    ],
+  },
+];
+
+const trust = [
+  {
+    title: 'Build capabilities',
+    body: 'knomit gives you the parts — signatures, verification at acceptance, certificates, grants — and leaves each repository to decide how strictly to use them.',
   },
   {
-    title: 'Verified SSH host keys',
-    body: 'SSH remotes are checked against a known_hosts file you choose — by default one under KNOMIT_HOME, or your own ~/.ssh/known_hosts. An unknown host is pinned on first contact; a host that later presents a different key is rejected and the sync fails. If the known_hosts file cannot be read or parsed, the operation errors out: there is no fallback to accepting unverified keys.',
+    title: 'Trust transitively',
+    body: 'Trust follows repository access and trusted merges. Whoever can merge to a repository’s main sets its policy, verify_signatures included, and a subscriber trusts the repository it subscribes to.',
   },
   {
-    title: 'It is just git — review like code',
-    body: 'Each machine is the sole writer of its own agent branch. No peer merges another peer\'s branch directly. Facts land on main through review and merge, exactly like a pull request. You can host the store on any git host and apply the same access controls you already use for code.',
-  },
-  {
-    title: 'Exports do not leak their source',
-    body: 'Publishing a knowledge base as an OKF repository never publishes its address. The KB URL lives in a git remote that is not pushed, and the KB\'s own history is fetched to refs outside refs/heads/*, so the default push refspec cannot carry it. Recording the address in the published bundle is opt-in — and credentials are stripped from it first, with the tool saying so whenever that changes anything.',
-  },
-  {
-    title: 'Open source and auditable',
-    body: 'knomit is open source. The store format is plain markdown in a git repo — you can read every fact, diff every change, and audit the whole system yourself.',
+    title: 'Investigate afterwards',
+    body: 'knomit does not try to stop a trusted participant in real time. Every commit is signed and attributable, so a breach can be traced, audited against the member history, and reverted.',
   },
 ];
 ---
 
 <BaseLayout
-  title="Security & privacy — knomit"
-  description="How knomit keeps knowledge secure: local-first, Ed25519-signed history, encrypted credentials, and guarded remotes."
+  title="Security & privacy — identity, signing and access in knomit"
+  description="How knomit secures a fleet: persisted agent identity, signed commits verified at acceptance, mTLS between instances, OAuth for clients, and grants."
 >
   <section class="k-section">
     <div class="k-container">
@@ -48,19 +110,42 @@ const pillars = [
         as="h1"
         eyebrow="Security & privacy"
         title="Local-first, signed, and yours."
-        lead="knomit is a plain git repo you control. No vendor lock-in, no data exfiltration, and a history you can verify."
+        lead="Many agents on many machines writing one body of knowledge needs four answers: who wrote this, who may connect, what can change the rules, and what stays local. Here is what knomit does for each."
       />
-      <div class="sec-grid">
-        {pillars.map((p) => (
-          <div class="sec-card k-reveal">
-            <h2 class="sec-card__title">{p.title}</h2>
-            <p class="sec-card__body k-text-2">{p.body}</p>
+
+      {groups.map((g) => (
+        <div class="sec-group">
+          <p class="sec-group__eyebrow k-mono">{g.eyebrow}</p>
+          <div class="sec-grid">
+            {g.pillars.map((p) => (
+              <div class="sec-card k-reveal">
+                <h2 class="sec-card__title">{p.title}</h2>
+                <p class="sec-card__body k-text-2">{p.body}</p>
+              </div>
+            ))}
           </div>
-        ))}
+        </div>
+      ))}
+
+      <div class="sec-trust">
+        <SectionHeading
+          eyebrow="The trust model"
+          title="Build capabilities, trust transitively, investigate afterwards."
+        />
+        <div class="sec-grid">
+          {trust.map((t) => (
+            <div class="sec-card sec-card--trust k-reveal">
+              <h3 class="sec-card__title">{t.title}</h3>
+              <p class="sec-card__body k-text-2">{t.body}</p>
+            </div>
+          ))}
+        </div>
       </div>
+
       <p class="sec-foot k-text-2">
-        For the operational detail — auth methods, the origin record, the
-        local-path gate, and integrity verification — see
+        For the operational detail, see
+        <a href="/docs/auth/">Authentication and permissions</a>,
+        <a href="/docs/fleet/">Fleets</a>,
         <a href="/docs/remote-sync/">Remote sync</a> and
         <a href="/docs/configuration/">Configuration</a>. For what a running
         server exposes about itself, see
@@ -80,5 +165,21 @@ const pillars = [
   .sec-card { border: 1px solid var(--k-hairline); border-radius: var(--k-radius); padding: 1.25rem 1.4rem; background: var(--k-surface-1); }
   .sec-card__title { font-size: 1.08rem; margin-bottom: 0.5rem; }
   .sec-card__body { line-height: 1.6; font-size: 0.95rem; }
-  .sec-foot { margin-top: 2rem; max-width: 60ch; }
+  .sec-foot { margin-top: 2.5rem; max-width: 60ch; }
+  .sec-group { margin-top: 2.25rem; }
+  .sec-group .sec-grid { margin-top: 1rem; }
+  .sec-group__eyebrow {
+    font-size: 0.75rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--k-text-muted);
+  }
+  .sec-trust { margin-top: 3.5rem; }
+  .sec-trust :global(.k-heading) { margin-bottom: 0; }
+  .sec-card--trust {
+    border-color: rgba(119, 204, 153, 0.3);
+    background:
+      radial-gradient(130% 120% at 0% 0%, var(--k-brand-glow), transparent 60%),
+      var(--k-surface-1);
+  }
 </style>

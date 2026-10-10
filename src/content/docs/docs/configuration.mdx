@@ -1,6 +1,6 @@
 ---
 title: Configuration
-description: The KNOMIT_HOME data layout, knomit.toml, the full environment-variable surface, and LLM provider configuration for synthesis.
+description: The KNOMIT_HOME data layout, every knomit.toml table and key with its default, the environment variables knomit reads, and LLM provider setup.
 ---
 
 import { Aside } from '@astrojs/starlight/components';
@@ -8,107 +8,163 @@ import { Aside } from '@astrojs/starlight/components';
 Configuration is layered, lowest to highest precedence:
 
 1. **Defaults** — `internal/config/config.go` `Defaults()`, the single source of truth.
-2. **`knomit.toml`** — searched next to the binary, then at `KNOMIT_HOME/knomit.toml`.
+2. **`knomit.toml`** — read from the data root (`KNOMIT_HOME/knomit.toml`) and nowhere else.
 3. **Environment variables** — overlay any value that is set (non-empty).
 
-`KNOMIT_HOME` is resolved *first* (it is the config search root) and therefore
-cannot be overridden from inside the TOML file.
+`KNOMIT_HOME` is resolved *first* (it decides which `knomit.toml` is read) and
+therefore cannot be overridden from inside the TOML file.
 
-A `.env` file in the process's working directory is loaded into the environment
-before config resolution, so its entries participate as ordinary environment
-variables at layer 3. It is optional; a missing or unreadable `.env` is ignored.
-Variables already present in the environment win — `.env` does not overwrite
-them.
+Every `knomit` command (not only `serve`) also loads a `.env` file from the process's working directory into
+the environment before config resolution, so its entries participate as ordinary
+environment variables at layer 3. It is optional; a missing or unreadable `.env`
+is ignored. Variables already present in the environment win — `.env` does not
+overwrite them.
 
 <Aside type="caution">
-Malformed numeric or duration env values fail at boot rather than being silently
-ignored — a typo in `KNOMIT_PORT` or a duration knob stops the server, it doesn't
-fall back to the default.
+Malformed numeric, boolean or duration env values fail at boot rather than being
+silently ignored — a typo in `KNOMIT_PORT`, `KNOMIT_GIT_SERVE` or a duration knob
+stops the server, it doesn't fall back to the default. Unknown keys in
+`knomit.toml` are different: they log one warning each and are ignored.
 </Aside>
 
 ## `KNOMIT_HOME` and the data layout
 
-`KNOMIT_HOME` (default `~/.knomit`) is the single root for all runtime data.
-`KNOMIT_REPO` is a backward-compatible alias. Everything else derives from it:
+`KNOMIT_HOME` is the single root for all of an instance's runtime data.
+`KNOMIT_REPO` is a backward-compatible alias. Everything else derives from it.
+The default depends on the platform:
+
+| Platform | Default data root | State directory (lockfile; desktop logs on Linux and Windows) |
+|----------|-------------------|------------------------------------------|
+| macOS | `~/.knomit` | `~/Library/Application Support/knomit` |
+| Linux | `~/.knomit` | `$XDG_STATE_HOME/knomit` (fallback `~/.local/state/knomit`) |
+| Windows | `%LOCALAPPDATA%\knomit\home` | `%LOCALAPPDATA%\knomit` |
+
+On macOS the desktop's log file is in `~/Library/Logs/knomit` instead.
+
+On Windows the data root sits one level below the state directory, so it does not
+share a folder with `server.json` and the logs. There is no `~/.knomit` fallback
+on Windows and no migration from one.
+
+A `KNOMIT_HOME` that is still **relative** after `~` expansion is refused at
+startup: the server, `kb`, the hooks and the desktop app start from different
+working directories and would each resolve it to a different root. If the
+default cannot be resolved at all (no home directory, no `%LOCALAPPDATA%`),
+startup stops with an error telling you to set `KNOMIT_HOME`; knomit never
+guesses.
+
+The data root is made private to your user at every boot: created `0700` on
+macOS and Linux (or tightened, if you own it and it was wider), restricted to the
+current user on Windows. A root owned by someone else, or a symlink, is only
+warned about.
 
 ```text
 $KNOMIT_HOME/
 ├── knomit.toml                 # optional config file
+├── knomit.sock                 # local authenticated listener (unix; Windows uses a named pipe instead)
 ├── repos/
-│   ├── <uid>.db                # one repo (SQLite cache; git is source of truth)
+│   ├── <uid>.db                # one repo: its git objects and refs, plus the derived index
 │   ├── <uid>.db-shm / -wal     # SQLite sidecars
-│   ├── <uid>.sessions.db       # ephemeral: tool cursors + pipeline work-steal sessions
-│   └── archive/
-│       ├── <ksuid>.db          # archived (deleted-but-recoverable) repo
-│       └── <ksuid>.json        # archive manifest {id, name, origin, archivedAt}
+│   └── <uid>.sessions.db       # ephemeral: tool cursors + pipeline work-steal sessions
 ├── models/
 │   └── embeddinggemma/         # cached ONNX model + tokenizer
 ├── bin/
-│   └── knomit-bridge           # symlink the desktop app creates on launch
+│   ├── kb                      # the MCP bridge, placed here by the desktop app on launch
+│   └── knomit-okf              # the OKF exporter, placed the same way
+├── pki/                        # fleet certificate files, once `knomit identity install` has run
+│   ├── instance.crt
+│   ├── root.crt
+│   ├── crl.pem
+│   └── crl.number
 ├── crashes/                    # crash-report bundles written by the post-mortem reporter
-├── dumps/                      # goroutine dumps written on SIGUSR1 (server keeps running)
-├── control.db                  # machine-local control plane: the repo registry, origins, lenses
+├── dumps/                      # goroutine dumps (SIGUSR1) and heap profiles
+├── control.db                  # machine-local control plane (see below)
 ├── running.marker              # clean-shutdown marker; present at boot ⇒ previous run crashed
 ├── known_hosts                 # SSH host-key pins for git remotes (default location)
-├── id_ed25519 / .pub           # agent SSH key (signs commits; derives credential-encryption key)
+├── id_ed25519 / .pub           # the instance key: signs commits, encrypts stored credentials
 └── …
 ```
 
 `crashes/`, `dumps/`, and `running.marker` are the native post-mortem surface —
-see [Observability](/docs/observability/).
+see [Observability](/docs/observability/). `bin/` is written only by the desktop
+app, which places `kb` and `knomit-okf` there (symlinks on macOS, copies on Linux
+and Windows) and removes the pre-rename `knomit-bridge` link.
+
+The socket path has a fallback: when `<home>/knomit.sock` would be too long for a
+unix socket address, the listener lives at `/tmp/knomit-<uid>/<8 hex>.sock`
+instead, derived from the data root. On Windows the local listener is the named
+pipe `\\.\pipe\knomit-<16 hex>`, derived from the data root, so two instances with
+different roots get different pipes. Every binary derives the same name from the
+same root; that is how `kb` finds the server with nothing configured.
 
 <Aside type="note">
-`control.db` is a SQLite database holding the **repo registry** (tables `repos`,
-`repo_origins`) and lens definitions (`lenses`, `lens_reads`). It is
-machine-local operational config: deliberately **not** git-backed, and it does
-not sync.
+`control.db` is a SQLite database holding everything this machine knows about
+itself rather than about a knowledge base:
 
-It is schema-versioned by the same migrator as the per-repo databases, on one
-shared handle, so a home carries a version stamp and an interrupted migration
-self-heals on the next boot rather than leaving every repo unreachable at once.
+- the **repo registry** (tables `repos`, `repo_origins`, `repo_subscriptions`)
+  and lens definitions (`lenses`, `lens_reads`);
+- this instance's **identity** (`instance_identity`: the persisted agent id and
+  its fleet registration state);
+- the permission **grants** (`grants`), MCP **client sessions**
+  (`client_sessions`) and binding handles (`binding_handles`);
+- the OAuth issuer's state (`oauth_*`), and any `knomit verify accept` waivers.
+
+It is machine-local operational config: deliberately **not** git-backed, and it
+does not sync. It is schema-versioned by the same migrator as the per-repo
+databases, on one shared handle, so a home carries a version stamp and an
+interrupted migration self-heals on the next boot rather than leaving every repo
+unreachable at once.
 </Aside>
 
-A repo's **name and its filename are no longer the same thing.** Each database is
+A repo's **name and its filename are not the same thing.** Each database is
 `repos/<uid>.db`, where the uid is an opaque, immutable KSUID; `control.db` maps
 that uid to the display name. Renaming a repo therefore touches only a registry
 row, and two repos can swap names without a file moving. Startup opens what the
-registry lists — the `*.sessions.db` sidecars are filtered out, and there is no
-runtime rescan endpoint.
+registry lists — the `*.sessions.db` sidecars are not repos, and there is no
+runtime rescan endpoint. An archived repo keeps its file in `repos/`; the
+registry marks it archived and a restore reopens it in place.
 
 ### Inside a repo, versus inside `KNOMIT_HOME`
 
 The layout above is **machine-local**: caches, keys, models, the registry. None
 of it syncs. What travels with a knowledge base is the git repo's own contents,
-which is a separate layout:
+which is a separate layout with three roots:
 
 ```text
 <repo>/
 ├── kb/                       # the ontology root — facts live here
+├── artifacts/                # agents' untyped working files, one folder per area; never indexed
+│   └── <area>/…
 ├── README.md                 # the repo description, read and written by knomit
 ├── LICENSE                   # the KB's terms, read and written by knomit
-└── .knomit/
+└── .knomit/                  # the system root: how this knowledge base operates
     ├── ontology.yaml         # the ontology definition
-    └── <area>/               # agent-written private state, one dir per area
+    ├── triggers/             # trigger scripts
+    ├── recipes/              # recipes that `do: run` triggers launch
+    ├── skills/               # skills the repo serves to agents
+    └── templates/            # templates the repo offers for new knowledge bases
 ```
 
-`ontology_root` (default `kb`) names the first of these. The
-[ontology definition](/docs/ontologies/) itself sits in a **private** directory —
-anything with a dot-prefixed path segment is excluded from fact discovery —
-which is why it is configuration rather than a fact, and why knomit reads it by
-name. See
+`ontology_root` (default `kb`) names the first of these; the value `artifacts`
+is refused. The [ontology definition](/docs/ontologies/) sits in `.knomit/`
+because anything with a dot-prefixed path segment is excluded from fact
+discovery — which is why it is configuration rather than a fact, and why knomit
+reads it by name. See
 [what a knowledge base repo contains](/docs/concepts/#what-a-knowledge-base-repo-contains).
 
-Ownership inside `.knomit/` splits by depth. Loose files at its root are
-knomit's own config and no agent may write them; a subdirectory is an area that
-agents write private state into. That is why the fact tools refuse
+`.knomit/` is **closed to every fact-tool write**. Its writers are people,
+through git (a commit, a push, a merge), and knomit's own code (creating a repo,
+creating one from a template). That is why the fact tools refuse
 `.knomit/ontology.yaml` — and why the only way to change a live KB's ontology is
-[out of band, through git](/docs/ontologies/#choosing-an-ontology).
+[out of band, through git](/docs/ontologies/#choosing-an-ontology). Agents put
+their own working files under `artifacts/<area>/` instead. A file under
+`.knomit/` can still be read by exact path (`knomit_explain`, or a REST `GET`);
+it is just never indexed, queried or listed.
 
 <Aside type="note" title="Two different `.knomit`s">
 `~/.knomit` is `KNOMIT_HOME`, the machine-local directory above. `.knomit/`
-*inside a repo* is knomit's private namespace within that git tree. They share a
-name and nothing else: one is local state that never syncs, the other is
-versioned content that travels with the knowledge base.
+*inside a repo* is knomit's system root within that git tree. They share a name
+and nothing else: one is local state that never syncs, the other is versioned
+content that travels with the knowledge base.
 </Aside>
 
 ### There is no default repo
@@ -124,37 +180,97 @@ meaning.
 
 The consequence for anything that resolves a repo is that it cannot fall back to
 a hardcoded name and must handle the empty set — which is why `knomit verify`
-requires `--repo` unless you pass `--all`, and `knomit-bridge` requires exactly
-one of `--repo` or `--lens`. Repos are born only through `POST /api/v1/repos`
-(the web UI's **Manage** mode); MCP cannot create them at all.
+requires `--repo` unless you pass `--all`, and `kb` requires exactly one of
+`--repo` or `--lens`. Repos are born only through `POST /api/v1/repos` (the web
+UI's **Manage** mode); MCP cannot create them at all.
 
 ### Server discovery lockfile
 
-`server.json` is written by the desktop app/tray on startup and read by
-`knomit-bridge` to find the running server's port. Contents are
-`{pid, port, version}`, mode `0600`, written atomically (write-then-rename). Its
-location is **not** under `KNOMIT_HOME`:
+`server.json` is written by the desktop app on startup and read by `kb` to find
+the running server's port. Contents are `{pid, port, version}`, mode `0600`,
+written atomically (write-then-rename). It lives in the state directory, **not**
+under `KNOMIT_HOME`:
 
 - macOS: `~/Library/Application Support/knomit/server.json`
 - Linux: `$XDG_STATE_HOME/knomit/server.json` (default `~/.local/state/knomit/server.json`)
+- Windows: `%LOCALAPPDATA%\knomit\server.json`
+
+`kb` does not rely on the lockfile alone. It takes its server from, first match
+wins: its positional argument, `KNOMIT_SERVER`, this lockfile, then
+`http://localhost:19278`. `KNOMIT_HOME` does not choose the server; with several
+instances on one machine, name the one you mean (see `KNOMIT_SERVER` below).
 
 ## `knomit.toml`
 
-Place a `knomit.toml` next to the binary or at `KNOMIT_HOME/knomit.toml`.
+Put a `knomit.toml` at `KNOMIT_HOME/knomit.toml`. It is read from the data root
+**only**: a copy next to the `knomit` binary is not read, and `knomit serve` logs
+one warning naming it so the file is not silently ignored. A file that cannot be parsed is an error, not a fall-through to
+defaults.
+
 Top-level keys are bare (not under a table); the rest are `[tables]`. Defaults
 shown:
 
 ```toml
 # --- top-level ---
-repo            = "~/.knomit"   # KNOMIT_HOME (the TOML key is "repo"); resolved before TOML, so setting it here is a no-op
-host            = "localhost"
-port            = "19278"
-socket          = ""            # Unix socket path; an *additional* listener alongside host:port
-ontology_root   = "kb"          # path within git where facts live
-onnx_lib_path   = ""            # set ORT_LIB_PATH instead (see the note below)
-local_origin_root = ""          # root for permitted local-path git origins ("" = disabled)
-read_only       = false         # read-only demo: reject mutations, hide git + write tools, pull-only sync
-methodology_min_score = 0.15    # composite-score floor for methodology candidates
+repo              = "~/.knomit"  # KNOMIT_HOME (the TOML key is "repo"); resolved before TOML, so setting it here is a no-op
+host              = "localhost"
+port              = "19278"
+socket            = ""           # local authenticated listener; "" = default under the data root (see above)
+external_addresses = []          # URLs peers use to reach this instance, e.g. ["https://knomit.example.net"]
+ontology_root     = "kb"         # path within git where facts live
+onnx_lib_path     = ""           # set ORT_LIB_PATH instead (see the note below)
+local_origin_root = ""           # root for permitted local-path git origins ("" = disabled)
+read_only         = false        # read-only demo: reject mutations, hide git + write tools, pull-only sync
+methodology_min_score = 0.15     # composite-score floor for methodology candidates
+
+[git]
+serve                    = true     # expose the built-in git smart-HTTP server (mounted at /git on the main port)
+port                     = ""       # no separate listener: /git rides the main host:port
+network_timeout          = "120s"   # bounds every remote git network op (clone/fetch/push); 0 disables the bound
+max_probe_bytes          = 67108864 # 64 MiB: caps the shallow clone the pre-create branch check pulls; 0 disables
+local_reconcile_interval = "30s"    # a repo with NO origin advances its consensus branch from its agent branch this often; 0 disables
+realtime_pull_interval   = "3s"     # sync round cadence for repos that set `sync: {pull: realtime}`; below 1s is a boot error
+
+[remote]
+token       = ""                # GitHub/PAT token
+user        = ""
+password    = ""
+ssh_key     = ""                # path to an SSH private key; "" = <KNOMIT_HOME>/id_ed25519
+auth_method = ""                # "token" | "basic" | "ssh" | "cert" | "none" (inferred if empty)
+known_hosts = ""                # SSH host-key pins; "" = <KNOMIT_HOME>/known_hosts
+
+[auth]
+require          = false        # true: refuse any request without a verified principal
+loopback_default = ["read", "write", "push:own", "operator", "admin"]  # what an anonymous loopback caller may do
+loopback_hosts   = []           # extra Host names a loopback peer may use (a same-host proxy's name)
+
+[tls]
+addr = ""                       # mTLS listener for enrolled instances, e.g. "0.0.0.0:19279"; "" = off
+dir  = ""                       # certificate files; "" = <KNOMIT_HOME>/pki
+
+[oauth]
+issuer         = ""             # canonical https URL clients reach addr by; set together with addr
+addr           = ""             # bearer-token listener, e.g. "127.0.0.1:19280"; "" = OAuth off
+access_ttl     = "2h"
+refresh_ttl    = "336h"         # 14 days, counted from the first issuance
+default_client = true           # keep the built-in `kb` client
+
+# [[oauth.client]]              # a pre-registered client; repeat the table for more
+# id            = "my-client"
+# name          = "My client"
+# redirect_uris = ["https://app.example.net/callback"]
+
+# [oauth.idp]                   # consent through an external identity provider
+# provider           = "github" # the only provider
+# client_id          = ""
+# client_secret_file = ""       # owner-only file; KNOMIT_OAUTH_IDP_CLIENT_SECRET wins if both are set
+# allowed_subjects   = ["github-583231 read"]
+
+[experiments]
+expiry_days = 30                # roll back an experiment with no commit for this long; 0 = never
+
+[triggers]
+script_rate_per_minute = 60     # cap on runs of ONE `do: script` trigger per minute; must be >= 1
 
 [llm]
 model    = "gemini-2.5-flash"
@@ -164,30 +280,22 @@ cache    = false
 batch    = false
 
 [embeddings]
-model = "embeddinggemma"
-
-[git]
-serve           = true          # expose the built-in git smart-HTTP server (mounted at /git on the main port)
-port            = ""            # no separate listener: /git rides the main host:port
-network_timeout = "120s"        # bounds every remote git network op (clone/fetch/push)
-max_probe_bytes = 67108864      # 64 MiB: caps the shallow clone the pre-create branch check pulls
-
-[remote]
-token       = ""                # GitHub/PAT token
-user        = ""
-password    = ""
-ssh_key     = ""                # path to an SSH private key
-auth_method = ""                # "token" | "basic" | "ssh" | "none" (inferred if empty)
-known_hosts = ""                # SSH host-key pins; "" = <KNOMIT_HOME>/known_hosts
+model            = "embeddinggemma"
+max_batch_tokens = 0            # padded-token budget per inference batch; 0 = derive from this machine's memory
 
 [cluster_cache]
 resolution         = 4.0        # Louvain γ (higher = more, smaller communities)
 min_community_size = 2          # communities smaller than this are relabelled as noise
+neighbor_kinds     = ["epistemic"]  # fact kinds a clustering neighbour search may return: "epistemic", "pragmatic"
 
 [session]
-tool_idle_ttl     = "15m"       # query/explain cursor TTL
-pipeline_idle_ttl = "60m"       # review/hypothesize work-steal session TTL
-sweep_interval    = "5m"        # reaper cadence (never disabled)
+tool_idle_ttl          = "15m"  # query/explain cursor TTL
+pipeline_idle_ttl      = "60m"  # review/hypothesize work-steal session TTL
+pipeline_resume_window = ""     # unset = 10m, or half of pipeline_idle_ttl when that is 10m or less
+sweep_interval         = "5m"   # reaper cadence (never disabled)
+client_dead_after      = "1h"   # a client session silent this long shows as dead
+client_hidden_after    = "3h"   # ...and this long drops out of the presence view
+client_retention       = "168h" # client session rows older than this are purged; "0" = never purge
 
 [discovery]
 effort_default         = "normal"  # "normal" | "medium" | "high"
@@ -207,14 +315,47 @@ format          = "console"     # "console" (human, stderr) | "json" (structured
 level           = "info"        # zerolog level: trace|debug|info|warn|error|fatal|panic
 file            = ""            # non-empty adds a rotating JSON file sink (lumberjack)
 max_size_mb     = 10            # rotate the file sink at this size
-max_backups     = 3            # rotated files to keep
-max_age_days    = 7            # max age for rotated files
+max_backups     = 3             # rotated files to keep
+max_age_days    = 7             # max age for rotated files
 slow_request_ms = 1000          # log HTTP/MCP requests slower than this at WARN (0 = off)
+slow_trigger_ms = 50            # log a trigger whose own work takes longer than this at WARN (0 = off)
 crash_file      = ""            # non-empty redirects fd 2 (stderr) to persist fatal/CGO tracebacks
 
 [runtime]
-addr = ""                       # diagnostics port (pprof + /metrics + /runtime/*); "" = off. Bind local only.
+addr         = ""               # diagnostics port (pprof + /metrics + /runtime/*); "" = off
+allow_remote = false            # true: allow a non-loopback addr (and non-loopback peers)
 ```
+
+What the newer tables govern:
+
+- **`[git]`** — `local_reconcile_interval` and `realtime_pull_interval` set the
+  cadence of the sync loops described in
+  [Sync & consensus](/docs/sync-and-consensus/). A repo only reads
+  `realtime_pull_interval` if its ontology sets `sync: {pull: realtime}`; the 1 s
+  floor exists so a typo such as `3ms` cannot become a fetch storm.
+- **`[auth]`, `[tls]`, `[oauth]`** — who may do what, and how peers and clients
+  prove who they are. The meaning of each permission, the enrolment flow and the
+  OAuth flow are on the [Authentication & permissions](/docs/auth/) page; here
+  only the keys are listed. `[auth] require = true` with no bound local
+  listener refuses to boot. `[oauth] issuer` and `addr` must be set together,
+  `issuer` must be `https://` (plain `http://` only on `localhost`, `127.0.0.1`
+  or `[::1]`), and the desktop app never opens the OAuth listener. A
+  `client_secret` key under `[oauth.idp]` is refused outright: use
+  `client_secret_file` or the environment variable.
+- **`external_addresses`** — the URLs *peers* use to reach this instance (for
+  example behind `tailscale serve`, where knomit listens on `127.0.0.1:19278` and
+  peers connect on 443). Each entry must be `scheme://host[:port]` with no path,
+  query or user info. Only you know this, so nothing is derived or probed; the
+  list is copied into the fleet member record at every boot. See
+  [Fleet](/docs/fleet/).
+- **`[experiments]`** — `expiry_days` is the only experiment setting; see
+  [Experiments](/docs/experiments/).
+- **`[triggers]`** — `script_rate_per_minute` caps one script trigger. Fires over
+  the cap are dropped for good on this machine and recorded as `rate-limited` in
+  the fire log. See [Triggers & recipes](/docs/triggers/).
+- **`[session]`** — the three `client_*` keys control the presence view of MCP
+  client sessions (Manage → Sessions). A session is a row in `control.db` stamped
+  with its last request; live, idle and dead are computed when you read.
 
 <Aside type="caution" title="The bridge quality gate is TOML-only">
 `coh_floor`, `max_members`, `quality_floor`, `w_coh`, `w_gap`, and `w_spec` are
@@ -223,7 +364,9 @@ env overlay in `internal/config/config.go` covers `effort_default`, `bridge`,
 `confidence_threshold`, and `blast_radius_threshold` and stops there. A
 deployment configured purely through environment variables (a container, for
 instance) cannot reach them; it needs a `knomit.toml` at
-`KNOMIT_HOME/knomit.toml` or next to the binary.
+`KNOMIT_HOME/knomit.toml`. The same is true of `[auth]`, `[oauth]` (apart from
+`issuer`, `addr` and the identity-provider secret), `external_addresses` and
+`[git] max_probe_bytes`.
 </Aside>
 
 ### SSH host-key verification
@@ -247,10 +390,7 @@ SSH path pins against the same file.
 <Aside type="caution">
 An unusable `known_hosts` path (empty, unreadable, unparseable, or in a
 directory that cannot be created) is a **hard error**: the operation fails.
-knomit never falls back to accepting unverified host keys. Earlier versions used
-`ssh.InsecureIgnoreHostKey()`, which accepted every host key forever — after
-upgrading, a remote whose host key has changed fails the sync instead of
-succeeding silently.
+knomit never falls back to accepting unverified host keys.
 </Aside>
 
 ## Environment variables
@@ -259,14 +399,15 @@ succeeding silently.
 
 | Variable | Overrides | Default |
 |----------|-----------|---------|
-| `KNOMIT_HOME` (or `KNOMIT_REPO`) | data root | `~/.knomit` |
+| `KNOMIT_HOME` (or `KNOMIT_REPO`) | data root | per platform, see above |
 | `KNOMIT_HOST` | `host` | `localhost` |
 | `KNOMIT_PORT` | `port` | `19278` |
-| `KNOMIT_SOCKET` | `socket` | — |
+| `KNOMIT_SOCKET` | `socket` | `<home>/knomit.sock` (unix) / derived pipe (Windows) |
 | `KNOMIT_READ_ONLY` | `read_only` | `false` |
 | `KNOMIT_LOCAL_ORIGIN_ROOT` | `local_origin_root` | — (disabled) |
 | `ONNXRUNTIME_SHARED_LIBRARY` | `onnx_lib_path` — use `ORT_LIB_PATH`, see below | — |
 | `KNOMIT_EMBED_MODEL` | `embeddings.model` | `embeddinggemma` |
+| `KNOMIT_EMBED_MAX_BATCH_TOKENS` | `embeddings.max_batch_tokens` | `0` (auto) |
 | `KNOMIT_LLM_MODEL` | `llm.model` | `gemini-2.5-flash` |
 | `KNOMIT_LLM_PROVIDER` | `llm.provider` | `gemini` |
 | `KNOMIT_API_KEY` | `llm.api_key` — use the provider's own variable, see below | — |
@@ -275,18 +416,32 @@ succeeding silently.
 | `KNOMIT_GIT_SERVE` | `git.serve` | `true` |
 | `KNOMIT_GIT_PORT` | `git.port` — `/git` rides the main port, see below | — |
 | `KNOMIT_GIT_NETWORK_TIMEOUT` | `git.network_timeout` | `120s` |
+| `KNOMIT_GIT_LOCAL_RECONCILE_INTERVAL` | `git.local_reconcile_interval` | `30s` |
+| `KNOMIT_GIT_REALTIME_PULL_INTERVAL` | `git.realtime_pull_interval` | `3s` |
 | `KNOMIT_REMOTE_TOKEN` | `remote.token` | — |
 | `KNOMIT_REMOTE_USER` | `remote.user` | — |
 | `KNOMIT_REMOTE_PASSWORD` | `remote.password` | — |
-| `KNOMIT_REMOTE_SSH_KEY` | `remote.ssh_key` | `~/.knomit/id_ed25519` |
+| `KNOMIT_REMOTE_SSH_KEY` | `remote.ssh_key` | `<KNOMIT_HOME>/id_ed25519` |
 | `KNOMIT_REMOTE_AUTH` | `remote.auth_method` | auto-detected |
-| `KNOMIT_REMOTE_KNOWN_HOSTS` | `remote.known_hosts` | `~/.knomit/known_hosts` |
+| `KNOMIT_REMOTE_KNOWN_HOSTS` | `remote.known_hosts` | `<KNOMIT_HOME>/known_hosts` |
+| `KNOMIT_TLS_ADDR` | `tls.addr` | — (off) |
+| `KNOMIT_TLS_DIR` | `tls.dir` | `<KNOMIT_HOME>/pki` |
+| `KNOMIT_OAUTH_ISSUER` | `oauth.issuer` | — (off) |
+| `KNOMIT_OAUTH_ADDR` | `oauth.addr` | — (off) |
+| `KNOMIT_OAUTH_IDP_CLIENT_SECRET` | the `[oauth.idp]` client secret (wins over `client_secret_file`) | — |
+| `KNOMIT_EXPERIMENTS_EXPIRY_DAYS` | `experiments.expiry_days` | `30` |
+| `KNOMIT_TRIGGERS_SCRIPT_RATE_PER_MINUTE` | `triggers.script_rate_per_minute` | `60` |
 | `KNOMIT_METHODOLOGY_MIN_SCORE` | `methodology_min_score` | `0.15` |
 | `KNOMIT_CLUSTER_CACHE_RESOLUTION` | `cluster_cache.resolution` | `4.0` |
 | `KNOMIT_CLUSTER_CACHE_MIN_COMMUNITY_SIZE` | `cluster_cache.min_community_size` | `2` |
+| `KNOMIT_CLUSTER_CACHE_NEIGHBOR_KINDS` | `cluster_cache.neighbor_kinds` (comma-separated) | `epistemic` |
 | `KNOMIT_SESSION_TOOL_IDLE_TTL` | `session.tool_idle_ttl` | `15m` |
 | `KNOMIT_SESSION_PIPELINE_IDLE_TTL` | `session.pipeline_idle_ttl` | `60m` |
+| `KNOMIT_SESSION_PIPELINE_RESUME_WINDOW` | `session.pipeline_resume_window` | unset (10m, or half the idle TTL) |
 | `KNOMIT_SESSION_SWEEP_INTERVAL` | `session.sweep_interval` | `5m` |
+| `KNOMIT_SESSION_CLIENT_DEAD_AFTER` | `session.client_dead_after` | `1h` |
+| `KNOMIT_SESSION_CLIENT_HIDDEN_AFTER` | `session.client_hidden_after` | `3h` |
+| `KNOMIT_SESSION_CLIENT_RETENTION` | `session.client_retention` | `168h` |
 | `KNOMIT_DISCOVERY_EFFORT_DEFAULT` | `discovery.effort_default` | `normal` |
 | `KNOMIT_DISCOVERY_CONFIDENCE_THRESHOLD` | `discovery.confidence_threshold` | `0.5` |
 | `KNOMIT_DISCOVERY_BLAST_RADIUS_THRESHOLD` | `discovery.blast_radius_threshold` | `1` |
@@ -298,8 +453,13 @@ succeeding silently.
 | `KNOMIT_LOG_MAX_BACKUPS` | `log.max_backups` | `3` |
 | `KNOMIT_LOG_MAX_AGE` | `log.max_age_days` | `7` |
 | `KNOMIT_LOG_SLOW_MS` | `log.slow_request_ms` | `1000` |
+| `KNOMIT_LOG_SLOW_TRIGGER_MS` | `log.slow_trigger_ms` | `50` |
 | `KNOMIT_CRASH_LOG` | `log.crash_file` | — (off) |
 | `KNOMIT_RUNTIME_ADDR` | `runtime.addr` | — (off) |
+| `KNOMIT_RUNTIME_ALLOW_REMOTE` | `runtime.allow_remote` | `false` |
+
+Boolean variables accept `1`, `t`, `true`, `0`, `f`, `false`; anything else stops
+the boot. Duration variables take Go durations such as `120s` or `2m`.
 
 <Aside type="note" title="Three settings live outside knomit.toml">
 Three things you might expect to configure here are controlled elsewhere. If
@@ -318,7 +478,8 @@ are the settings that take effect instead:
 - **The git port** — there isn't one, by design. Git smart-HTTP is mounted at
   `/git` on the main server router rather than getting a listener of its own,
   so it is reached on `KNOMIT_HOST` / `KNOMIT_PORT` like everything else, and
-  `git.serve` is what turns it on.
+  `git.serve` is what turns it on. (Enrolled peers reach the same `/git` over the
+  separate mTLS listener, `[tls].addr`.)
 </Aside>
 
 ### Provider credentials (read directly)
@@ -330,7 +491,7 @@ These are read by the LLM adapters, not through `knomit.toml`:
 | `ANTHROPIC_API_KEY` | Anthropic API key |
 | `GEMINI_API_KEY` | Gemini API key (checked first) |
 | `GOOGLE_AI_API_KEY` | Gemini API key (fallback) |
-| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | AWS credentials for Bedrock |
+| `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` | AWS credentials for Bedrock (the default AWS credential chain applies) |
 | `AWS_REGION` | AWS region for Bedrock — no default; an unset region fails at call time |
 | `OLLAMA_HOST` | Ollama server base URL; unset defaults to `http://localhost:11434`. Health-checked at adapter creation (`GET /api/tags`, 5s) — an unreachable server is a hard error |
 
@@ -338,12 +499,18 @@ These are read by the LLM adapters, not through `knomit.toml`:
 
 | Variable | Read by | Purpose | Default |
 |----------|---------|---------|---------|
+| `KNOMIT_SERVER` | `kb` (proxy and hooks) | The server `kb` talks to: `http(s)://host:port`, `unix:///abs/path.sock`, or `npipe:////./pipe/<name>`. Beats the desktop lockfile, loses to a positional argument. `knomit serve` logs its own address in this spelling at startup, and sets the variable for the recipe processes it starts | the lockfile, then `http://localhost:19278` |
+| `KNOMIT_MCP_DEBUG` | `kb` | Non-empty → debug logging | — (info) |
 | `KNOMIT_REFLECT_PROPOSE_CAP` | synthesize/reflect | Max new methodologies a reflect step may propose (`0` = none) | `1` |
 | `KNOMIT_REFLECT_NOVELTY_THRESHOLD` | synthesize/reflect | Cosine floor to reject near-duplicate methodologies | the active model's calibrated `Thresholds.ReflectNovelty` — `0.69` for EmbeddingGemma |
-| `KNOMIT_BASE_URL` | `knomit-bridge claude` | Server URL for the `claude init` / `claude hook` helpers. **Does not affect the MCP proxy** — that resolves its base URL from the positional argument, then `server.json`, then the hardcoded default | `http://localhost:19278` |
-| `KNOMIT_MCP_DEBUG` | `knomit-bridge` | Non-empty → debug logging | — (info) |
 | `KNOMIT_LLM_TRACE` | app wiring | Non-empty → wraps the LLM adapter in a tracing adapter that writes every request/response to this path | — (off) |
+| `KNOMIT_OKF_TOKEN`, `KNOMIT_OKF_SSH_KEY`, `KNOMIT_OKF_SSH_PASSPHRASE` | `knomit-okf` | Credentials for an OKF export from a remote (see [OKF](/docs/okf/)) | — |
 | `ORT_LIB_PATH` | embeddings | ONNX Runtime shared library — the variable the embedder actually reads | — (probes `lib/` next to the binary) |
+
+A recipe process started by a `do: run` trigger also receives `KNOMIT_HOME`,
+`KNOMIT_TRACE`, `KNOMIT_CAUSE` and `KNOMIT_RUN` from the server; those are for
+the recipe to read, not for you to set. The reader of `KNOMIT_BASE_URL` was
+removed — set `KNOMIT_SERVER` instead.
 
 <Aside type="note">
 `GRAPHQLITE_LIB_PATH` no longer exists — the GraphQLite dependency was removed
@@ -355,10 +522,14 @@ live process controls together. See [Observability](/docs/observability/).
 
 ## LLM configuration
 
-Synthesis is the **only** LLM-backed feature. Set **both** the provider and the
-model — the shipped default is `provider = "gemini"`, and an explicit provider
-is always used as-is, so changing only the model leaves you on the Gemini
-adapter:
+The server's own LLM adapter is used by the **synthesis runs** you start from
+Manage or `POST …/synthesis-runs`. The MCP tools `knomit_review` and
+`knomit_hypothesize` hand their model work to the *calling agent*, so they need
+no key on the server. (A `do: run` trigger that launches an agent session
+through a recipe is separate again: that agent brings its own runtime and
+credentials, not knomit's adapter.) Set **both** the provider and the model —
+the shipped default is `provider = "gemini"`, and an explicit provider is always
+used as-is, so changing only the model leaves you on the Gemini adapter:
 
 | Provider | Variables |
 |----------|-----------|
@@ -373,26 +544,33 @@ Provider names are matched exactly: `gemini`, `anthropic`, `bedrock`,
 `claudecli`, `geminicli`, `ollama`. Anything else fails with
 `unknown provider "…"`. Note there is no hyphen in the CLI names.
 
-Inference from the model name happens **only** when the provider is explicitly
-empty (`KNOMIT_LLM_PROVIDER=` or `provider = ""` in `knomit.toml`). In that case
-`claude-*` → `anthropic`, `gemini-*` → `gemini`, `anthropic.*` / `us.*` / `eu.*`
-→ `bedrock`, and the bare names `claude` / `gemini` → `claudecli` / `geminicli`.
+Inference from the model name happens **only** when the provider is empty, and
+the only way to empty it is `provider = ""` in `knomit.toml`. An empty
+`KNOMIT_LLM_PROVIDER=` is ignored like every other empty variable, so the
+default `gemini` stays. With an empty provider, `claude-*` → `anthropic`,
+`gemini-*` → `gemini`, `anthropic.*` / `us.*` / `eu.*` → `bedrock`, and the bare
+names `claude` / `gemini` → `claudecli` / `geminicli`.
+
+`llm.cache` and `llm.batch` apply to the Gemini adapter (context caching and
+batch mode). A missing key is not a fault: the server logs one line and carries
+on without a model.
 
 Embeddings are a separate, local model and never call an LLM — see
 [Embeddings](/docs/embeddings/).
 
 <Aside type="note" title="No key, no problem — for reads">
 If you only browse, search, and query, you never need an LLM key. It's required
-only to run synthesis. A read-only instance (like the public demo) needs no
-provider credentials at all.
+only to run server-side synthesis. A read-only instance (like the public demo)
+needs no provider credentials at all.
 </Aside>
 
 ## Verifying integrity
 
-The `knomit verify` subcommand runs integrity checks against a live on-disk repo.
-It is read-only, but it holds the read lock on every branch it checks for its
-whole run, so it **blocks every writer** on those branches — stop any writing
-agent rather than firing it at a busy one:
+The `knomit verify` command family checks a knowledge base. The bare command runs
+integrity checks against a live on-disk repo. It is read-only, but it holds the
+read lock on every branch it checks for its whole run, so it **blocks every
+writer** on those branches — stop any writing agent rather than firing it at a
+busy one:
 
 ```sh
 knomit verify --repo work     # verify one repo — there is no default to fall back to
@@ -401,4 +579,19 @@ knomit verify --all --deep    # …including per-fact format checks
 knomit verify --all --json    # machine-readable, never truncated
 ```
 
-See the [CLI reference](/docs/cli-reference/) for every flag and exit code.
+Three subcommands deal with signatures and the fleet's member records. They work
+on plain git checkouts and need no running server:
+
+| Command | What it does |
+|---------|--------------|
+| `knomit verify ci` | The gate a job runs before it merges a candidate branch into a knowledge base's `main`: checks every commit the candidate adds. Exit `0` mergeable, `1` blocked, `2` could not run |
+| `knomit verify audit` | Re-checks a whole branch against every version of the fleet's member records; `--key <fingerprint>` lists everything one key signed. Never moves a ref |
+| `knomit verify accept <commit>` | Waives the own-branch check for one commit on *this* instance, so a clone can adopt a branch that holds commits you did not sign. `--list` shows the waivers |
+
+Whether signatures are checked at all is a setting of the knowledge base, not of
+`knomit.toml`: `verify_signatures: off | log | enforce` in the root `attributes:`
+block of `.knomit/ontology.yaml`. Absent means `off`; `log` reports failures
+without refusing; `enforce` refuses a push or blocks `verify ci`. See
+[Authentication & permissions](/docs/auth/) and [Fleet](/docs/fleet/) for what
+the check compares against, and the [CLI reference](/docs/cli-reference/) for
+every flag and exit code.
