@@ -1,0 +1,196 @@
+---
+title: 'Coordinating many agents across many knowledge bases'
+description: "Experiments, triggers, real-time consensus, signed fleets and templates: what knomit adds so a network of machines pays for a piece of knowledge once."
+seoTitle: 'Coordinating agents across knowledge bases'
+pubDate: 2026-10-10
+author: The knomit team
+tags: [multi-agent, fleet, consensus, git, knowledge, architecture]
+draft: true
+---
+ Some knowledge is expensive to produce. Checking a claim against its sources,
+folding twenty observations into one synthesis, deciding whether a hypothesis
+still holds: each of these costs model tokens and somebody's judgment. If ten
+agents on five machines each need that answer, the network should produce it
+once and every agent should read the result.
+
+knomit's base design already points that way. A fact is a typed markdown file
+in a git repository, each agent writes only its own branch,
+`agent/<host>-<fp8>`, and a merge into the knowledge base's `main` is how one
+agent's facts reach every other agent that shares the base. That is enough for
+a few agents adding to one corpus, with a person merging pull requests. It is
+not enough for a network that hands work between machines, settles
+disagreements without a person in the loop, and knows whose commits it is
+accepting. knomit's aim is a fabric of many agents and many knowledge bases
+that accumulate knowledge, distill it and put it to use. This post covers what
+the current build adds for that, and what it leaves out on purpose.
+
+## A unit of work that can fail without leaking
+
+An agent that takes on a task may abandon it halfway, or produce a synthesis
+nobody should keep. On a plain agent branch, every fact it writes is on its
+way to peers at the next sync.
+
+An [experiment](/docs/experiments/) is a knowledge transaction below the agent
+branch. `knomit_experiment {action: "open", name}` forks a local branch,
+`exp/<name>`, and moves the session onto it: every later learn, update,
+retract, query and review reads and writes there, through the same MCP tools.
+The branch is never pushed and never fetched. `commit` merges it into the
+agent branch, the first point from which its results can reach a peer;
+`rollback` deletes it and everything on it. If both sides changed the same
+fact since the fork, the commit settles it by the repo's conflict rule
+(below), or refuses and lists the conflicting paths so the agent can retry
+with per-path resolutions.
+
+## Reacting to knowledge without polling
+
+A [trigger](/docs/triggers/) is a rule in the repo's ontology: when a fact
+matching a path is learned, updated, retracted, or passes its `expires` time,
+do one of four things. `emit` logs and publishes a server-sent event. `script`
+runs sandboxed JavaScript that can query and write the knowledge base through
+the same handlers as the MCP tools, with no network or file access. `push`
+asks for a sync round now. `run` starts a **recipe**: trusted JavaScript with
+one more function, `exec`, which runs a program. The `mission` template's
+recipe uses it to start a headless Claude Code session on the machine where a
+task landed.
+
+Triggers run on every instance that mounts the repo and fire on facts that
+arrived by merge from a peer as well as on local writes. The dispatcher runs
+beside the write path, so a write never waits for a trigger. Recipes are read
+from the tip of the consensus branch, so a recipe edited on one agent's branch
+takes effect only once it is merged into `main`. Commits made by scripts and
+recipes carry `Knomit-Trace` and `Knomit-Cause` trailers, and agents can pass
+the same trace on their own writes, so `git log --grep` reassembles one task's
+chain of work across machines.
+
+## Consensus without a coordinator
+
+In the base design, something outside knomit merges agent branches into
+`main`: a pull request, a CI job, a person. Three settings in the repo's
+ontology, described in [Sync, consensus &
+conflicts](/docs/sync-and-consensus/), let a group of machines reach `main` on
+their own.
+
+**`consensus: auto`.** A knomit instance can host a repo for its peers: they
+clone it over `knomit+https` and push their own agent branches back. With
+`consensus: auto`, the host merges every pushed branch into its own agent
+branch with a host-signed merge commit shortly after the push lands, and its
+`main` follows by fast-forward. Without it, the host's operator merges each
+pushed branch from the web UI.
+
+**`conflicts`.** When two agents changed the same fact since their common
+ancestor, `facts: merge` merges the two versions field by field. A field only
+one side changed takes that side's value. A field both changed differently
+goes to the version with higher confidence, then more sources. Lists such as
+`entities` and `refs` merge as sets. It is the rule knomit's deduplication
+already uses to fold two near copies of a fact, made symmetric. A retraction
+against an edit lands as the retraction, and the edited version stays readable
+in the merge commit's other parent. Paths that are not facts take the
+consensus side's version under `state: consensus`, where "consensus side"
+means the side speaking for `main`, so every merge site picks the same
+survivor. Every settled conflict is written into the merge commit as a
+`Knomit-Merge:` or `Knomit-Conflict:` trailer naming the strategy and the
+versions involved.
+
+**`sync`.** With `push: realtime`, every commit on an instance's agent branch
+goes out after a one-second countdown that batches bursts; with `pull:
+realtime`, each instance runs a sync round every 3 seconds instead of every
+300. On a knomit-hosted repo with all three settings, a fact learned on one
+peer reaches the other peers' view of `main` within a few seconds.
+
+## Identity checked where git checks it
+
+Every instance has an Ed25519 key that signs every commit it writes. Whether a
+knowledge base checks those signatures is a root attribute,
+`verify_signatures`, set to `off`, `log` or `enforce`. Commits are verified
+once, when they are accepted into `main`: in a CI job before a forge merges an
+agent branch (`knomit verify ci`), or at the push on a knomit host. Fetches,
+syncs and merges between agent branches do not re-verify, the way a git host
+checks a change when it is merged and not on every fetch.
+
+The list of signers is itself a knowledge base: a [fleet](/docs/fleet/)
+repository holding one member record per instance, with its current key and
+its state (`active`, `left` or `revoked`). An instance joins with `knomit
+fleet register <url>`, which writes its own record on its agent branch; a
+person accepts it by merging that branch into the fleet's `main`. A key change
+or a revocation is a new version of the record, never a deletion.
+
+Trust passes through accepted merges. When a host merged a peer's branch with
+a merge commit it signed, a later re-clone of the host's branch adopts the
+peer's commits as the host's own, with no waiver and no warning. If you trust
+instance A, and A accepted B's commits, you trust them. A compromised key is
+handled afterwards: `knomit verify audit` lists everything one key signed.
+
+## A knowledge base that already knows how to behave
+
+All of the above is configuration: an ontology, triggers, scripts, a recipe,
+skills. A [template](/docs/templates/) is a repo's skeleton, a
+`.knomit/templates/<name>/` folder in any mounted repo, and creating a repo
+from it copies the files into one signed commit that records the source repo's
+id and commit. The official playbook repo, `knomit/knomit-playbooks`, ships
+four templates (`general`, `coding`, `fleet` and `mission`) together with
+facts describing each template, each file it carries and each edit you are
+expected to make, so an agent can read its way through a template with
+`knomit_explain` before creating anything.
+
+## End to end: two machines, one mission repo, one target knowledge base
+
+A mission is one piece of work spread over several machines. The knowledge it
+produces goes to a **target knowledge base** that exists before the mission
+and stays after it. The machines coordinate in a separate **mission repo**,
+created from the `mission` template, which holds only coordination and
+annotations. With two machines, A and B:
+
+1. A creates the mission repo from the template. The ontology already sets
+   `consensus: auto`, `conflicts: {facts: merge, state: consensus}` and
+   real-time `sync`, so A is the host. B, enrolled with a fleet certificate,
+   clones the repo from A and pushes only its own agent branch back.
+2. A session posts a task. A task is a `signal`, a fact that is consumed once
+   and never believed, written under the mission repo's coordination topics
+   with a trace that names the mission.
+3. Both machines see the task within seconds. Under the *claim, wait, take*
+   pattern, each machine with capacity writes a claim; after a fixed window,
+   a trigger script on each claimer ranks the claims the same way, and the
+   winner takes the task in one atomic move that writes its working copy and
+   deletes the task and its claims in one commit. A duplicate check undoes a
+   double take if two copies ever meet.
+4. The working copy landing on B fires a trigger whose `do: run` starts the
+   mission recipe, which launches a headless Claude Code session on B. That
+   session works the task inside an experiment on the target knowledge base,
+   commits the experiment when the work holds up, and acknowledges the task.
+5. A cross-check task writes **annotations** to the mission repo, facts
+   about the target knowledge base's facts, each with a `verdict` of
+   `corroborate` or `contradict` and a confidence, and never edits the facts
+   it checks. A single fold task is the only writer that updates, merges or
+   retracts hypotheses in the target knowledge base from those verdicts.
+6. The task's post, the trigger scripts' writes and the session's writes all
+   carry the mission's trace, so the story of one task reads back from git,
+   whichever machine did each step.
+
+If A and B change the same fact between two syncs, the host's merge settles it
+by the `conflicts` rule and records it; no step waits for a person.
+
+## What is deliberately not there
+
+There is no leader. No instance is elected or decides on behalf of the others.
+The person who creates a mission repo picks its host, and the claim protocol
+runs as trigger scripts on every participant, each computing the same ranking
+from what it has fetched.
+
+There is no librarian, no dedicated agent that reviews branches and merges
+them. Agent branches reach `main` through a forge's merge, an operator's merge
+in the web UI, or `consensus: auto`. Wherever knomit performs a merge, it
+settles conflicts by the same written rule, read at the tip of `main`, and
+records what it decided. "Consensus" means `main` decides.
+
+There is no policy engine. [Repository access is the trust
+boundary](/docs/auth/#the-trust-model): whoever can merge into a knowledge
+base's `main` decides its ontology, its `verify_signatures` setting and the
+recipes every instance runs. `.knomit/`, the system half of a repo, changes
+only through git and is refused to every fact tool. This is the model git
+hosting already uses: access to the repository is checked, and what is merged
+is trusted.
+
+The rest follows one rule: build generic operations that compose. The claim
+protocol, the per-agent inbox queue and the fold task live in a template's
+ontology, scripts and skills, not in knomit's code, so a different mission can
+replace any of them with an edited copy of the template.
