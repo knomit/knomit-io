@@ -59,8 +59,10 @@ When it does act, it reads the binding from the `mcp_config.json` beside its own
 `hooks.json` and injects the same context as Claude Code's `session-start`: the
 repo's global principles (or its top invariants until it has any) and its most
 recent facts. If the entry is unbound it injects one line telling the agent to
-call `knomit_repos` and `knomit_bind`; if the config is broken or names two
-scopes it injects a notice saying the hook is disabled. For a lens, the hook
+call `knomit_repos` and `knomit_bind`; if the config is broken, names two
+scopes, or the plugin was installed machine-wide, it injects a one-line notice
+naming the problem. A lens it cannot resolve (server down, unknown lens) is
+skipped silently. For a lens, the hook
 resolves the write repo.
 
 This is the only hook. Claude Code's `post-edit`, `post-ask`, `pre-compact` and
@@ -82,11 +84,11 @@ hooks or MCP tools. Launch `agy` interactively from the project directory, or pa
   skills, rules, plugins or MCP servers, knomit's included.
 - **To switch it off,** run `agy plugin disable knomit`. That setting lives in
   your own `config.json` and survives a re-run of `init`.
-- **Choosing the server and signing in** work as for the other hosts: a
-  positional server argument, `KNOMIT_SERVER`, the desktop lockfile, then
-  `http://localhost:19278`, and `kb login <base-url>` for a server that needs
-  sign-in. The hook uses `KNOMIT_SERVER`, the lockfile or the default, since it
-  has no argument to read. See [Claude Code](/docs/claude-code/#choosing-the-server).
+- **Choosing the server and signing in.** Set `KNOMIT_SERVER` in the
+  environment `agy` launches with; otherwise the desktop lockfile, then
+  `http://localhost:19278`, is used. Do not add a server argument to
+  `mcp_config.json`: `init` rewrites that file on every run. Run
+  `kb login <base-url>` once for a server that needs sign-in. See [Claude Code](/docs/claude-code/#choosing-the-server).
 
 ## Verify it works
 
@@ -94,13 +96,11 @@ hooks or MCP tools. Launch `agy` interactively from the project directory, or pa
    .agents/plugins/knomit/ (…)` line, which says whether the plugin is bound to
    a repo, a lens, or unbound.
 2. Start `agy` interactively from that directory.
-3. In the first conversation turn, the context block appears as injected
-   context, or the unbound note if you did not pass a flag. A repo with no facts
-   yet produces no block.
+3. In the first turn, ask the agent what knomit context it was given: it
+   should quote the principles or recent facts, or the unbound note if you did
+   not pass a flag. A repo with no facts yet produces no block.
 4. Ask the agent to run `knomit_repos`. It lists the repos and lenses the server
    serves; see [MCP tools](/docs/mcp-tools/).
-
-{/* UNVERIFIED: the exact way Antigravity surfaces ephemeral injected context to the user in step 3; verify in an agy session. */}
 
 If nothing shows up, check the registered-workspace constraint above first. The
 hook logs a skip reason for every call it declines (`already_greeted`,

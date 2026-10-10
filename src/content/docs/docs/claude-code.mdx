@@ -23,8 +23,7 @@ repo can hold any kind of knowledge, not only knowledge about code.
 The integration is a hybrid. **Hooks** automate the obvious capture and recall
 moments, **skills** (slash commands) handle the deliberate ones, and a
 **CLAUDE.md** block carries the guidance on when to use which. It does *not*
-inject facts on every tool call: recall is a tool the agent reaches for, not a
-firehose.
+inject facts on every tool call: the agent calls recall when it needs it.
 
 ## One-time setup
 
@@ -75,8 +74,9 @@ is replaced by the unbound entry (`Replaced: …`). To change a kept scope, edit
 or remove the entry in `.mcp.json` and run `init` again.
 
 A companion file (`.mcp.json.knomit`, `CLAUDE.md.knomit-block`) is written only
-where a merge cannot decide: a knomit entry under a different key, or a
-`CLAUDE.md` block with no closing marker. A `.claude/settings.json` that does
+where a merge cannot decide: a knomit entry under a different key, a
+`.mcp.json` that does not parse, or a knomit block in `CLAUDE.md` that has no
+closing marker or no markers at all. A `.claude/settings.json` that does
 not parse makes `init` fail with the file named and nothing written.
 
 <Aside type="caution">
@@ -88,7 +88,7 @@ tool call. `init` reads only the project file and cannot see the others.
 </Aside>
 
 <Aside type="caution">
-The skills are deployed **only** by `kb claude init`, from templates embedded in
+In a Claude Code project the skills are deployed **only** by `kb claude init`, from templates embedded in
 the binary. Do not hand-edit `.claude/skills/`: the next run overwrites the
 edit, and a fix in the templates reaches a project only after the binary is
 rebuilt and `init` is run again. Any other skill in `.claude/skills/` belongs to
@@ -101,7 +101,8 @@ The `mcpServers` key is derived, not constant: `knomit-repo-<repo>` with
 `--repo`, `knomit-lens-<lens>` with `--lens`. The prefix is always applied, so a
 repo and a lens sharing a name, or a repo literally named `knomit-repo-x`,
 cannot collide on one key. An unbound entry gets `knomit-repo-<directory name>`,
-with other characters turned into `-`. The key does not say what the entry is
+lowercased, with other characters turned into `-` and cut to 27 characters, so
+no directory name can make `init` fail. The key does not say what the entry is
 bound to; only the entry's `args` do.
 
 ```jsonc
@@ -127,19 +128,20 @@ separate server; one knomit server hosts all of them.
 
 ### How the hooks find their binding
 
-A hook's binding comes from the `.mcp.json` entry's `args` and nothing else,
-parsed the way `kb` itself parses them: `--lens` wins over `--repo`, and parsing
+When `.mcp.json` has a knomit entry, a hook's binding comes from that entry's
+`args` and nothing else, parsed the way `kb` itself parses them: `--lens` wins over `--repo`, and parsing
 stops at the first positional argument. The `command` basename must be `kb` (or
 `kb.exe`) for an entry to count as knomit's; an entry whose command is a wrapper
-script is recognised only through the `knomit-` key prefix, and only when no
-entry matched on command.
+script is recognised only through its key (`knomit` or a `knomit-` prefix), and only
+when no entry matched on command.
 
 | `args` | Hook behaviour |
 |--------|----------------|
 | `["--repo", "x"]` | reads repo `x` |
 | `["--lens", "x"]` | resolves the lens's write repo, see [lens mode](#lens-mode) |
 | `[]` | unbound: injects one line telling the agent to call `knomit_repos`, then `knomit_bind` |
-| a flag with no or an empty value | broken: the hooks are disabled with a notice. The directory name is never used as a fallback. |
+| a flag with no or an empty value | broken: the hooks are disabled with a notice. The directory name is not used as a fallback. |
+| no knomit entry at all (no `.mcp.json`, or no `kb` server in it) | reads the repo named after the project directory. This is the only place the directory name is used, and only because no entry exists. A user-scope knomit server is not visible to the hooks. |
 
 <Aside type="caution" title="Keep one knomit scope per project">
 Entries naming **different** scopes leave no single answer to "which repo do
@@ -179,11 +181,11 @@ Registered in `.claude/settings.json`, each one runs `kb claude hook <event>`:
 
 | Hook | Claude Code event | What it does |
 |------|-------------------|--------------|
-| `session-start` | `SessionStart` | Once per session, prints context that Claude Code wraps as a system reminder: up to 7 of the repo's global principles (or, until it has any, up to 5 load-bearing invariants) plus the 5 most recent facts. Silent when the repo has no facts. |
+| `session-start` | `SessionStart` | At the start of a session (Claude Code also fires `SessionStart` on resume, `/clear` and compaction), prints context that Claude Code wraps as a system reminder: up to 7 of the repo's global principles (or, until it has any, up to 5 load-bearing invariants) plus the 5 most recent facts. Silent when the repo has no facts. |
 | `post-edit` | `PostToolUse` on `Edit`, `Write`, `MultiEdit` | If the edited file is listed as an `entities` value on any fact, says how many facts reference it and nudges `/knomit-update` or `/knomit-retract`. It matches `entities` only, not refs or fact bodies. |
 | `post-ask` | `PostToolUse` on `AskUserQuestion` | After every resolved question, nudges `/knomit-decided` before the authorized work starts. Whether the answer is worth recording is left to the skill. |
 | `pre-compact` | `PreCompact` | Scans the last 50 transcript messages for capture-worthy moments and passes up to 8 candidates into the compaction summary, so they survive it. |
-| `memory-guard` | `PreToolUse` on `Write`, `Edit`, `MultiEdit`, `Bash` | Denies a call that would write a team-relevant note into Claude Code's private auto-memory directory (`~/.claude/projects/<cwd>/memory/`) and points at `/knomit-remember` instead. A note left there is visible to one session on one machine; a fact is visible to every agent on the repo. `MEMORY.md` and `type: user` memories are allowed. It fails open on anything it does not positively recognise — a malformed payload, an unreadable file, a Bash command that only reads the directory. |
+| `memory-guard` | `PreToolUse` on `Write`, `Edit`, `MultiEdit`, `Bash` | Denies a call that would write a team-relevant note into Claude Code's private auto-memory directory (`~/.claude/projects/<cwd>/memory/`) and points at `/knomit-remember` instead. A note left there is visible to one session on one machine; a fact is visible to every agent on the repo. `MEMORY.md` and `type: user` memories are allowed. It fails open on anything it does not positively recognise: a malformed payload, a path outside the memory directory, a Bash command that only reads the directory. An Edit to a file it cannot read is judged by its path alone, so it is denied unless the file is `MEMORY.md`. |
 
 <Aside type="note">
 `SessionStart` stdout is wrapped by Claude Code as a system reminder, so that hook
@@ -258,7 +260,9 @@ MCP proxy only (`"args": ["--repo", "work", "https://knomit.example.com"]`). The
 hooks are separate `kb` processes with no argument to read, so they use
 `KNOMIT_SERVER`, the lockfile or the default. For a server that is not on the
 default address, set `KNOMIT_SERVER` in the environment Claude Code launches with
-and both halves agree. The proxy resolves the address once at startup, so
+and both halves agree. Prefer `KNOMIT_SERVER` over a server argument in
+`.mcp.json`: a re-run of `init --repo …` or `init --lens …` resets the entry's
+`args` to the scope it derives, which drops a server argument you added. The proxy resolves the address once at startup, so
 restart Claude Code if the server moves.
 
 For a server that requires sign-in, run `kb login <base-url>` once. The token is

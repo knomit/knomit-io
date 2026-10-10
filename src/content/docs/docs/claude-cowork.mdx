@@ -19,15 +19,19 @@ Cowork session can read and write any repo or lens on the server.
    writes the `server.json` lockfile the bridge uses to find it. A bare
    `knomit serve` on `localhost:19278` works too.
 2. **The `kb` binary on disk.** The desktop app places it in `$KNOMIT_HOME/bin`
-   (default `~/.knomit/bin`) on launch; otherwise point at a built `dist/kb`.
+   (default `~/.knomit/bin` on macOS and Linux,
+   `%LOCALAPPDATA%\knomit\home\bin\kb.exe` on Windows) on launch; otherwise point at a built `dist/kb`.
    Use an absolute path in the config, since the host does not necessarily share
    your shell's `PATH`.
 
 ## Configure Cowork
 
-Add `kb` as an MCP server in the Claude Cowork config (see Cowork's own
-documentation for the config file's location and schema). The entry has the same
-shape as a Claude Desktop server:
+Cowork runs in the Claude desktop app and uses the MCP servers configured
+there, so add `kb` to the Claude Desktop config:
+`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS,
+`%APPDATA%\Claude\claude_desktop_config.json` on Windows. Claude Desktop opens
+one connection per configured server and shares it across Cowork sessions. The
+entry:
 
 ```jsonc
 {
@@ -39,8 +43,6 @@ shape as a Claude Desktop server:
   }
 }
 ```
-
-{/* UNVERIFIED: Cowork's exact config file location and schema; the bridge README documents only the Claude Desktop file (claude_desktop_config.json), and the shape above is that file's. */}
 
 Three ways to scope the connection:
 
