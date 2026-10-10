@@ -81,7 +81,7 @@ export function buildSteps(t: BundleTour): TourStep[] {
     // something they never saw.
     {
       label: 'Ontology first',
-      body: 'The library opens on the ontology — topic, then category, then the fact itself. Nothing was re-filed to produce this: the path is where the fact already lives in the repo, and a fact placed higher up applies to everything beneath it.',
+      body: 'This knowledge base is about agentic engineering, built by agents from web sources, not from a codebase. The library opens on its ontology — topic, then category, then the fact itself. Nothing was re-filed to produce this: the path is where the fact already lives in the repo, and a fact placed higher up applies to everything beneath it.',
       highlight: 'library',
       // Only dispatch when the sort actually differs. SET_LIBRARY_SORT nulls
       // factPath by design — upstream clears the selection so the right panel

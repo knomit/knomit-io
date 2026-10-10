@@ -1,4 +1,4 @@
-import { SITE_NAME, GITHUB_URL, SITE_TWITTER } from './site';
+import { SITE_NAME, GITHUB_URL, SITE_TWITTER, SITE_DESCRIPTION } from './site';
 
 const ctx = 'https://schema.org';
 
@@ -34,19 +34,24 @@ export function softwareApplicationSchema(site: URL) {
     '@type': 'SoftwareApplication',
     name: SITE_NAME,
     applicationCategory: 'DeveloperApplication',
-    operatingSystem: 'macOS, Linux',
+    // Release binaries exist for macOS arm64 and Linux amd64 (plus a container
+    // image); Windows builds and runs from source but has no release asset.
+    operatingSystem: 'macOS, Linux, Windows (from source)',
     url: site.origin + '/',
-    description:
-      'Git-backed knowledge for AI agents: a distributed knowledge base of typed, provenanced facts.',
+    description: SITE_DESCRIPTION,
     featureList: [
-      'Typed, atomic facts in plain markdown — not chunked documents',
-      'Ed25519-signed git commits with full provenance',
-      'Confidence that rises and falls with the evidence',
-      'Semantic search over a local embedding model',
-      'Synthesis, hypotheses, and emergent discovery',
-      'Agent branches with consensus on main',
-      'MCP-native tools for Claude Code and any MCP client',
-      'REST API (HAL+JSON) and an embedded web UI',
+      'Typed, atomic facts in plain markdown, not chunked documents',
+      'Per-agent branches with signed commits and a persisted agent identity',
+      'Consensus on main by review or automatic merge, with field-by-field conflict merge',
+      'Real-time sync, peer hosting over mTLS, and a fleet of registered instances',
+      'Signature verification at acceptance against the fleet member records',
+      'Review (prune, distill, reflect), hypotheses, and emergent discovery',
+      'Motifs: the shared pattern facts about different subjects instantiate',
+      'Experiments: local branches that commit or roll back as a unit',
+      'Triggers and recipes that react to new knowledge and launch work',
+      'Lenses that query several knowledge bases as one',
+      'Templates and playbooks for new knowledge bases',
+      'MCP tools for any MCP client, a REST API (HAL+JSON) and a web UI',
       'Open Knowledge Format (OKF) export',
     ],
     offers: { '@type': 'Offer', price: '0', priceCurrency: 'USD' },

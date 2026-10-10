@@ -3,13 +3,15 @@ export const SITE_NAME = 'knomit';
 export const SITE_TAGLINE = 'Knowledge + commit.';
 /** One-line product category, used under the logo and in fallbacks. */
 export const SITE_SUBLINE =
-  'A distributed, decentralized knowledge base — built from facts, not documents.';
+  'A distributed, decentralized knowledge distillation factory.';
+/** The fabric statement, for on-page copy, RSS and llms.txt where the full
+ *  framing matters. */
 export const SITE_DESCRIPTION =
-  'A distributed, decentralized knowledge base built from concise, typed facts — not documents. Confidence, provenance, and ontology; facts evolve and discovery spawns new ones. Humans and agents converge on one source of truth.';
+  'A distributed, decentralized knowledge distillation factory: a fabric that connects many agents and many knowledge bases, so that what any one of them learns is accumulated, distilled and put to use by all of them. Learning is paid once across the network instead of once per agent. Knowledge is kept as typed, signed facts in git.';
 /** ≤160-char meta description for SERP snippets. The long SITE_DESCRIPTION
  *  stays for on-page copy where the full framing matters. */
 export const SITE_DESCRIPTION_SHORT =
-  'Git-backed knowledge for AI agents: typed, provenanced facts in a distributed knowledge base. Open source, MCP-native, exports to Open Knowledge Format.';
+  'A distributed knowledge distillation factory: many agents and knowledge bases accumulate, distill and use what any one learns, as signed facts in git.';
 // Placeholder home — update once the public repo location is finalized.
 export const GITHUB_URL = 'https://github.com/knomit/knomit';
 

@@ -75,13 +75,13 @@ const refinery = [
   {
     icon: 'provenance',
     title: 'Every change is signed — and reversible',
-    body: 'Each fact is an Ed25519-signed git commit. Because the substrate is git, knomit prunes and rewrites itself safely: nothing is ever lost, and every refinement is a commit you can review, diff, and revert.',
+    body: 'Each write is a signed git commit by an agent whose identity is kept for life. A repository can verify those signatures when commits are accepted into main, against the fleet’s member records. Because the substrate is git, knomit prunes and rewrites itself safely: every refinement is a commit you can review, diff, and revert.',
     link: { href: '/security/', label: 'How the signing holds up' },
   },
   {
     icon: 'consensus',
-    title: 'Knowledge converges across peers',
-    body: 'Agents and humans propose facts on branches; review merges them to main. One reviewed source of truth, shared instead of siloed — the gap every other cluster leaves open.',
+    title: 'Knowledge converges across agents and machines',
+    body: 'Agents and people write on their own branches; facts reach main by review or by automatic merge, and edits to the same fact can be merged field by field. Instances sync in real time and host each other’s repositories, so what one agent learns, every agent inherits.',
   },
   {
     icon: 'markdown',
@@ -91,8 +91,35 @@ const refinery = [
   },
 ];
 
+// Coordination: what lets many agents on many machines work as one fabric.
+// The profile column describes the four profiles above as documented, not any
+// one product; it was not re-checked against rival docs for this revision.
+const coordination = [
+  {
+    cap: 'Experiments',
+    knomit: 'An agent stages work on a local branch forked from its own; commit merges it as a unit, rollback discards it. Never pushed.',
+  },
+  {
+    cap: 'Triggers and recipes',
+    knomit: 'Rules in the ontology fire when facts are learned, updated, retracted or fall due, and can run a script or a recipe that starts an agent session.',
+  },
+  {
+    cap: 'Signed identity, verified at acceptance',
+    knomit: 'Each agent has a kept identity and signs every commit; a repository can refuse commits into main not signed by an active fleet member’s current key.',
+  },
+  {
+    cap: 'Conflict merge',
+    knomit: 'When two agents changed the same fact, the merge can combine their edits field by field or let consensus win, and records every conflict it settled.',
+  },
+  {
+    cap: 'Lenses across machines',
+    knomit: 'One query reads several knowledge bases at once, including ones synced from other machines, with one shared motif vocabulary.',
+  },
+];
+
 const reach = [
   'Knowledge has to be shared and trusted across many agents and humans, not siloed inside one tool.',
+  'Several agents or machines work on the same problem and should build on each other’s results.',
   'You need to explain a claim — where it came from, how confident it is, how it changed.',
   'You want it reviewable like code and hostable anywhere: it’s just a git repo.',
   'You want the store to improve itself — dedup, synthesis, hypotheses — not merely hold text.',
@@ -109,8 +136,8 @@ const mapAria =
 ---
 
 <BaseLayout
-  title="knomit vs the AI-memory landscape — comparison"
-  description="How knomit compares to the four operational profiles of AI memory: raw stores, recall layers, graph engines, and agent runtimes."
+  title="knomit vs RAG, recall layers, graph engines and agent runtimes — comparison"
+  description="How knomit compares to RAG, recall layers, graph engines and agent runtimes: a fabric that accumulates, distills and shares knowledge across many agents."
 >
   <!-- Reframe + map -->
   <section class="k-section">
@@ -119,7 +146,7 @@ const mapAria =
         as="h1"
         eyebrow="Comparison"
         title="The landscape, by operational profile."
-        lead="The tools agents use for memory cluster into four profiles. Each is good at something. None of them refine what they store — or let you audit how it changed. That gap is where knomit lives."
+        lead="The tools agents use for memory cluster into four profiles. Each is good at something. None of them is built to connect many agents and many knowledge bases so that what one learns is distilled and used by all, with every change auditable. That is what knomit is for."
       />
 
       <div
@@ -144,7 +171,8 @@ const mapAria =
         ))}
       </div>
       <p class="cmp-note k-text-2">
-        Everyone else accumulates. knomit refines — and signs its work.
+        The four profiles store and retrieve. knomit also distills what it holds,
+        shares it across agents, and signs every change.
       </p>
     </div>
   </section>
@@ -185,8 +213,8 @@ const mapAria =
     <div class="k-container">
       <SectionHeading
         eyebrow="Where knomit sits"
-        title="A fifth profile: the knowledge refinery."
-        lead="knomit isn’t a better point on the memory axis — it’s on a different one. It refines the knowledge it holds, and signs every change so you can trust what it kept and what it dropped."
+        title="A fifth profile: the knowledge distillation factory."
+        lead="knomit is not a better point on the memory axis. It is a fabric of many agents and many knowledge bases that accumulates knowledge, distills it, and puts it to use, signing every change so you can trust what it kept and what it dropped."
         align="center"
       />
       <div class="cmp-grid">
@@ -221,6 +249,49 @@ const mapAria =
     </div>
   </section>
 
+  <!-- Coordination -->
+  <section class="k-section cmp-coord">
+    <div class="k-container">
+      <SectionHeading
+        eyebrow="Coordination"
+        title="What it takes for many agents to work as one."
+        lead="Sharing a store is not the same as working together. These are the pieces knomit has for agents on several machines building one body of knowledge."
+        align="center"
+      />
+      <!-- UNVERIFIED: the "four profiles" column (No equivalent documented) was not re-checked against each rival's public docs in the 2026-10 refresh. -->
+      <div class="cmp-table-wrap k-reveal">
+        <table class="cmp-table">
+          <caption class="k-text-2">
+            The profiles column is as documented, as of October 2026.
+          </caption>
+          <thead>
+            <tr>
+              <th scope="col">Capability</th>
+              <th scope="col">knomit</th>
+              <th scope="col">The four profiles</th>
+            </tr>
+          </thead>
+          <tbody>
+            {coordination.map((row) => (
+              <tr>
+                <th scope="row">{row.cap}</th>
+                <td>{row.knomit}</td>
+                <td class="cmp-table__none">No equivalent documented</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p class="cmp-coord__more k-text-2">
+        Read more: <a href="/docs/experiments/">experiments</a>,
+        <a href="/docs/triggers/">triggers and recipes</a>,
+        <a href="/docs/fleet/">fleets</a>,
+        <a href="/docs/sync-and-consensus/">sync and consensus</a>,
+        <a href="/docs/lenses/">lenses</a>.
+      </p>
+    </div>
+  </section>
+
   <!-- Honest fit -->
   <section class="k-section">
     <div class="k-container">
@@ -248,8 +319,8 @@ const mapAria =
       </div>
       <p class="cmp-fit__more k-text-2">
         Recognise yourself on the left?
-        <a href="/use-cases/">See what people build on it</a> — twelve of them,
-        from a solo developer's codebase to an open knowledge network.
+        <a href="/use-cases/">See what people build on it</a>, from a research
+        corpus to work coordinated across several machines.
       </p>
     </div>
   </section>
@@ -448,6 +519,65 @@ const mapAria =
     text-align: center;
     font-size: 0.94rem;
     line-height: 1.65;
+  }
+
+  /* ── Coordination ────────────────────────────────────────────────── */
+  .cmp-coord {
+    background: var(--k-surface-1);
+    border-block: 1px solid var(--k-hairline-soft);
+  }
+  .cmp-table-wrap {
+    margin-top: 2.5rem;
+    overflow-x: auto;
+  }
+  .cmp-table {
+    width: 100%;
+    min-width: 36rem;
+    border-collapse: collapse;
+    border: 1px solid var(--k-hairline);
+    background: var(--k-bg);
+    font-size: 0.93rem;
+    line-height: 1.5;
+  }
+  .cmp-table caption {
+    caption-side: bottom;
+    text-align: left;
+    padding-top: 0.7rem;
+    font-size: 0.85rem;
+  }
+  .cmp-table th,
+  .cmp-table td {
+    text-align: left;
+    vertical-align: top;
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--k-hairline-soft);
+  }
+  .cmp-table thead th {
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--k-text-muted);
+  }
+  .cmp-table tbody th {
+    color: var(--k-brand);
+    font-weight: 600;
+    width: 22%;
+  }
+  .cmp-table td {
+    color: var(--k-text-2);
+  }
+  .cmp-table__none {
+    color: var(--k-text-muted);
+    width: 22%;
+  }
+  .cmp-coord__more {
+    margin-top: 1.5rem;
+    text-align: center;
+    font-size: 0.95rem;
+  }
+  .cmp-coord__more a {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
   }
 
   /* ── Honest fit ──────────────────────────────────────────────────── */

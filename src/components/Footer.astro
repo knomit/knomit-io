@@ -1,7 +1,7 @@
 ---
 import Logo from '../assets/logo.svg';
-import { GITHUB_URL, SITE_TAGLINE, DEMO_LIVE } from '../lib/site';
-const subline = 'Distributed, decentralized knowledge management.';
+import { GITHUB_URL, SITE_TAGLINE, SITE_SUBLINE, DEMO_LIVE } from '../lib/site';
+const subline = SITE_SUBLINE;
 
 const cols = [
   {
@@ -22,8 +22,11 @@ const cols = [
     links: [
       { label: 'Quick start', href: '/docs/quick-start/' },
       { label: 'MCP tools', href: '/docs/mcp-tools/' },
+      { label: 'Sync & consensus', href: '/docs/sync-and-consensus/' },
+      { label: 'Fleets', href: '/docs/fleet/' },
+      { label: 'Experiments', href: '/docs/experiments/' },
+      { label: 'Triggers & recipes', href: '/docs/triggers/' },
       { label: 'REST API', href: '/docs/api/' },
-      { label: 'OKF export', href: '/docs/okf/' },
       { label: 'Configuration', href: '/docs/configuration/' },
     ],
   },
