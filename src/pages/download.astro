@@ -27,7 +27,7 @@ const published = release
         as="h1"
         eyebrow="Download"
         title="Run knomit on your machine."
-        lead="A tray app that runs the server for you, or the bare server binary. Local-first: your knowledge base is a git repo on your own disk."
+        lead="A tray app that runs the server for you, or the bare server binary. Local-first: every knowledge base is a git repository on your own disk."
       />
 
       {release && (
@@ -97,14 +97,15 @@ const published = release
     <div class="k-container dl-prose">
       <h2 class="dl-h2">What you get</h2>
       <p class="k-text-2">
-        Every download carries the same programs. <code>knomit</code> is the server.
-        <code>kb</code> is the bridge that connects an MCP client such as Claude Code,
+        Every download carries <code>kb</code> and <code>knomit-okf</code>; they
+        differ in how the server runs. <code>kb</code> is the bridge that connects an MCP client such as Claude Code,
         Antigravity or Claude Desktop to a server, and creates knowledge bases from
         templates. <code>knomit-okf</code> publishes a knowledge base as
-        <a href="/okf/">Open Knowledge Format</a>. The desktop app adds
-        <code>knomit-desktop</code>, a tray app that runs the server for you, and
-        carries <code>kb</code> and <code>knomit-okf</code> inside it; the server
-        tarball carries <code>knomit</code>, <code>kb</code> and <code>knomit-okf</code>.
+        <a href="/okf/">Open Knowledge Format</a>. The desktop app is
+        <code>knomit-desktop</code>, a tray app that runs the server for you, with
+        <code>kb</code> and <code>knomit-okf</code> inside it. The server tarball
+        carries <code>knomit</code>, the server binary, beside <code>kb</code> and
+        <code>knomit-okf</code>.
       </p>
       <p class="k-text-2">
         For servers there is also a container image for Linux amd64,

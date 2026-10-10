@@ -32,7 +32,7 @@ export const HOME_FAQ_ITEMS: FaqItem[] = [
   },
   {
     q: 'Is knomit open source?',
-    a: 'Not under the OSI definition. knomit is source-available under the Functional Source License (FSL-1.1-ALv2): the code is public, and the store is an ordinary git repository you can clone, diff and review like code. Each release becomes Apache 2.0 two years after it ships.',
+    a: 'Not under the OSI definition. knomit is source-available under the Functional Source License (FSL-1.1-ALv2): the code is public, and the store is a git repository that ordinary git can clone, diff and review like code. Each release becomes Apache 2.0 two years after it ships.',
   },
 ];
 
@@ -61,12 +61,12 @@ export const FAQ_ITEMS: FaqItem[] = [
   },
   {
     q: 'What are templates and playbooks?',
-    a: 'A template is the starting state of a new knowledge base: its ontology, skills, recipes and trigger scripts, plus a README. The templates (general, coding, mission and fleet) live in knomit-playbooks, a public knowledge base of playbooks for programming knomit that an instance subscribes to read-only. Its facts describe each template and each file in it, so an agent can find the right one by querying. You create a knowledge base from a template in the web UI or with "kb repo create <name> --template <repo>/<template>".',
+    a: 'A template is the starting state of a new knowledge base: its ontology, skills, recipes and trigger scripts, plus a README. The templates (general, coding, mission and fleet) live in knomit-playbooks, a public knowledge base of playbooks for programming knomit that you subscribe an instance to, read-only. Its facts describe each template and each file in it, so an agent can find the right one by querying. You create a knowledge base from a template in the web UI or with "kb repo create <name> --template <repo>/<template>".',
     more: { href: '/docs/templates/', label: 'Templates and playbooks' },
   },
   {
     q: 'Is knomit open source?',
-    a: 'Not under the OSI definition. knomit is source-available under the Functional Source License, FSL-1.1-ALv2. You can use, copy, modify and self-host it freely, including for internal commercial use; the one excluded thing is offering knomit, or a substantially similar substitute, to others as a commercial product or service. Two years after each release, that version becomes Apache 2.0. A commercial license is available for anything the FSL does not permit. The store itself is a plain git repository, so you can inspect it, diff it, review changes like code, and host it anywhere.',
+    a: 'Not under the OSI definition. knomit is source-available under the Functional Source License, FSL-1.1-ALv2. You can use, copy, modify and self-host it freely, including for internal commercial use; the one excluded thing is offering knomit, or a substantially similar substitute, to others as a commercial product or service. Two years after each release, that version becomes Apache 2.0. A commercial license is available for anything the FSL does not permit. The store itself is a git repository that ordinary git can clone, so you can inspect it, diff it, review changes like code, and host a copy anywhere.',
   },
   {
     q: 'What is MCP and how does knomit use it?',
@@ -75,11 +75,11 @@ export const FAQ_ITEMS: FaqItem[] = [
   },
   {
     q: 'Does knomit work offline?',
-    a: 'Yes. knomit runs locally against a plain git repository and uses a local embedding model (EmbeddingGemma over an ONNX runtime) for semantic search, so it needs no external services to read, write, or search facts. Syncing with a git remote is optional.',
+    a: 'Yes. knomit keeps each knowledge base as a git repository on the local disk and uses a local embedding model (EmbeddingGemma over an ONNX runtime) for semantic search, so it needs no external services to read, write, or search facts. Syncing with a git remote is optional.',
   },
   {
     q: 'How does knomit handle multiple agents writing at once?',
-    a: 'Each agent writes only to its own git branch, so writers never overwrite each other. Facts reach main, the consensus, in one of two ways: a reviewed merge, or automatically, when a repository sets consensus to auto and its hosting instance merges every branch a peer pushes. Every agent then pulls main and merges it locally, so what one learns, all inherit. Where two agents changed the same fact, the repository can merge the two versions field by field or let the consensus side win; every conflict settled this way is recorded on the merge commit.',
+    a: 'Each agent writes only to its own git branch, so writers never overwrite each other. Facts reach main, the consensus, in one of two ways: a reviewed merge, or automatically, when a repository sets consensus to auto and its hosting instance merges every branch a peer pushes. Every agent then pulls main and merges it locally, so what one learns, all inherit. Where two agents changed the same fact, the repository’s conflicts setting (on by default under consensus: auto) can merge the two versions field by field or let the consensus side win; every conflict settled this way is recorded on the merge commit.',
     more: { href: '/docs/sync-and-consensus/', label: 'Sync, consensus and conflicts' },
   },
   {
@@ -99,7 +99,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   },
   {
     q: 'How does provenance work?',
-    a: 'Every write is one atomic, signed git commit pinned to the exact moment and state of the world in which it was learned. Because the whole graph is versioned by commit, you can trace where a claim came from, who asserted it, how its confidence moved over time, and read the graph as-of any past commit.',
+    a: 'Every write is one atomic, signed git commit, so each fact is pinned to the state of the knowledge base in which it was learned. Because the whole graph is versioned by commit, you can trace where a claim came from, who asserted it, how its confidence moved over time, and read the graph as-of any past commit.',
     more: { href: '/blog/retraction-is-not-deletion/', label: 'What a retraction does to what cited it' },
   },
   {
@@ -109,7 +109,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   },
   {
     q: 'What is a discovered (emergent) fact?',
-    a: 'Beyond storing and synthesizing, knomit can discover facts nobody wrote down. An effort dial on review and hypothesize seeds from "bridges" — facts that share a domain or entity yet sit in different similarity clusters — and proposes the keystone those bridges imply. Forward discovery writes a synthesis fact (a consequence); backward discovery writes a hypothesis (an unstated premise), ranked by blast radius. Each carries origin: discovered, so the emergent set is queryable and auditable. Similarity-only retrieval is structurally blind to these cross-cluster links — that is exactly why the facts went unwritten.',
+    a: 'Beyond storing and synthesizing, knomit can discover facts nobody wrote down. An effort dial on review and hypothesize seeds from "bridges" — facts that share a domain or entity yet sit in different similarity clusters — and proposes the keystone those bridges imply. Forward discovery writes a synthesis fact (a consequence); backward discovery writes a hypothesis (an unstated premise), ranked by blast radius. Each carries origin: discovered, so the emergent set is queryable and auditable. Similarity-only retrieval does not reach these cross-cluster links, which is why a search does not surface them.',
   },
   {
     q: 'Does knomit support the Open Knowledge Format (OKF)?',
@@ -121,7 +121,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   },
   {
     q: 'What is the difference between a knomit knowledge base and an OKF bundle?',
-    a: 'A knomit KB is the private, agent-shaped original: facts under kb/, one git branch per author, provenance edges, confidence that moves, and an embedding index for semantic search. An OKF bundle is the portable, consumer-shaped publication of it: plain markdown concept documents with standard frontmatter, directory indexes, and a changelog, readable by any conformant tool without knomit involved. knomit-okf is the mapper between them — meaning lands in standard OKF keys, and knomit-specific axes like confidence and origin are preserved alongside under knomit_* rather than discarded.',
+    a: 'A knomit KB is the agent-shaped working original: facts under kb/, one git branch per author, provenance edges, confidence that moves, and an embedding index for semantic search. An OKF bundle is the portable, consumer-shaped publication of it: plain markdown concept documents with standard frontmatter, directory indexes, and a changelog, readable by any conformant tool without knomit involved. knomit-okf is the mapper between them — meaning lands in standard OKF keys, and knomit-specific axes like confidence and origin are preserved alongside under knomit_* rather than discarded.',
   },
   {
     q: 'Where can I run knomit?',

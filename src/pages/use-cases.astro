@@ -7,7 +7,7 @@ import { GITHUB_URL, DEMO_LIVE } from '../lib/site';
 const groups = [
   {
     eyebrow: 'For researchers & analysts',
-    lead: 'A corpus that sharpens itself, about any field.',
+    lead: 'A corpus that gets sharper with every review pass, about any field.',
     cases: [
       {
         icon: 'search',
@@ -58,7 +58,7 @@ const groups = [
       {
         icon: 'markdown',
         title: 'Publish knowledge as an open standard',
-        body: 'Export the whole base to Open Knowledge Format — Google Cloud\'s open spec — and push it to any git host. Consumers read plain markdown with standard frontmatter, with no knomit anywhere in the picture. Your private, agent-shaped base stays private; what you publish is portable and belongs to no vendor.',
+        body: 'Export the whole base to Open Knowledge Format — Google Cloud\'s open spec — and push it to any git host. Consumers read plain markdown with standard frontmatter, with no knomit anywhere in the picture. Your agent-shaped base stays where it is; what you publish is portable and belongs to no vendor.',
         tag: 'OKF 0.2 · conformance-validated · one git URL',
         link: { href: '/okf/', label: 'How OKF export works' },
       },
@@ -90,9 +90,10 @@ const groups = [
       },
       {
         icon: 'mcp',
-        title: 'Knowledge processing pipelines',
-        body: 'Instances compose. One instance can track a repository another hosts, so you can chain stages: a raw-ingestion node feeds a distillation node feeds a consensus node. Every stage is itself a knomit you can query.',
-        tag: 'compose instances · ingest → distill → consensus',
+        title: 'Staged processing with triggers',
+        body: 'A trigger on one knowledge base can run a recipe when facts land there, and the recipe can start an agent session that reads them and writes what it concludes into a separate target knowledge base. Each knowledge base in the chain can be queried on its own, and a lens can read several as one.',
+        tag: 'triggers · recipes · target KB',
+        link: { href: '/docs/triggers/', label: 'Triggers and recipes' },
       },
       {
         icon: 'fact',
@@ -123,7 +124,7 @@ const groups = [
       {
         icon: 'discovery',
         title: 'Surface hidden invariants before they bite',
-        body: 'Run review or hypothesize at higher effort to discover emergent keystones: the load-bearing premises that underwrite facts across your codebase but were never written down. knomit ranks them by blast radius, how much breaks if the premise is false.',
+        body: 'Run hypothesize at medium or high effort to discover emergent keystones: the load-bearing premises that underwrite facts across your codebase but were never written down. knomit ranks them by blast radius, how much breaks if the premise is false.',
         tag: 'discovery · keystones · blast radius',
       },
     ],
@@ -140,7 +141,7 @@ const groups = [
       <SectionHeading
         as="h1"
         eyebrow="Use cases"
-        title="Where shared, proven knowledge pays off."
+        title="Where shared, distilled knowledge pays off."
         lead="The same fabric serves an analyst with a research corpus, a team, an operator running work across several machines, and a developer with a codebase. Here is what people build with it."
       />
     </div>

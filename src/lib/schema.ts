@@ -42,7 +42,7 @@ export function softwareApplicationSchema(site: URL) {
     featureList: [
       'Typed, atomic facts in plain markdown, not chunked documents',
       'Per-agent branches with signed commits and a persisted agent identity',
-      'Consensus on main by review or automatic merge, with field-by-field conflict merge',
+      'Consensus on main by review or automatic merge, with a field-by-field conflict merge set per repository',
       'Real-time sync, peer hosting over mTLS, and a fleet of registered instances',
       'Signature verification at acceptance against the fleet member records',
       'Review (prune, distill, reflect), hypotheses, and emergent discovery',

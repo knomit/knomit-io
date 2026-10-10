@@ -15,7 +15,7 @@ const groups = [
       },
       {
         title: 'Verified once, at acceptance',
-        body: 'A repository chooses verify_signatures: off, log or enforce (off when absent). When it is on, knomit verify ci checks every commit about to enter main: its author must have exactly one member record, the record must be active, and the commit must be signed with that record’s current key. Enforce refuses the merge; log reports and lets it through. An unknown value stops the gate rather than reading as off.',
+        body: 'A repository chooses verify_signatures: off, log or enforce (off when absent). When it is on, every commit about to enter main is checked once: by knomit verify ci in a forge’s CI, or when a peer pushes to a knomit host. Its author must have exactly one member record, the record must be active, and the commit must be signed with that record’s current key. Enforce refuses the merge or the push; log reports and lets it through. An unknown value stops the gate rather than reading as off.',
       },
       {
         title: 'The fleet decides who is admitted',
@@ -66,7 +66,7 @@ const groups = [
     pillars: [
       {
         title: 'Local-first by default',
-        body: 'knomit runs against plain git repositories on your own machine and searches with a local embedding model (EmbeddingGemma over an ONNX runtime). Reading, writing and searching facts need no external service, and no data leaves your host unless you sync it.',
+        body: 'knomit keeps every knowledge base as a git repository on your own machine, cloneable with ordinary git, and searches with a local embedding model (EmbeddingGemma over an ONNX runtime). Reading, writing and searching facts need no external service. Fact content leaves your host only when you sync it, or when review and hypothesize call a hosted LLM provider; with a local model through Ollama, synthesis stays on the machine too.',
       },
       {
         title: 'Encrypted remote credentials',

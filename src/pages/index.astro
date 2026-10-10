@@ -82,7 +82,7 @@ const distill = [
   {
     icon: 'consensus',
     title: 'Disagreements settled, not lost',
-    body: 'When two agents changed the same fact, a field-by-field merge keeps each side’s independent edits and settles a field both changed by confidence, then by sources. The version it set aside stays readable in the merge’s history.',
+    body: 'When two agents changed the same fact, the repository’s conflicts setting, on by default under consensus: auto, merges it field by field: each side’s independent edits are kept, and a field both changed is settled by confidence, then by sources. The version it set aside stays readable in the merge’s history.',
   },
 ];
 
@@ -149,7 +149,7 @@ const gitOps = [
     <div class="k-container hero__inner">
       <div class="hero__copy">
         <p class="k-eyebrow">Knowledge distillation factory · Knowledge + commit</p>
-        <h1 class="hero__title">Learn it once.<br />Everywhere knows.</h1>
+        <h1 class="hero__title">Learn it once.<br />Every agent can use it.</h1>
         <p class="k-lead hero__lead">
           <strong>knomit is a distributed, decentralized knowledge distillation
           factory.</strong> It connects many agents and many knowledge bases so
@@ -259,6 +259,13 @@ const gitOps = [
         lead="Each agent writes to its own branch; instances sync, host each other’s repositories and converge on one main. The corpus gathers one best statement of each claim rather than a pile of copies."
         align="center"
       />
+      <p class="phase__example k-text-2">
+        <span class="k-mono">Example</span> In the public agentic-engineering
+        knowledge base, the fact on the July 2026 Hugging Face intrusion has 13
+        signed versions: it was updated in place as fuller accounts were
+        published, and every earlier version is still readable.
+        {DEMO_LIVE && <a href="/explore/">See it in the explorer</a>}
+      </p>
       <FeatureGrid features={accumulate} />
       <p class="phase__more">
         <a href="/docs/sync-and-consensus/">Sync, consensus and conflicts <Icon name="arrow" size={16} /></a>
@@ -298,9 +305,16 @@ const gitOps = [
       <SectionHeading
         eyebrow="2 · Distill"
         title="Accumulation alone is a bigger pile."
-        lead="The factory keeps reviewing what it has gathered: it merges what is redundant, derives conclusions no single source states, and surfaces where facts about unrelated subjects follow the same pattern."
+        lead="Review passes, run by an agent or by a session a trigger starts, merge what is redundant, derive conclusions no single source states, and surface where facts about unrelated subjects follow the same pattern."
         align="center"
       />
+      <p class="phase__example k-text-2">
+        <span class="k-mono">Example</span> In the same knowledge base, a review
+        pass read guardrail write-ups from four vendors and wrote a synthesis
+        none of them states: a model-based check reduces friction but is never a
+        boundary. It cites the seven facts it came from.
+        {DEMO_LIVE && <a href="/explore/">Read the synthesis</a>}
+      </p>
       <FeatureGrid features={distill} />
       <p class="phase__more">
         <a href="/docs/synthesis/">Synthesis <Icon name="arrow" size={16} /></a>
@@ -315,9 +329,15 @@ const gitOps = [
       <SectionHeading
         eyebrow="3 · Use"
         title="Distilled knowledge goes back to work."
-        lead="It flows into agents’ working context and into the decisions of the people beside them, and it can start work on its own. Every fact keeps its provenance, its confidence and the history of how it came to be believed."
+        lead="It flows into agents’ working context and into the decisions of the people beside them, and a trigger on a new fact can start the next piece of work. Every fact keeps its provenance, its confidence and the history of how it came to be believed."
         align="center"
       />
+      <p class="phase__example k-text-2">
+        <span class="k-mono">Example</span> An agent that calls explain on that
+        synthesis gets its seven sources back, each at the version the
+        synthesis was written from, and can check the conclusion before acting
+        on it.
+      </p>
       <FeatureGrid features={use} />
       <p class="phase__more">
         <a href="/docs/mcp-tools/">MCP tools <Icon name="arrow" size={16} /></a>
@@ -325,35 +345,6 @@ const gitOps = [
         <a href="/docs/experiments/">Experiments <Icon name="arrow" size={16} /></a>
         <a href="/use-cases/">Use cases <Icon name="arrow" size={16} /></a>
       </p>
-    </div>
-  </section>
-
-  <!-- Interop: publish as OKF -->
-  <section class="k-section okfband-sec">
-    <div class="k-container">
-      <div class="okfband k-reveal">
-        <div class="okfband__copy">
-          <p class="k-eyebrow">Use it outside knomit too</p>
-          <h2 class="okfband__title">Publish it as Open Knowledge Format.</h2>
-          <p class="k-text-2 okfband__body">
-            A knomit knowledge base is private and agent-shaped.
-            <strong>knomit-okf</strong> publishes it as a portable
-            <a href="/okf/">OKF</a> repository — Google Cloud's open spec — from a
-            single git URL. Plain markdown any conformant consumer can read, and
-            a bundle that is validated against the spec before it commits.
-          </p>
-          <a href="/okf/" class="k-btn k-btn--ghost okfband__cta">
-            How publishing works <Icon name="arrow" size={16} />
-          </a>
-        </div>
-        <div class="okfband__code">
-          <pre class="k-mono"><span class="okfband__c">$</span> knomit-okf clone -b main &lt;kb-url&gt; my-kb
-<span class="okfband__c">$</span> git push -u origin main
-
-<span class="okfband__c">$</span> knomit-okf sync &amp;&amp; git push</pre>
-          <p class="okfband__note k-mono">it commits · you push</p>
-        </div>
-      </div>
     </div>
   </section>
 
@@ -388,13 +379,43 @@ const gitOps = [
     </div>
   </section>
 
+  <!-- Interop: publish as OKF -->
+  <section class="k-section okfband-sec">
+    <div class="k-container">
+      <div class="okfband k-reveal">
+        <div class="okfband__copy">
+          <p class="k-eyebrow">Use it outside knomit too</p>
+          <h2 class="okfband__title">Publish it as Open Knowledge Format.</h2>
+          <p class="k-text-2 okfband__body">
+            A knomit knowledge base is shaped for agents: branches per author,
+            provenance edges, confidence that moves.
+            <strong>knomit-okf</strong> publishes it as a portable
+            <a href="/okf/">OKF</a> repository — Google Cloud's open spec — from a
+            single git URL. Plain markdown any conformant consumer can read, and
+            a bundle that is validated against the spec before it commits.
+          </p>
+          <a href="/okf/" class="k-btn k-btn--ghost okfband__cta">
+            How publishing works <Icon name="arrow" size={16} />
+          </a>
+        </div>
+        <div class="okfband__code">
+          <pre class="k-mono"><span class="okfband__c">$</span> knomit-okf clone -b main &lt;kb-url&gt; my-kb
+<span class="okfband__c">$</span> git push -u origin main
+
+<span class="okfband__c">$</span> knomit-okf sync &amp;&amp; git push</pre>
+          <p class="okfband__note k-mono">it commits · you push</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- From the blog -->
   {
     posts.length > 0 && (
       <section class="k-section">
         <div class="k-container">
           <div class="blogstrip__head">
-            <SectionHeading eyebrow="From the blog" title="Real-world use cases." />
+            <SectionHeading eyebrow="From the blog" title="How it works, argued in full." />
             <a href="/blog/" class="k-blogstrip__all">All posts <Icon name="arrow" size={16} /></a>
           </div>
           <div class="blogstrip">
@@ -707,6 +728,19 @@ const gitOps = [
   /* Accumulate / Distill / Use */
   .phase {
     border-bottom: 1px solid var(--k-hairline-soft);
+  }
+  .phase__example {
+    max-width: 44rem;
+    margin: 0 auto 2.25rem;
+    text-align: center;
+    font-size: 0.95rem;
+    line-height: 1.6;
+  }
+  .phase__example .k-mono {
+    margin-right: 0.4rem;
+    font-size: 0.8rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
   }
   .phase__more {
     margin-top: 2.25rem;
