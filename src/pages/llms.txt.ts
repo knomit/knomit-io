@@ -37,7 +37,7 @@ export const GET: APIRoute = async ({ site }) => {
   );
   lines.push('');
   lines.push(
-    'The mechanism is git, used for what its operations mean: a commit is a signed assertion of belief, a branch is an agent\'s identity, a merge is consensus, a conflict is a disagreement surfaced to be settled, and the log is the timeline of what the fabric believed and when. Git is the only source of truth; indexes and embeddings are rebuildable caches. Open source; MCP-native.',
+    'The mechanism is git, used for what its operations mean: a commit is a signed assertion of belief, a branch is an agent\'s identity, a merge is consensus, a conflict is a disagreement surfaced to be settled, and the log is the timeline of what the fabric believed and when. Git is the only source of truth; indexes and embeddings are rebuildable caches. Source-available (FSL-1.1-ALv2); MCP-native.',
   );
   lines.push('');
   lines.push(

@@ -52,6 +52,10 @@ const groups = [
         body: 'The ontology, triggers, recipes and skills live under .knomit/, which every fact-writing tool refuses to touch. They change by commits that reach main the way code does, so an agent cannot rewrite the rules it is judged by. Repository recipes run only from main, and symlinks there are refused.',
       },
       {
+        title: 'Source-available and auditable',
+        body: 'The code is public under the Functional Source License (FSL-1.1-ALv2), and every fact is markdown in git. You can read every line of the code, and diff every change to the knowledge.',
+      },
+      {
         title: 'It is just git — review like code',
         body: 'Each instance is the sole writer of its own agent branch. Facts reach main through a reviewed merge, or, where a repository sets consensus to auto, through the hosting instance’s automatic merge of pushed branches. You can host a repository on any git host and apply the access controls you already use for code.',
       },

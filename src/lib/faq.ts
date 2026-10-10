@@ -32,7 +32,7 @@ export const HOME_FAQ_ITEMS: FaqItem[] = [
   },
   {
     q: 'Is knomit open source?',
-    a: 'Yes, and the store is an ordinary git repository — so you can clone it, diff it, and review knowledge changes in a pull request, like code.',
+    a: 'Not under the OSI definition. knomit is source-available under the Functional Source License (FSL-1.1-ALv2): the code is public, and the store is an ordinary git repository you can clone, diff and review like code. Each release becomes Apache 2.0 two years after it ships.',
   },
 ];
 
@@ -66,7 +66,7 @@ export const FAQ_ITEMS: FaqItem[] = [
   },
   {
     q: 'Is knomit open source?',
-    a: 'Yes. knomit is open source and the store is a plain git repository, so you can inspect it, diff it, review changes like code, and host it anywhere — locally or on a git host such as GitHub.',
+    a: 'Not under the OSI definition. knomit is source-available under the Functional Source License, FSL-1.1-ALv2. You can use, copy, modify and self-host it freely, including for internal commercial use; the one excluded thing is offering knomit, or a substantially similar substitute, to others as a commercial product or service. Two years after each release, that version becomes Apache 2.0. A commercial license is available for anything the FSL does not permit. The store itself is a plain git repository, so you can inspect it, diff it, review changes like code, and host it anywhere.',
   },
   {
     q: 'What is MCP and how does knomit use it?',

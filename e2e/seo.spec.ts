@@ -131,7 +131,7 @@ test('/security renders and covers signing, encryption, and local-first', async 
   const res = await page.request.get('/security/');
   expect(res.status()).toBe(200);
   await page.goto('/security/');
-  for (const term of [/Ed25519/i, /encrypt/i, /local/i, /open source/i]) {
+  for (const term of [/Ed25519/i, /encrypt/i, /local/i, /source-available/i]) {
     await expect(page.getByText(term).first()).toBeVisible();
   }
 });
